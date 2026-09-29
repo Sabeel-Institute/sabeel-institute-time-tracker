@@ -9,8 +9,9 @@ cuts, the no-dark-mode call, and the accents this app adds).
 **Both Sabeel apps share this palette exactly** — this time tracker and the
 sibling `sabeel-institute-kanban` (the reference implementation). It is one
 identity across two products. The canonical write-up of the palette, its roles
-and the accessibility rules is the shared **`sabeel-color-scheme` skill**
-(`faisal-shah/agent-skills`); this file records how *this app* applies it.
+and the accessibility rules is the shared **`sabeel-brand` skill** in
+[Sabeel-Institute/brand](https://github.com/Sabeel-Institute/brand); this file records how
+*this app* applies it.
 
 ## The palette
 
