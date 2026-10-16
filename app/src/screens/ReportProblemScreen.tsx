@@ -75,7 +75,9 @@ export function ReportProblemScreen({ uid }: { uid: string }) {
       />
       {tooLong ? <Text style={styles.hint}>{REPORT_TOO_LONG}</Text> : null}
       <Button label="Send" onPress={send} disabled={!reportTextReady(text)} />
-      {notice ? <Text style={styles.notice}>{notice}</Text> : null}
+      {notice ? (
+        <Text style={[styles.notice, notice === KEPT_NOT_EMAILED && styles.noticeKept]}>{notice}</Text>
+      ) : null}
       <ErrorText error={error} />
     </Screen>
   );
@@ -95,4 +97,6 @@ const styles = StyleSheet.create({
   },
   hint: { fontSize: 13, color: t.feedback.danger },
   notice: { fontSize: 15, color: t.feedback.success, fontWeight: '600' },
+  // Kept, but not emailed: not a success to celebrate, nor an error to fix.
+  noticeKept: { color: t.text.primary },
 });
