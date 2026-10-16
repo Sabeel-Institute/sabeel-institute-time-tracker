@@ -13,7 +13,7 @@
 # so the "cleanup" kills the caller — observed as a shell exiting with 144.
 set -uo pipefail
 
-PORTS=(61000 61001 61002 61003 61004 61005 61006)
+PORTS=(61000 61001 61002 61003 61004 61005 61006 61007 61008)
 CALLER_PIDS=" $$ $PPID "
 
 pids_on_port() {

@@ -133,7 +133,7 @@ Do not silently change any of these.
   shot. **Run it before pushing.**
 - Unit: `npm test` (Vitest: functions + shared).
 - Rules/integration: `npm run test:emulator` (needs JDK 21).
-- **This checkout owns emulator ports 61000–61006**; the sibling repos own 61100+
+- **This checkout owns emulator ports 61000–61008**; the sibling repos own 61100+
   and 61200+. Three projects share this machine and all three used to pin
   8080/9099/5001, so whichever suite started second killed the other's Firestore.
   Four files state the ports and `functions/test/unit/emulator-ports.test.ts`

@@ -335,7 +335,7 @@ one run in two. Both are stack behaviour, so the *why* lives in the
 step.**
 
 The shared-machine hazard behind them is **fixed as of 2026-08-28**: this
-checkout owns ports **61000–61006** and `free-emulator-ports.sh` sweeps nothing
+checkout owns ports **61000–61008** and `free-emulator-ports.sh` sweeps nothing
 outside that block. Previously this repo and its two siblings all pinned
 8080/9099/5001 and all called that script at the start of every run, so a run in
 one repo SIGTERMed the other's Firestore (`exited with code: 143`) — or, worse,
@@ -343,7 +343,7 @@ silently cost it a write. See **"Emulator ports are this checkout's own"** below
 
 ## Emulator ports are this checkout's own
 
-**This repo owns 61000–61006.** The sibling projects own 61100+ and 61200+.
+**This repo owns 61000–61008.** The sibling projects own 61100+ and 61200+.
 
 | port | service |
 |---|---|
@@ -354,6 +354,8 @@ silently cost it a write. See **"Emulator ports are this checkout's own"** below
 | 61004 | emulator UI |
 | 61005 | hub |
 | 61006 | logging |
+| 61007 | eventarc |
+| 61008 | tasks (Cloud Tasks) |
 
 Three repos share this machine and all three used to pin 8080/9099/5001, so
 whichever suite started second killed the other's Firestore. `61003` also reads
@@ -376,6 +378,15 @@ that every port is inside the block, and that the kill list contains **nothing
 this checkout does not own**. Change one, change all four, and let `npm run
 verify` prove it in seconds rather than discovering it when an emulator answers
 on a port nobody expected.
+
+**Two ports nobody asked for.** The functions emulator starts the Eventarc
+and Cloud Tasks emulators beside itself, used or not, on 9299 and 9499 unless
+`firebase.json` pins them. Unpinned, every checkout's functions emulator wants
+those two, and the second to start logs `EADDRINUSE` twice as "An unexpected
+error has occurred", never brings Auth up, and the suite dies with "timeout
+waiting for auth emulator". Seen 2026-10-16 with a sibling's sweep running:
+indistinguishable from a broken diff until the debug log names the port. Both
+are pinned inside this block.
 
 **Two ports are easy to move wrongly:**
 

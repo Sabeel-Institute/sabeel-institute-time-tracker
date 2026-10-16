@@ -97,7 +97,7 @@ A debug build on the simulator, against this checkout's emulators.
 ```mermaid
 flowchart LR
   subgraph mac["Mac host processes"]
-    EMU["Firebase emulators<br/>61000-61006"]
+    EMU["Firebase emulators<br/>61000-61008"]
     METRO["Metro :8091<br/>EXPO_PUBLIC_USE_EMULATORS=1"]
   end
   SIM["iPhone simulator<br/>debug build"] -->|"127.0.0.1"| EMU

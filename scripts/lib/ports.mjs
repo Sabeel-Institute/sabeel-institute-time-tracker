@@ -20,4 +20,9 @@ export const EMULATOR_PORTS = {
   ui: PORT_BASE + 4,
   hub: PORT_BASE + 5,
   logging: PORT_BASE + 6,
+  // Started by the functions emulator whether or not anything uses them, on
+  // 9299 and 9499 unless pinned: every checkout's functions emulator then wants
+  // the same two ports, and the second to start fails (docs/DEV-TOOLING.md).
+  eventarc: PORT_BASE + 7,
+  tasks: PORT_BASE + 8,
 };
