@@ -68,6 +68,12 @@ approve your account before you can use the app — this screen updates by
 itself the moment they do, no refresh needed. If you seem stuck here, contact
 your admin.
 
+The very first sign-in can show **"Setting up your account…"** for a few
+seconds while the account is made. If that takes unusually long, the app says
+**"Still setting up your account. Try again in a minute."**: wait a minute and
+tap **Try again**. **"Can't sign in"** appears only for an address outside
+`@oursabeel.com`, which the app does not accept.
+
 ### Then, once: the institute's rules
 
 ![The institute's rules](manual/img/rules.png)
@@ -535,6 +541,8 @@ Open that week → Reopen (admin) → the owner fixes and resubmits.
 | What you see | What it means | What to do |
 |---|---|---|
 | "Almost there" screen after signing in | Your account awaits admin approval | Ask your admin; the screen unlocks by itself once approved |
+| "Still setting up your account. Try again in a minute." | Your new account is taking longer than usual to be made | Wait a minute and tap **Try again** |
+| "Can't sign in" | The address is not an `@oursabeel.com` account | Sign out and sign in with your `@oursabeel.com` Google account |
 | "Before you continue" screen | The institute's rules, shown once to every account | Read them and tap **I agree** |
 | "Your report was saved but the email did not go out" | The report is kept, but its email failed | Nothing: the administrators will see it; no need to send it again |
 | "Pick your timesheet approver…" when submitting | No approver chosen yet | Home → My timesheet approver → pick one |

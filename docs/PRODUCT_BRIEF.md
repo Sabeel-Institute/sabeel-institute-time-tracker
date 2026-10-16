@@ -155,7 +155,7 @@ Not functions: profile creation (client create under rules), totals (aggregation
 
 ## Screens (one codebase — every screen works on every platform; everyone, managers included, is primarily on the phone, so all screens including manager tools are designed phone-first; web is the occasional big-screen/print surface)
 
-- SignIn (Google button), Pending/Disabled gate screens
+- SignIn (Google button), Pending/Disabled gate screens; while a new account is made, "Setting up your account…" for up to 45 s, then "Still setting up" (Try again); "Can't sign in" only for an address the trigger deleted, which Auth confirms
 - Rules: the institute's rules, once per account, after the gate and before Home (I agree / Sign out)
 - Report a problem (from Home): one field and Send
 - Home: big Clock In/Out, activity picker, running-timer banner, today's total

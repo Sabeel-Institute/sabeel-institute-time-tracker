@@ -59,6 +59,30 @@ phase boundary.
 
 ## Decision log
 
+- 2026-10-16 — **A slow account set-up is waited for, not refused; the report
+  email reads well on a phone.** "Can't sign in" ("This app is for Sabeel
+  Institute accounts only") used to follow ten seconds without a profile, which
+  a cold start of `onUserCreate` can exceed: a genuine colleague was told the
+  app was not for them. The app now waits 45 s on "Setting up your account…",
+  asking Auth every few seconds whether the account still exists
+  (`accounts:lookup`, `app/src/auth/accountLookup.ts`, not `user.reload()`,
+  which signs the person out on the answer); a deleted account (the trigger's
+  refusal) is refused within seconds, and anything else ends on "Still setting
+  up your account. Try again in a minute." with Try again (a page reload on
+  the web, the connection reopened on a phone, the wait over) and Sign out. An
+  outside address deleted before sign-in even finishes now reads the same
+  refusal on the sign-in screen instead of `auth/user-token-expired`. Proved
+  by `app/src/session.test.ts`, red against the old session logic, and by the
+  e2e holding the page's Firestore traffic; the old logic, run through the
+  e2e, refused the admin's own first sign-in. The sweep's reload workaround
+  became `settle` (`scripts/lib/e2e-stack.mjs`, both suites), which answers
+  that screen with the app's own Try again: on a fresh emulator stack the
+  first sign-in's Listen channel can stay silent until the page reloads,
+  which no wait cures. The report email is
+  multipart/alternative: plain text one line per paragraph (Gmail on a phone
+  broke the fixed-width lines a second time) and plain HTML of the same
+  content, the reporter's words escaped.
+
 - 2026-10-16 — **The institute's rules and Report a problem** (the
   `sabeel-app-stores` skill, decision 4, decided by Faisal for every Sabeel
   app; `docs/STORE-RELEASE.md`, 4). An active account sees the rules once,
