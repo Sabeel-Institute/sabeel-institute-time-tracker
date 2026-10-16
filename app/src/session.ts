@@ -21,8 +21,9 @@
  */
 import { useEffect, useState } from 'react';
 import { onAuthStateChanged, signOut as fbSignOut, type User } from 'firebase/auth';
-import { doc, onSnapshot, type DocumentSnapshot } from 'firebase/firestore';
+import { disableNetwork, doc, enableNetwork, onSnapshot, type DocumentSnapshot } from 'firebase/firestore';
 import { COLLECTIONS, type TokenClaims, type UserDoc } from '@sabeel/shared';
+import { lookUpAccount } from './auth/accountLookup';
 import { googleSignOut } from './auth/google';
 import { unregisterPush } from './notify';
 import { auth, db } from './firebase';
@@ -34,9 +35,16 @@ export type Session =
   /** Signed in, but the user doc/claims have not arrived yet. */
   | { phase: 'provisioning'; uid: string }
   /**
-   * Provisioning never completed — overwhelmingly this means the `onUserCreate`
-   * trigger REJECTED the account (a non-org address) and deleted it. The client's
-   * token stays valid until it refreshes, so without this state the person would
+   * No profile after PROVISIONING_PATIENCE_MS, and the account still exists:
+   * a trigger slower than that, or a connection that delivered nothing. Never
+   * a refusal: the person is told to try again in a minute, and Try again
+   * (`retryProvisioning`) starts the wait over on a fresh connection.
+   */
+  | { phase: 'provisioningSlow'; uid: string; email: string }
+  /**
+   * The `onUserCreate` trigger REJECTED the account (a non-org address) and
+   * deleted it, which Auth itself confirms (`lookUpAccount`). The client's token
+   * stays valid until it refreshes, so without this state the person would
    * watch a spinner forever instead of being told what happened.
    */
   | { phase: 'notProvisioned'; uid: string; email: string }
@@ -54,7 +62,6 @@ function emit(next: Session) {
 
 let unsubDoc: (() => void) | null = null;
 let lastClaimsStamp: number | null = null;
-let provisioningTimer: ReturnType<typeof setTimeout> | null = null;
 /**
  * Snapshot ordering guard. handleSnapshot awaits a token read (up to 8s on a
  * forced refresh, ~0 on the cached path), so two snapshots in flight can finish
@@ -64,11 +71,64 @@ let provisioningTimer: ReturnType<typeof setTimeout> | null = null;
 let snapshotSeq = 0;
 
 /**
- * How long to wait for the trigger before concluding it is not coming.
- * Provisioning normally takes well under a second; ten is generous enough to
- * survive a cold function start without stranding a rejected user on a spinner.
+ * How long "Setting up your account…" waits for the profile before saying it
+ * is still being set up. Provisioning normally takes well under a second; a
+ * cold start of the onUserCreate trigger can take tens. Time alone never
+ * refuses anyone: ten seconds once told a colleague on a cold start that the
+ * app was not for them.
  */
-const PROVISIONING_TIMEOUT_MS = 10_000;
+export const PROVISIONING_PATIENCE_MS = 45_000;
+/**
+ * While waiting, Auth is asked whether the account still exists, so an
+ * address the trigger rejected is told so in seconds rather than after the
+ * whole wait. The first look leaves the trigger a moment to decide.
+ */
+const FIRST_LOOK_MS = 3_000;
+const LOOK_EVERY_MS = 5_000;
+
+let provisioningTimers: ReturnType<typeof setTimeout>[] = [];
+let provisioningWatched = false;
+/** Moves on every stop, so a look still in flight cannot act for a wait that is over. */
+let provisioningGeneration = 0;
+
+function stopProvisioningWatch() {
+  provisioningTimers.forEach(clearTimeout);
+  provisioningTimers = [];
+  provisioningWatched = false;
+  provisioningGeneration++;
+}
+
+/**
+ * The wait for a new account's profile, which ends one of three ways: the
+ * profile arrives (handleSnapshot stops this), Auth says the account is gone
+ * (the refusal), or PROVISIONING_PATIENCE_MS passes with the account still
+ * there (still setting up). A look Auth cannot answer is not a refusal.
+ */
+function watchProvisioning(user: User) {
+  stopProvisioningWatch();
+  provisioningWatched = true;
+  const generation = provisioningGeneration;
+  const email = user.email ?? '';
+  const later = (fn: () => void, ms: number) => {
+    provisioningTimers.push(setTimeout(fn, ms));
+  };
+  const look = async () => {
+    const state = await lookUpAccount(user);
+    if (generation !== provisioningGeneration) return;
+    if (state === 'deleted') {
+      stopProvisioningWatch();
+      emit({ phase: 'notProvisioned', uid: user.uid, email });
+      return;
+    }
+    later(() => void look(), LOOK_EVERY_MS);
+  };
+  later(() => void look(), FIRST_LOOK_MS);
+  later(() => {
+    if (generation !== provisioningGeneration) return;
+    stopProvisioningWatch();
+    emit({ phase: 'provisioningSlow', uid: user.uid, email });
+  }, PROVISIONING_PATIENCE_MS);
+}
 
 function stopWatching() {
   unsubDoc?.();
@@ -77,17 +137,7 @@ function stopWatching() {
   // Invalidate anything still in flight — on a sign-out or account switch its
   // emit would restore the previous user's session.
   snapshotSeq++;
-  if (provisioningTimer) {
-    clearTimeout(provisioningTimer);
-    provisioningTimer = null;
-  }
-}
-
-function armProvisioningTimeout(uid: string, email: string) {
-  if (provisioningTimer) clearTimeout(provisioningTimer);
-  provisioningTimer = setTimeout(() => {
-    if (current.phase === 'provisioning') emit({ phase: 'notProvisioned', uid, email });
-  }, PROVISIONING_TIMEOUT_MS);
+  stopProvisioningWatch();
 }
 
 function withTimeout<T>(p: Promise<T>, ms: number, label: string): Promise<T> {
@@ -132,16 +182,15 @@ async function readClaims(user: User, forceRefresh: boolean): Promise<TokenClaim
 async function handleSnapshot(user: User, snap: DocumentSnapshot): Promise<void> {
   const seq = ++snapshotSeq;
   if (!snap.exists()) {
-    // The trigger has not finished yet, or it rejected the account and is about
-    // to delete it. The timeout decides which.
+    // The trigger has not finished yet, or it rejected the account and is
+    // about to delete it: the watch tells the two apart. A screen that has
+    // already said "still setting up" or refused keeps saying so.
+    if (current.phase === 'provisioningSlow' || current.phase === 'notProvisioned') return;
     emit({ phase: 'provisioning', uid: user.uid });
-    armProvisioningTimeout(user.uid, user.email ?? '');
+    if (!provisioningWatched) watchProvisioning(user);
     return;
   }
-  if (provisioningTimer) {
-    clearTimeout(provisioningTimer);
-    provisioningTimer = null;
-  }
+  stopProvisioningWatch();
 
   const profile = snap.data() as UserDoc;
   const stamp = typeof profile.claimsUpdatedAt === 'number' ? profile.claimsUpdatedAt : null;
@@ -167,10 +216,12 @@ function watchUserDoc(user: User) {
       void handleSnapshot(user, snap).catch((e) => {
         console.warn('user snapshot handler failed', e);
         emit({ phase: 'provisioning', uid: user.uid });
+        if (!provisioningWatched) watchProvisioning(user);
       }),
     (e) => {
       console.warn('user doc listener', (e as { code?: string }).code ?? e.message);
       emit({ phase: 'provisioning', uid: user.uid });
+      if (!provisioningWatched) watchProvisioning(user);
     },
   );
 }
@@ -184,19 +235,39 @@ onAuthStateChanged(auth, (user) => {
   }
   emit({ phase: 'provisioning', uid: user.uid });
   watchUserDoc(user);
-  armProvisioningTimeout(user.uid, user.email ?? '');
+  watchProvisioning(user);
 });
+
+/** Follow the session from outside React. Hears the current one at once. */
+export function onSessionChange(listener: Listener): () => void {
+  listeners.add(listener);
+  listener(current);
+  return () => {
+    listeners.delete(listener);
+  };
+}
 
 export function useSession(): Session {
   const [s, setS] = useState<Session>(current);
-  useEffect(() => {
-    listeners.add(setS);
-    setS(current);
-    return () => {
-      listeners.delete(setS);
-    };
-  }, []);
+  useEffect(() => onSessionChange(setS), []);
   return s;
+}
+
+/**
+ * Try again, from "Still setting up your account": the whole wait over, on a
+ * fresh connection to the database, so whatever held the profile back (a
+ * stalled listener on a loaded machine has done it) does not carry over.
+ */
+export async function retryProvisioning(): Promise<void> {
+  const user = auth.currentUser;
+  if (!user) return;
+  stopWatching();
+  emit({ phase: 'provisioning', uid: user.uid });
+  await disableNetwork(db).catch(() => undefined);
+  await enableNetwork(db).catch(() => undefined);
+  if (auth.currentUser !== user) return;
+  watchUserDoc(user);
+  watchProvisioning(user);
 }
 
 export async function signOut(): Promise<void> {

@@ -17,6 +17,7 @@ import {
   DisabledScreen,
   ProvisioningScreen,
   NotProvisionedScreen,
+  StillSettingUpScreen,
 } from './src/screens/GateScreens';
 import { HomeScreen } from './src/screens/HomeScreen';
 import { UsersScreen } from './src/screens/UsersScreen';
@@ -94,8 +95,11 @@ export default function App() {
   } else if (session.phase === 'provisioning') {
     // Signed in; the trigger is creating the profile (or about to reject it).
     content = <ProvisioningScreen />;
+  } else if (session.phase === 'provisioningSlow') {
+    // No profile in the whole wait, and the account still exists.
+    content = <StillSettingUpScreen email={session.email} />;
   } else if (session.phase === 'notProvisioned') {
-    // The trigger rejected+deleted the account — a non-org address.
+    // The trigger rejected and deleted the account — a non-org address.
     content = <NotProvisionedScreen email={session.email} />;
   } else if (session.claims.status !== 'active') {
     // Signed in with a profile, but not (yet) an active member.

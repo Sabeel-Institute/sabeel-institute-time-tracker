@@ -86,6 +86,26 @@ async function expectNoHome(page, who) {
   }
 }
 
+/**
+ * Hold every Firestore emulator request from this page's browser context
+ * until the returned release is called: a profile that reaches the page late,
+ * however fast the server made it. Auth is not held, so the account lookups
+ * the app makes meanwhile are answered.
+ */
+async function holdFirestore(page) {
+  let release;
+  const held = new Promise((r) => (release = r));
+  const url = `http://${EMULATOR_HOSTS.firestore}/**`;
+  await page.context().route(url, async (route) => {
+    await held;
+    await route.continue().catch(() => {});
+  });
+  return async () => {
+    release();
+    await page.context().unroute(url);
+  };
+}
+
 const firstOnScreen = (locator) => locator.filter({ visible: true }).first();
 const lastOnScreen = (locator) => locator.filter({ visible: true }).last();
 
@@ -593,6 +613,44 @@ async function main() {
     kept.platform?.stringValue === 'web' &&
     kept.mail?.mapValue?.fields?.status?.stringValue === 'skipped';
   if (!keptOk) throw new Error('the stored report is not the one sent: ' + JSON.stringify(kept).slice(0, 400));
+
+  console.log('▸ a slow account set-up is waited for, never refused…');
+  // Every Firestore answer to this page held for 15 s: the profile arrives
+  // late, as after a cold start of onUserCreate. Ten seconds used to be read
+  // as "This app is for Sabeel Institute accounts only".
+  const slow = await newPage('slow');
+  const releaseSlow = await holdFirestore(slow);
+  await devSignIn(slow, 'slow.start@oursabeel.com');
+  await slow.getByText('Setting up your account…', { exact: true }).waitFor({ timeout: 30000 });
+  await slow.waitForTimeout(15000);
+  if ((await slow.getByText('Can’t sign in').count()) !== 0) throw new Error('a slow set-up was refused');
+  await slow.getByText('Setting up your account…', { exact: true }).waitFor({ timeout: 1000 });
+  await releaseSlow();
+  await slow.getByText('waiting for an administrator', { exact: false }).waitFor({ timeout: 30000 });
+
+  console.log('▸ …while an address outside the institute is refused, in seconds…');
+  // onUserCreate deletes it; Auth saying so is what the refusal rests on.
+  const outsider = await newPage('outsider');
+  await devSignIn(outsider, 'someone.outside@gmail.com');
+  await outsider.getByText('Can’t sign in').waitFor({ timeout: 25000 });
+  if ((await outsider.getByText('Still setting up your account', { exact: false }).count()) !== 0)
+    throw new Error('a deleted account was told it is still being set up');
+
+  console.log('▸ …and a profile that never comes says so, neutrally, with Try again…');
+  const stuck = await newPage('stuck');
+  const releaseStuck = await holdFirestore(stuck);
+  await devSignIn(stuck, 'stuck.start@oursabeel.com');
+  await stuck
+    .getByText('Still setting up your account. Try again in a minute.', { exact: true })
+    .waitFor({ timeout: 70000 });
+  if ((await stuck.getByText('Can’t sign in').count()) !== 0) throw new Error('a stuck set-up was refused');
+  await stuck.screenshot({ path: join(shots, '20-still-setting-up.png'), animations: 'disabled', timeout: 8000 }).catch(() => {});
+  // Try again starts the wait over (the new requests are held too), then the
+  // profile arrives and the account lands on its gate.
+  await stuck.getByText('Try again', { exact: true }).click();
+  await stuck.getByText('Setting up your account…', { exact: true }).waitFor({ timeout: 10000 });
+  await releaseStuck();
+  await stuck.getByText('waiting for an administrator', { exact: false }).waitFor({ timeout: 30000 });
 
   await browser.close();
 

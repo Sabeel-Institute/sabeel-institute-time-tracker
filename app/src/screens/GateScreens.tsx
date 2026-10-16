@@ -1,5 +1,5 @@
 import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
-import { signOut } from '../session';
+import { retryProvisioning, signOut } from '../session';
 import { Button } from '../components/ui';
 import { getTheme, spacing } from '../theme';
 
@@ -15,7 +15,27 @@ export function ProvisioningScreen() {
   );
 }
 
-/** Terminal: the trigger rejected+deleted this account (not an org address). */
+/**
+ * The account still exists, and its profile has not arrived in the whole
+ * wait: a slow set-up or a stalled connection, never a refusal. Try again
+ * starts the wait over on a fresh connection.
+ */
+export function StillSettingUpScreen({ email }: { email: string }) {
+  return (
+    <Gate
+      title="One moment"
+      message="Still setting up your account. Try again in a minute."
+      email={email}
+      action={{ label: 'Try again', onPress: retryProvisioning }}
+    />
+  );
+}
+
+/**
+ * Terminal: the trigger rejected and deleted this account (not an org
+ * address), which Auth confirmed (session.ts, lookUpAccount). Never shown for
+ * an account that still exists, however long its set-up takes.
+ */
 export function NotProvisionedScreen({ email }: { email: string }) {
   return (
     <Gate
@@ -29,13 +49,25 @@ export function NotProvisionedScreen({ email }: { email: string }) {
   );
 }
 
-function Gate({ title, message, email }: { title: string; message: string; email: string }) {
+function Gate({
+  title,
+  message,
+  email,
+  action,
+}: {
+  title: string;
+  message: string;
+  email: string;
+  /** A primary action above Sign out. */
+  action?: { label: string; onPress: () => Promise<void> };
+}) {
   return (
     <View style={styles.container}>
       <Text style={styles.title}>{title}</Text>
       <Text style={styles.message}>{message}</Text>
       <Text style={styles.email}>{email}</Text>
       <View style={styles.actions}>
+        {action ? <Button label={action.label} onPress={action.onPress} block /> : null}
         <Button label="Sign out" kind="secondary" onPress={() => signOut()} block />
       </View>
     </View>
@@ -85,5 +117,5 @@ const styles = StyleSheet.create({
     maxWidth: 420,
   },
   email: { fontSize: 14, color: t.accent.base, fontWeight: '600' },
-  actions: { marginTop: spacing(4), width: '100%', maxWidth: 240 },
+  actions: { marginTop: spacing(4), width: '100%', maxWidth: 240, gap: spacing(3) },
 });
