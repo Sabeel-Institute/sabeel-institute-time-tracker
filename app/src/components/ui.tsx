@@ -1,6 +1,7 @@
 import { Children, type ReactNode, useState } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
 import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useListenerError } from '../liveQuery';
 import { getTheme, spacing } from '../theme';
 import {
@@ -35,6 +36,11 @@ export function Screen({
   // must never look like "there's just no data" (see the 2026-07-16 postmortem).
   const listenerError = useListenerError();
   const { isWide } = useLayout();
+  // The title clears the status bar by the same margin everywhere: 48 was
+  // enough under an Android status bar and put the title into the iPhone's
+  // 62pt Dynamic Island inset. The bottom keeps the last button above the
+  // home indicator (and Android's navigation bar) when scrolled to the end.
+  const insets = useSafeAreaInsets();
 
   // Cap + centre on wide only; on a phone the column is the whole screen, so a
   // maxWidth there would just add dead margin. `capStyle` is the centring cap;
@@ -58,7 +64,7 @@ export function Screen({
   return (
     <View style={styles.screen}>
       {title ? (
-        <View style={styles.header}>
+        <View style={[styles.header, { paddingTop: Math.max(spacing(12), insets.top + spacing(4)) }]}>
           {/* On wide the title aligns with the centred content column, not the
               window edge. */}
           <View style={capStyle}>
@@ -68,7 +74,7 @@ export function Screen({
       ) : null}
       {listenerError ? <Text style={styles.listenerError}>{listenerError}</Text> : null}
       <KeyboardAwareScrollView
-        contentContainerStyle={styles.body}
+        contentContainerStyle={[styles.body, { paddingBottom: spacing(5) + insets.bottom }]}
         keyboardShouldPersistTaps="handled"
         bottomOffset={spacing(6)}
       >
@@ -167,7 +173,6 @@ const styles = StyleSheet.create({
     // Ivory chrome: the title sits on the canvas, not on a raspberry bar
     // (brand chrome-vs-content rule).
     backgroundColor: t.bg.canvas,
-    paddingTop: spacing(12),
     paddingBottom: spacing(4),
     paddingHorizontal: spacing(5),
   },

@@ -8,6 +8,7 @@ import { setNotifRoutingSession, flushNotifRoute } from './src/notifRouting';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { KeyboardProvider } from 'react-native-keyboard-controller';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { useSession } from './src/session';
 import { SignInScreen } from './src/screens/SignInScreen';
@@ -273,11 +274,16 @@ export default function App() {
 
   return (
     <ErrorBoundary>
-      <KeyboardProvider>
-        {content}
-        {/* Dark icons — the app is ivory-topped everywhere (ivory chrome). */}
-        <StatusBar style="dark" />
-      </KeyboardProvider>
+      {/* The insets every Screen pads by: the iPhone's status bar and Dynamic
+          Island at the top and its home indicator at the bottom, Android's
+          system bars under edge-to-edge, and zero on the web. */}
+      <SafeAreaProvider>
+        <KeyboardProvider>
+          {content}
+          {/* Dark icons — the app is ivory-topped everywhere (ivory chrome). */}
+          <StatusBar style="dark" />
+        </KeyboardProvider>
+      </SafeAreaProvider>
     </ErrorBoundary>
   );
 }
