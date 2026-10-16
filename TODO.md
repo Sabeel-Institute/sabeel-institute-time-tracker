@@ -117,12 +117,10 @@ Nothing here blocks sideloaded testing. The APKs already ARE release builds
 (minified, production bundle); only the signing key is the debug one, which is
 valid to 2052 and functionally identical for testing.
 
-- [ ] **Release keystore + SHA-1** — generate a real keystore, wire the signing
-  config, register its SHA-1 on the Firebase Android app, re-download
-  `google-services.json`. Play Store will not accept a debug-signed APK.
-  Note: switching keys forces a one-time uninstall/reinstall for everyone who
-  already has the app (Android refuses an update signed by a different key), so
-  the cost scales with install count. Nothing is lost — all data is in Firestore.
+- [x] **Release keystore + SHA-1** (2026-10-15) — signing config wired to the
+  release key, its SHA-1 and SHA-256 registered on the Firebase Android app,
+  `google-services.json` re-downloaded. Everyone with a debug-signed APK
+  uninstalls once before installing a release-signed build.
 
 ## App Store phase (not now — versioning groundwork done 2026-07-26)
 

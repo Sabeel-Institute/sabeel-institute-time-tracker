@@ -93,9 +93,16 @@ recovers with `git reset --hard HEAD~1`.
 - Both surfaces agree: the web bundle's `BUILD_INFO` matches the APK's.
 - Record the deploy in `docs/PHASE_STATUS.md`.
 
-Signing: the APKs are debug-signed, which is fine for sideloading but not for
-Play. Switching to a real keystore later forces a one-time uninstall/reinstall
-for everyone — see `TODO.md`.
+Signing: release builds (the APKs and the Play bundle) sign with the app's own
+key, `~/keystores/sabeel-time-tracker-release.jks`, named by
+`~/.config/sabeel-time-tracker/keystore.properties` (`app/android/app/build.gradle`
+refuses to package a release without it). Google Play signs with the same key,
+uploaded as its app signing key, so a Play install and an APK from the download
+page update each other. Builds before this were signed with the public debug key:
+a phone that has one must uninstall it once before installing a release-signed
+build (Android refuses an update signed by another key); nothing is lost, all
+data is in Firestore. Both keys' SHA-1s are on the Firebase Android app, so
+Google sign-in works on either.
 
 ## Troubleshooting
 

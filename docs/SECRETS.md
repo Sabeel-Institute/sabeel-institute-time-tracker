@@ -24,12 +24,20 @@ See `functions/.env.example`.
 | `EXPO_PUBLIC_SENTRY_DSN` | app Sentry seam (`app/src/sentry*.ts`) | Sentry DSN (deferred to launch) |
 | `EXPO_PUBLIC_USE_EMULATORS` | dev only — point the app at local emulators | `1` |
 
+## Android release signing key
+`~/keystores/sabeel-time-tracker-release.jks` (alias and password in
+`sabeel-time-tracker-release.credentials.txt` beside it), named for Gradle by
+`~/.config/sabeel-time-tracker/keystore.properties` (mode 600, outside the repo).
+It is also Google Play's app signing key for this app. Losing it means no update
+can ever be signed again: back it up (Faisal's vault holds a copy).
+
 ## Non-secret client config in the repo
 - `app/src/firebase-config.ts` — Firebase web app config (public).
 - `packages/shared/src/constants.ts` → `WEB_CLIENT_ID` — the **Web** OAuth client id
   (public; needed by native Google Sign-In). Not the Android client id.
-- `app/google-services.json` — committed placeholder until the real Firebase Android
-  app exists; replace per `TODO.md`.
+- `app/google-services.json` (and its copy under `app/android/app/`) — the Firebase
+  Android app's config, with an OAuth client for the debug key and one for the
+  release key.
 
 ## iOS build (the Mac and GitHub)
 `app/.env.sentry-build-plugin` (gitignored) holds `SENTRY_ORG`, `SENTRY_PROJECT`,
