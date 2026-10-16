@@ -121,11 +121,11 @@ Staff install from Play through a join link that never changes, as for Kanban.
   `google-services.json` re-downloaded. Everyone with a debug-signed APK
   uninstalls once before installing a release-signed build.
 - [x] **The app in Play Console, and the publishing account on it** (2026-10-15).
-- [ ] **The first release, in Play Console** (Internal testing, Create new
-  release): choose "Export and upload a key from Java keystore" so Play signs
-  with this app's own key, then upload `sabeel-time-tracker-0.27.1-27001.aab`.
-  `publish-play.mjs` refuses to make an app's first release, because that is
-  where the signing key is chosen.
+- [x] **Play signs with this app's own key** (2026-10-16): App integrity, App
+  signing, "Change key", "Export and upload a key from Java keystore".
+- [ ] **If the first release stays a draft,** roll it out once: Internal
+  testing, Start rollout (`npm run release` says so when Play keeps it a
+  draft).
 - [ ] **Testers:** tick the "Sabeel staff" email list on Internal testing,
   Testers, and share the join link.
 

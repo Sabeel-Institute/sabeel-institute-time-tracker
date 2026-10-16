@@ -70,11 +70,18 @@ testing track with `scripts/publish-play.mjs`.
 `publish-play.mjs` (`npm run publish:play -- --check`, or `-- --internal` to
 rerun the upload alone) refuses a debug-signed bundle, one that does not carry
 HEAD's commit or app.json's version, and an upload whose versionCode Play reads
-differently. It never makes the app's first release: that one is made in Play
-Console, where the app signing key is chosen (`TODO.md`), and an upload through
-the API first would have Google generate a key of its own, for good. Everyone on
-the "Sabeel staff" tester list gets each release from Play; the join link never
-changes. The publishing key is in `docs/SECRETS.md`.
+differently. It puts the build up as a draft release no tester sees, waits for
+the APKs Play generates from it, and completes the release only if they are
+signed with the app's own release key. Play Console gives every new app a
+Google-generated signing key the moment it is created; this app's was replaced
+with its own key (App integrity, App signing, "Change key", "Export and upload
+a key from Java keystore", with Google's PEPK tool), so a Play install and an
+APK from the download page update each other. APKs Play generated before a key
+change stay signed with the old key, which is what the check catches. Play
+keeps an app's first release a draft if the API may not complete it: one
+"Start rollout" in Play Console sends it. Everyone on the "Sabeel staff" tester
+list gets each release from Play; the join link never changes. The publishing
+key is in `docs/SECRETS.md`.
 
 `publish-apk.sh` updates the public download page
 (https://faisal-shah.github.io/sabeel-time-tracker/):
