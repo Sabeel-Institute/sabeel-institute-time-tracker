@@ -30,7 +30,7 @@ async function seedEntries(n: number) {
 }
 
 beforeEach(async () => {
-  await wipe(['timeEntries', 'users', 'activities', 'timesheets']);
+  await wipe(['timeEntries', 'users', 'activities', 'timesheets', 'reports']);
 });
 
 describe('runHealthCheck', () => {
@@ -46,6 +46,7 @@ describe('runHealthCheck', () => {
       timeEntries: 3,
       timesheets: 0,
       timesheetEvents: 0,
+      reports: 0,
     });
     // First run has no baseline to compare against.
     expect(findings).toEqual([]);

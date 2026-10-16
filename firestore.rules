@@ -97,7 +97,9 @@ service cloud.firestore {
       // Self may touch the clock pointer, cosmetic profile fields, their own
       // approver choice (must be an active manager/admin, or null), notification
       // prefs, and last-seen timezone. NOT lastReminderDayKey — that dedup
-      // marker is server-written only.
+      // marker is server-written only — and NOT rulesVersion/rulesAcceptedAt:
+      // accepting the institute's rules is recorded by the acceptRules
+      // callable alone, so the record says the server saw it.
       allow update: if isActive() && request.auth.uid == uid
         && request.resource.data.diff(resource.data).affectedKeys()
              .hasOnly(['activeEntryId', 'displayName', 'photoURL', 'approverUid',
@@ -297,6 +299,14 @@ service cloud.firestore {
     // document-count baseline). Deny-by-default would already cover it; stated
     // explicitly so the server-only intent is visible on the security surface.
     match /meta/{docId} {
+      allow read, write: if false;
+    }
+
+    // "Report a problem" records, written by the reportProblem callable (which
+    // also emails them to the administrators). No client reads or writes them:
+    // a report names the person who sent it and what they said about someone,
+    // and is for the administrators alone, who read it in their email.
+    match /reports/{reportId} {
       allow read, write: if false;
     }
 

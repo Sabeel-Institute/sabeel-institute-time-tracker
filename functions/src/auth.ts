@@ -45,6 +45,14 @@ function hasRole(claims: Claims, role: 'manager' | 'admin'): boolean {
   return role === 'admin' ? claims.admin === true : claims.role === 'manager';
 }
 
+/** What the caller may do, as one word: the highest role the locks above allow. */
+export function roleOf(req: CallableRequest): 'admin' | 'manager' | 'member' {
+  const claims = (req.auth?.token ?? {}) as Claims;
+  if (hasRole(claims, 'admin')) return 'admin';
+  if (hasRole(claims, 'manager')) return 'manager';
+  return 'member';
+}
+
 /**
  * Reports and CSV export require an operational or administrative
  * role. Admin implies full access (an admin who isn't also a manager still gets

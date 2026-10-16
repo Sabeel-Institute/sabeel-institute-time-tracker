@@ -32,7 +32,9 @@ const HEALTH_DOC = 'meta/health';
  *
  * `zeroTolerance` — any decrease at all is suspicious:
  *  - `activities` are never deleted (firestore.rules: `allow delete: if false`);
- *  - `users` are removed only by a deliberate admin-SDK operation.
+ *  - `users` are removed only by a deliberate admin-SDK operation;
+ *  - `reports` are never deleted: no client may touch them and no function
+ *    removes one, so a report that disappears is the record being lost.
  *
  * The rest shrink in normal use (people delete their own entries; withdrawing or
  * reopening a timesheet deletes its doc), so they alert on a drop bigger than
@@ -47,6 +49,7 @@ interface DropRule {
 const DROP_RULES: Record<string, DropRule> = {
   [COLLECTIONS.users]: { zeroTolerance: true },
   [COLLECTIONS.activities]: { zeroTolerance: true },
+  [COLLECTIONS.reports]: { zeroTolerance: true },
   [COLLECTIONS.timeEntries]: { minDrop: 5, fraction: 0.2 },
   [COLLECTIONS.timesheets]: { minDrop: 5, fraction: 0.2 },
 };

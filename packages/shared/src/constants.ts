@@ -5,7 +5,28 @@ export const COLLECTIONS = {
   timesheets: 'timesheets',
   /** Append-only lifecycle history. Server-written, never client-visible. */
   timesheetEvents: 'timesheetEvents',
+  /**
+   * "Report a problem" records (problemReport.ts), NOT the hours reports of
+   * the Reports screen. Written by the reportProblem callable only; no client
+   * reads or writes them. The same name in every Sabeel app's project.
+   */
+  reports: 'reports',
 } as const;
+
+/**
+ * The app's name as people see it: the home screen's title, app.json's
+ * `expo.name` (projectIdentity.test.ts holds the two equal), and the name a
+ * "Report a problem" email and record carry.
+ */
+export const APP_NAME = 'Sabeel Time Tracker';
+
+/**
+ * The version of the institute's rules a person must have accepted to use the
+ * app (the rules screen, app/src/screens/RulesScreen.tsx). The acceptRules
+ * callable records the version accepted on the person's profile; raising this
+ * number shows the rules again to everyone, once, on their next open.
+ */
+export const RULES_VERSION = 1;
 
 // Functions region must match setGlobalOptions in functions/src/setup.ts.
 export const REGION = 'us-central1';

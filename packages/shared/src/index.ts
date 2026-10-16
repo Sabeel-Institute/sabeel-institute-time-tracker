@@ -7,3 +7,4 @@ export * from './time';
 export * from './validate';
 export * from './overlap';
 export * from './notifRoute';
+export * from './problemReport';

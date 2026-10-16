@@ -71,6 +71,10 @@ export const probeQueries = onRequest(async (req, res) => {
     'users status==active (weekly reminder sweep)': db
       .collection('users')
       .where('status', '==', 'active'),
+    'reports uid==, createdAt> (report a problem: five an hour)': db
+      .collection('reports')
+      .where('uid', '==', 'probe')
+      .where('createdAt', '>', Date.now() - 60 * 60 * 1000),
     // No composite index needed (single-field OR); probed for query-shape regression.
     'users or(role==manager, admin==true) (approver choices)': db
       .collection('users')

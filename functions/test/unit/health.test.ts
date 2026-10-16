@@ -41,6 +41,12 @@ describe('evaluateCounts — zero-tolerance collections', () => {
     expect(f).toHaveLength(1);
     expect(f[0].collection).toBe('activities');
   });
+
+  it('flags losing a single report (nothing deletes one; it is the record)', () => {
+    const f = evaluateCounts({ ...base, reports: 3 }, { ...base, reports: 2 });
+    expect(f).toHaveLength(1);
+    expect(f[0]).toMatchObject({ collection: 'reports', dropped: 1, allowed: 0 });
+  });
 });
 
 describe('evaluateCounts — tolerant collections', () => {

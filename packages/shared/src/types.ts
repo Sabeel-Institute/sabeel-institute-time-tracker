@@ -60,6 +60,14 @@ export interface UserDoc {
    *  access change). The client watches this and force-refreshes its token when
    *  it moves, so approval un-gates within a second without a sign-out. */
   claimsUpdatedAt?: number;
+  /**
+   * The institute's rules, accepted: the version (RULES_VERSION) and when, as
+   * epoch ms on the server's clock. Server-written only, by the acceptRules
+   * callable; firestore.rules keeps both out of the fields a person may write.
+   * Absent until accepted, and the app shows the rules screen until then.
+   */
+  rulesVersion?: number;
+  rulesAcceptedAt?: number;
 }
 
 /**

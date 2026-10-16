@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { existsSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { APP_ID, FIREBASE_PROJECT_ID } from '@sabeel/shared';
+import { APP_ID, APP_NAME, EMULATOR_PROJECT_ID, FIREBASE_PROJECT_ID } from '@sabeel/shared';
 
 /**
  * One app, one project, stated in many files that must agree.
@@ -37,6 +37,12 @@ describe('the app id', () => {
   });
 });
 
+describe('the app name', () => {
+  it('is what app.json calls the app, and what a report names it', () => {
+    expect(JSON.parse(read('app/app.json')).expo.name).toBe(APP_NAME);
+  });
+});
+
 describe('the project id', () => {
   it('is the one every config file names', () => {
     expect(JSON.parse(read('.firebaserc')).projects.dev).toBe(FIREBASE_PROJECT_ID);
@@ -50,5 +56,15 @@ describe('the project id', () => {
     expect(existsSync(resolve(ROOT, file)), file).toBe(true);
     expect(read(file)).toMatch(/^APNS_KEY_ID=[A-Z0-9]{10}$/m);
     expect(read(file)).toMatch(/^APPLE_TEAM_ID=[A-Z0-9]{10}$/m);
+  });
+
+  it('names its own report-mailer as the service account report emails are signed by', () => {
+    // A service account of another project would be refused at signing, and
+    // every report would be kept as "failed" with nothing in the inbox.
+    expect(read(`functions/.env.${FIREBASE_PROJECT_ID}`)).toMatch(
+      new RegExp(`^REPORT_MAILER_SA=report-mailer@${FIREBASE_PROJECT_ID}\\.iam\\.gserviceaccount\\.com$`, 'm'),
+    );
+    // The emulator's file has a stand-in, so the emulator never stops to ask.
+    expect(read(`functions/.env.${EMULATOR_PROJECT_ID}`)).toMatch(/^REPORT_MAILER_SA=\S+$/m);
   });
 });
