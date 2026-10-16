@@ -23,6 +23,17 @@ export const ALLOWED_EMAIL_DOMAIN = 'oursabeel.com';
 export const WEB_CLIENT_ID =
   '858585609550-4pkumltbrleru9om5q91jhrv1pcnblk9.apps.googleusercontent.com';
 
+/** The Firebase project the app talks to in production (not the emulators'). */
+export const FIREBASE_PROJECT_ID = 'sabeel-institute-time-tracker';
+
+/**
+ * The app's identity on both phones: the iOS bundle id and the Android package,
+ * and so the topic of every push sent to Apple (functions/src/apns.ts), which
+ * Apple refuses for any other app's token. projectIdentity.test.ts holds
+ * app/app.json and both Firebase config files to it.
+ */
+export const APP_ID = 'com.sabeelinstitute.timetracker';
+
 // Where the web build is hosted. Used to build the click target of a web push;
 // the browser has no app to hand a route to, so the route rides in the URL.
 export const WEB_APP_ORIGIN = 'https://sabeel-institute-time-tracker.web.app';

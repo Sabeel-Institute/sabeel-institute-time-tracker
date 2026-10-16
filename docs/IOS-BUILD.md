@@ -170,6 +170,10 @@ Screenshots in `~/Documents/repos/time-tracker-ios-shots/` on the Mac.
 - Reports (the callable) and Manage users.
 - Sign out; "Sign in with Google" reaches Apple's web-authentication prompt
   (the URL scheme and client id are wired) and Cancel returns quietly.
+- The phone app refuses an address with no account, and creates none.
+- Push: the iOS row through the rules, a real sandbox push from Apple, and the
+  foreground banner's tap opening the week it named (see "Push on the
+  simulator").
 
 ### What the simulator cannot show
 
@@ -179,7 +183,42 @@ Screenshots in `~/Documents/repos/time-tracker-ios-shots/` on the Mac.
   keyboard is attached, so no keyboard rises over a field until
   `tools/sim-keyboard.m` switches that off.
 - **A notification tapped from outside the app** (home-screen banner,
-  Notification Center): SpringBoard drops synthetic taps there.
+  Notification Center, a killed app): SpringBoard drops synthetic taps there.
+  The foreground banner's tap does work, and is how the route was checked.
+
+## Push on the simulator
+
+An iPhone registers Apple's own device token, and the functions send it to
+Apple directly (`functions/src/apns.ts`); FCM is for Android and browsers only.
+An Apple-silicon simulator gets a real token from Apple's sandbox, so the whole
+round trip runs here except the tap from outside the app.
+
+1. **The row.** Sign in on a debug build that already allows notifications (or
+   tap **Enable notifications** on Home): the app writes
+   `users/{uid}/pushTokens/{token}` with `platform: 'ios'` and
+   `apnsEnvironment: 'development'` (a simulator carries no provisioning
+   profile, so the release type decides). The row goes through the rules, which
+   accept exactly that shape. An emulator build registers on an iPhone, unlike
+   Android: the sandbox really delivers to it.
+2. **A real push.** From the Mac, with the APNs key file:
+
+   ```bash
+   APNS_KEY_FILE=~/.apns/AuthKey_X5R8FL94BC.p8 \
+     node scripts/send-test-push.mjs --apple development <token> screen=Timesheet periodKey=2026-10-04
+   ```
+
+   It sends exactly what the functions send (it loads `apns.ts` from source).
+   With the app open the banner appears at the top; tap it and the app opens the
+   route, here My timesheet on the week of 4 October (verified 2026-10-15).
+3. **The emulated functions send nothing.** A trigger that reaches an iPhone row
+   logs `[emulator] push suppressed for 1 device(s)`: there is no APNs or FCM
+   emulator, and `APNS_KEY` is a placeholder there (`functions/.secret.local`).
+
+`node scripts/check-push.mjs` asks both real services whether they accept a
+message from this project (a bogus token each): FCM needs Google credentials
+(Application Default Credentials, or `CHECK_ACCESS_TOKEN`), Apple takes
+Secret Manager's `APNS_KEY` through `gcloud`, or `APNS_KEY_FILE`. On the Mac the
+Apple half passes and the FCM half has no credentials to try.
 
 ## Building a release
 
@@ -283,8 +322,5 @@ must be the tagged one.
 - **The Google sign-in prompt names the app "SabeelTimeTracker"**: Apple's
   web-authentication alert uses `CFBundleName` (the Xcode target's name), not
   the display name.
-- **The notification prompt is raised at sign-in.** On iOS that prompt can be
-  shown once; a "Don't Allow" given before the person knows what the app sends
-  can only be undone in Settings.
 - **The keyboard over the reject-reason field** has not been checked with
   `sim-keyboard.m`.

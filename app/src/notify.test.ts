@@ -19,7 +19,14 @@ vi.mock('expo-notifications', () => ({
   addPushTokenListener: vi.fn(() => ({ remove: vi.fn() })),
   AndroidImportance: { HIGH: 4, DEFAULT: 3 },
 }));
-vi.mock('react-native', () => ({ Linking: { openSettings: vi.fn(() => Promise.resolve()) } }));
+const rn = vi.hoisted(() => ({ Platform: { OS: 'android' as 'android' | 'ios' } }));
+vi.mock('react-native', () => ({ Linking: { openSettings: vi.fn(() => Promise.resolve()) }, Platform: rn.Platform }));
+const app = vi.hoisted(() => ({ profile: 'development' as string | null, release: 0 }));
+vi.mock('expo-application', () => ({
+  ApplicationReleaseType: { UNKNOWN: 0, SIMULATOR: 1 },
+  getIosPushNotificationServiceEnvironmentAsync: vi.fn(async () => app.profile),
+  getIosApplicationReleaseTypeAsync: vi.fn(async () => app.release),
+}));
 vi.mock('firebase/firestore', () => ({
   doc: vi.fn(() => ({})),
   setDoc: vi.fn(() => Promise.resolve()),
@@ -46,7 +53,12 @@ function device(opts: { granted: boolean; canAskAgain?: boolean; token?: string 
   });
 }
 
-beforeEach(() => vi.clearAllMocks());
+beforeEach(() => {
+  vi.clearAllMocks();
+  rn.Platform.OS = 'android';
+  app.profile = 'development';
+  app.release = 0;
+});
 
 describe('registerPush', () => {
   it('reports the token landing, not merely the permission', async () => {
@@ -65,6 +77,63 @@ describe('registerPush', () => {
     device({ granted: false });
     await expect(registerPush('user-1')).resolves.toBe(false);
     expect(setDoc).not.toHaveBeenCalled();
+  });
+
+  /**
+   * Sign-in registers a device that already allows notifications and ASKS
+   * NOTHING. On an iPhone the prompt can be shown once; spent at sign-in, before
+   * the person knows what the app sends, a "Don't Allow" leaves push dead until
+   * Settings. The ask belongs to a press (enablePush).
+   */
+  it('never raises the permission prompt by itself', async () => {
+    device({ granted: false, canAskAgain: true });
+    await expect(registerPush('user-1')).resolves.toBe(false);
+    expect(Notifications.requestPermissionsAsync).not.toHaveBeenCalled();
+  });
+
+  it('files an Android row for an FCM token', async () => {
+    device({ granted: true });
+    await registerPush('user-1');
+    expect(asMock(setDoc).mock.calls[0][1]).toEqual({
+      token: 'fcm-native-token',
+      platform: 'android',
+      updatedAt: expect.any(Number),
+    });
+  });
+});
+
+/**
+ * An iPhone's token is Apple's, and the server sends it to whichever of Apple's
+ * two services issued it (functions/src/apns.ts), so the row must say which.
+ */
+describe('registerPush on an iPhone', () => {
+  const row = async () => {
+    rn.Platform.OS = 'ios';
+    device({ granted: true, token: 'ab'.repeat(32) });
+    await registerPush('user-1');
+    return asMock(setDoc).mock.calls[0][1];
+  };
+
+  it('files an iOS row naming the service the profile says', async () => {
+    app.profile = 'production';
+    expect(await row()).toEqual({
+      token: 'ab'.repeat(32),
+      platform: 'ios',
+      apnsEnvironment: 'production',
+      updatedAt: expect.any(Number),
+    });
+  });
+
+  it('takes the sandbox for a simulator, which carries no profile', async () => {
+    app.profile = null;
+    app.release = 1; // SIMULATOR
+    expect(await row()).toMatchObject({ apnsEnvironment: 'development' });
+  });
+
+  it('takes production for a store install, which carries no profile either', async () => {
+    app.profile = null;
+    app.release = 0;
+    expect(await row()).toMatchObject({ apnsEnvironment: 'production' });
   });
 });
 
@@ -154,6 +223,12 @@ describe('enablePush', () => {
     await expect(enablePush('user-1')).resolves.toBe('granted');
   });
 
+  it('is what raises the permission prompt', async () => {
+    device({ granted: false, canAskAgain: true });
+    await enablePush('user-1');
+    expect(Notifications.requestPermissionsAsync).toHaveBeenCalledTimes(1);
+  });
+
   it('is unavailable when permission was granted but no token landed', async () => {
     device({ granted: true, token: null });
     await expect(enablePush('user-1')).resolves.toBe('unavailable');
@@ -190,11 +265,19 @@ describe('against the emulators', () => {
     await expect(state()).resolves.toBe('default');
   });
 
-  it('files no token there is no emulator to deliver to', async () => {
+  it('files no Android token: there is no FCM emulator to deliver to', async () => {
     device({ granted: true });
     const { registerPush: reg } = await loadWithEmulators();
     await expect(reg('user-1')).resolves.toBe(false);
     expect(setDoc).not.toHaveBeenCalled();
+  });
+
+  it('files an iPhone token: Apple’s sandbox does deliver to the simulator', async () => {
+    rn.Platform.OS = 'ios';
+    device({ granted: true, token: 'ab'.repeat(32) });
+    const { registerPush: reg } = await loadWithEmulators();
+    await expect(reg('user-1')).resolves.toBe(true);
+    expect(setDoc).toHaveBeenCalledTimes(1);
   });
 
   /**
@@ -209,7 +292,7 @@ describe('against the emulators', () => {
   it('still sets the channel up, and asks, before stopping at the token', async () => {
     device({ granted: true });
     const { registerPush: reg } = await loadWithEmulators();
-    await reg('user-1');
+    await reg('user-1', true);
     expect(Notifications.setNotificationChannelAsync).toHaveBeenCalledWith(
       PUSH_CHANNEL_ID,
       expect.objectContaining({ importance: Notifications.AndroidImportance.HIGH }),

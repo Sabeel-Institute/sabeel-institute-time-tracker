@@ -9,9 +9,26 @@ Set with `firebase functions:secrets:set <NAME>`; bind in code via `defineSecret
 | Name | Used by | Where to find the value |
 |---|---|---|
 | `SENTRY_DSN` | functions error capture (`functions/src/sentry.ts`) | Sentry → Project → Client Keys (DSN) |
+| `APNS_KEY` | push to iPhones (`functions/src/messaging.ts`, bound to every sender via `PUSH_SECRETS`) | The team's APNs key, `AuthKey_X5R8FL94BC.p8` (the same key the LMS and Kanban use). Set with `firebase functions:secrets:set APNS_KEY --data-file <the .p8>` |
+
+The emulator reads stand-ins from the gitignored `functions/.secret.local`
+(`APNS_KEY=unused-in-emulator`; CI writes the same line). The emulated functions
+send no push, so the value is never used.
+
+## Cloud Functions parameters (`functions/.env.<project>`, committed)
+`defineString` params, read from the committed `functions/.env.<project>` of the
+project being deployed or emulated. Both files exist, the demo one included, so
+the emulator never stops to prompt for a value.
+
+| Name | Used by | Value |
+|---|---|---|
+| `APNS_KEY_ID` | push to iPhones | The APNs key's id (`X5R8FL94BC`); `unused-in-emulator` for `demo-sabeel` |
+| `APPLE_TEAM_ID` | push to iPhones | The Apple team (`XRKWA4QRN9`); `unused-in-emulator` for `demo-sabeel` |
 
 ## Cloud Functions env vars (`functions/.env`, gitignored)
-Plain env vars (NOT `defineString` params — those hang the emulator on a stdin prompt).
+Plain env vars for values that are not per-project parameters. (A `defineString`
+param with no value in the emulated project's `.env.<project>` hangs the
+emulator on a stdin prompt, which is why both parameter files above exist.)
 See `functions/.env.example`.
 
 | Name | Used by | Value |

@@ -21,7 +21,7 @@ import { PUSH_CHANNEL_ID } from '@sabeel/shared';
  *   - asserting a notification arrived on a device proves nothing — it does
  *     arrive, in the wrong place.
  * So this asserts the PAYLOAD handed to FCM, through the real trigger. Delete
- * the `android` block in functions/src/notify.ts and this fails.
+ * the `android` block in functions/src/fcm.ts and this fails.
  *
  * It reads PUSH_CHANNEL_ID rather than restating it, so it cannot catch the
  * client and server genuinely disagreeing — nothing in a repo can, since the
@@ -35,7 +35,11 @@ const sendEachForMulticast = vi.fn(async (msg: unknown) => {
   return { responses: [{ success: true }], successCount: 1, failureCount: 0 };
 });
 
-const tokenDoc = { id: 'device-token-1', ref: { delete: vi.fn(async () => undefined) } };
+const tokenDoc = {
+  id: 'device-token-1',
+  data: () => ({ token: 'device-token-1', platform: 'android', updatedAt: 1 }),
+  ref: { delete: vi.fn(async () => undefined) },
+};
 const adminDoc = {
   id: 'admin-1',
   data: () => ({ displayName: 'Amina', email: 'amina@example.test', admin: true, status: 'active' }),

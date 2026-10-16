@@ -51,6 +51,15 @@ phase boundary.
   web keeps creating them, and `/privacy` and `/support` are static pages with
   the policy linked from the sign-in screen and Home (`docs/STORE-RELEASE.md`).
   Deploy order: functions before the first build that calls `accountExists`.
+  **iPhone push**: an iPhone registers Apple's device token, which FCM cannot
+  address, so the functions now send to Apple directly (`apns.ts`, HTTP/2, the
+  team's `APNS_KEY`), routed per device in `messaging.ts` with FCM for the rest;
+  one service failing does not undo the other, and the stale-token codes no
+  longer include `invalid-argument`, which FCM also returns for a bad message
+  and which would have unregistered everyone at once. The rules accept exactly
+  two row shapes. Proved on the simulator with a real sandbox push whose banner
+  tap opened the week it named. Nothing raises the notification prompt by
+  itself any more: Home's card and the settings screen ask, from a press.
 
 - 2026-08-27 — **The layout sweep (`npm run test:screens`).** This repo's
   highest-value missing test, named as such in `CLAUDE.md`, now exists:

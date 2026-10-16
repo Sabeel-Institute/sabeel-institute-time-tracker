@@ -125,12 +125,26 @@ service cloud.firestore {
       // purpose: sign-out deregisters this device, and that cleanup must still
       // work for someone who was disabled while signed in — otherwise their
       // tokens linger and the next person on the device inherits them.
+      //
+      // Exactly two shapes (PushTokenDoc in @sabeel/shared). A browser or an
+      // Android phone holds an FCM token. An iPhone holds Apple's own token and
+      // says which of Apple's two services issued it, because the server must
+      // send to that one and the other refuses it (functions/src/apns.ts). The
+      // doc id IS the token, which is the address the server sends to. `hasOnly`
+      // because this row is read by the send path, and a field nobody expects
+      // is a field nobody validates.
       match /pushTokens/{tokenId} {
         allow read, delete: if isSignedIn() && request.auth.uid == uid;
         allow create, update: if isActive() && request.auth.uid == uid
-          && request.resource.data.token is string
-          && request.resource.data.token.size() > 0
-          && request.resource.data.platform in ['web', 'android'];
+          && request.resource.data.token == tokenId
+          && request.resource.data.updatedAt is int
+          && (
+            (request.resource.data.keys().hasOnly(['token', 'platform', 'updatedAt'])
+              && request.resource.data.platform in ['web', 'android'])
+            || (request.resource.data.keys().hasOnly(['token', 'platform', 'apnsEnvironment', 'updatedAt'])
+              && request.resource.data.platform == 'ios'
+              && request.resource.data.apnsEnvironment in ['development', 'production'])
+          );
       }
     }
 

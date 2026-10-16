@@ -92,6 +92,10 @@ release commit. Two reasons it belongs there and not in your hands:
 Everything before the push is local, so a failed build or AVD check still
 recovers with `git reset --hard HEAD~1`.
 
+After a functions deploy, `npm run check:push` asks FCM and Apple whether they
+accept a message from the project (needs Google credentials for FCM and
+`gcloud` access to the `APNS_KEY` secret).
+
 The iPhone build of the release is the iOS workflow started on its tag
 (`docs/IOS-BUILD.md`, "Releasing to TestFlight").
 

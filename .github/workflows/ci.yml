@@ -42,6 +42,12 @@ jobs:
       - name: Unit tests
         run: npm test
 
+      # The functions emulator reads Secret Manager secrets from this gitignored
+      # file. The push senders bind APNS_KEY (functions/src/messaging.ts); the
+      # emulated ones send nothing, so a placeholder is all it needs.
+      - name: Emulator stand-ins for secrets
+        run: printf 'APNS_KEY=unused-in-emulator\n' > functions/.secret.local
+
       - name: Emulator integration tests
         run: npm run test:emulator
 

@@ -1,9 +1,15 @@
-// Android push registration (web sibling: notify.web.ts). Asks for permission,
-// grabs the native FCM device token, and files it under the user's pushTokens
-// so Cloud Functions can reach this device. Never throws — notifications are
-// best-effort and must not disturb sign-in.
+// Native push registration, Android and iOS (web sibling: notify.web.ts). Grabs
+// the device's own push token and files it under the user's pushTokens so Cloud
+// Functions can reach this device: FCM's token on Android, Apple's on an iPhone
+// (the server sends those to Apple directly, functions/src/apns.ts). Never
+// throws — notifications are best-effort and must not disturb sign-in.
 import { useEffect } from 'react';
-import { Linking } from 'react-native';
+import { Linking, Platform } from 'react-native';
+import {
+  ApplicationReleaseType,
+  getIosApplicationReleaseTypeAsync,
+  getIosPushNotificationServiceEnvironmentAsync,
+} from 'expo-application';
 import * as Notifications from 'expo-notifications';
 import { deleteDoc, doc, setDoc } from 'firebase/firestore';
 import {
@@ -11,6 +17,7 @@ import {
   PUSH_CHANNEL_ID,
   PUSH_CHANNEL_NAME,
   decodeNotifRoute,
+  type ApnsEnvironment,
   type PushTokenDoc,
 } from '@sabeel/shared';
 import { db } from './firebase';
@@ -99,20 +106,22 @@ export async function pushPromptState(): Promise<
 }
 
 /**
- * Ask for permission and register — the settings screen's "turn these on".
+ * Ask for permission and register: the Home card's and the settings screen's
+ * "turn these on", always from a press.
  *
- * The web sibling has to be called straight from a press and may not await
- * first; Android has no such rule, so this is just `registerPush`, which
- * already prompts here. Sign-in still prompts on Android for the same reason —
- * it works — so this button is normally only reached by someone who declined
- * earlier.
+ * The ONLY place the system prompt is raised. On iOS it can be shown once per
+ * install, and a "Don't Allow" given before the person knows what the app
+ * sends can be undone only in Settings; so sign-in registers a device that has
+ * already allowed notifications and asks nothing (`registerPush`, called from
+ * App.tsx), and the asking happens here, where somebody has just tapped
+ * "Enable notifications". Android follows the same rule.
  */
 export async function enablePush(uid: string): Promise<PushEnableResult> {
   // The RETURN, not just the permission afterwards. Permission granted with no
-  // token filed — an emulator run, a device that refused the token — is not a
-  // success, and reporting it as one puts "enabled" over a device that will
-  // receive nothing. Same three outcomes as the web sibling.
-  if (await registerPush(uid)) return 'granted';
+  // token filed — a device that refused the token — is not a success, and
+  // reporting it as one puts "enabled" over a device that will receive
+  // nothing. Same three outcomes as the web sibling.
+  if (await registerPush(uid, true)) return 'granted';
   const state = await pushPromptState();
   if (state === 'granted' || state === 'unsupported') return 'unavailable';
   // 'default' here means the system dialog was dismissed rather than refused —
@@ -148,7 +157,35 @@ const RETIRED_CHANNEL_IDS = [
   'expo_notifications_fallback_notification_channel',
 ];
 
-export async function registerPush(uid: string): Promise<boolean> {
+/**
+ * The row this device registers under its token (PushTokenDoc).
+ *
+ * An iPhone's row also says WHICH of Apple's two push services issued the
+ * token, because each refuses the other's and the server must ask the right
+ * one. The build's provisioning profile says which: development (an Xcode
+ * build on a phone) or production. Only two installs carry no profile, and they
+ * are the two ends: the SIMULATOR, whose tokens come from Apple's sandbox, and
+ * an install from TestFlight or the App Store, which always uses production.
+ */
+async function deviceRow(token: string): Promise<PushTokenDoc> {
+  const updatedAt = Date.now();
+  if (Platform.OS !== 'ios') return { token, platform: 'android', updatedAt };
+  return { token, platform: 'ios', apnsEnvironment: await apnsEnvironment(), updatedAt };
+}
+
+async function apnsEnvironment(): Promise<ApnsEnvironment> {
+  const fromProfile = await getIosPushNotificationServiceEnvironmentAsync();
+  if (fromProfile === 'development' || fromProfile === 'production') return fromProfile;
+  const release = await getIosApplicationReleaseTypeAsync();
+  return release === ApplicationReleaseType.SIMULATOR ? 'development' : 'production';
+}
+
+/**
+ * Register this device for push. Asks for permission only when `prompt` is true,
+ * which only `enablePush` (a press) passes; at sign-in a device that has not
+ * allowed notifications yet is simply not registered.
+ */
+export async function registerPush(uid: string, prompt = false): Promise<boolean> {
   try {
     // BEFORE the token, or the first message can race the channel into
     // existence. The server addresses this same id — see PUSH_CHANNEL_ID for why
@@ -161,20 +198,23 @@ export async function registerPush(uid: string): Promise<boolean> {
       // Failure is fine: on a fresh install there is nothing to delete.
       await Notifications.deleteNotificationChannelAsync(dead).catch(() => undefined);
     }
-    const perm = await Notifications.requestPermissionsAsync();
+    const perm = prompt
+      ? await Notifications.requestPermissionsAsync()
+      : await Notifications.getPermissionsAsync();
     if (!perm.granted) return false;
-    // FCM has no emulator, so a token minted here could never be delivered to
-    // and would make local runs non-deterministic. BELOW the channel setup and
-    // the prompt, and that placement is the point: with this on the first line
-    // an emulator-backed build — the only kind that reaches the AVD outside a
-    // release — could never create the channel or raise the dialog even once,
-    // which left the one native surface a browser cannot reach unverifiable
-    // from the only place it can be looked at.
-    if (USE_EMULATORS) return false;
+    // FCM has no emulator, so an Android token minted here could never be
+    // delivered to and would make local runs non-deterministic. An iPhone's is
+    // different: the simulator's token is real and Apple's sandbox delivers to
+    // it (scripts/send-test-push.mjs --apple), so an emulator build registers it
+    // and the rules see the row; the emulated functions themselves send nothing
+    // (functions/src/messaging.ts). BELOW the channel setup and the prompt, and
+    // that placement is the point: with this on the first line an
+    // emulator-backed build — the only kind that reaches the AVD outside a
+    // release — could never create the channel or raise the dialog even once.
+    if (USE_EMULATORS && Platform.OS !== 'ios') return false;
     const { data: token } = await Notifications.getDevicePushTokenAsync();
     if (typeof token !== 'string' || !token) return false;
-    const body: PushTokenDoc = { token, platform: 'android', updatedAt: Date.now() };
-    await setDoc(doc(db, COLLECTIONS.users, uid, 'pushTokens', token), body);
+    await setDoc(doc(db, COLLECTIONS.users, uid, 'pushTokens', token), await deviceRow(token));
     return true;
   } catch (e) {
     captureError(e, { source: 'registerPush' });

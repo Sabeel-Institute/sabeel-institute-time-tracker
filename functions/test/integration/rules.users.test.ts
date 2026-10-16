@@ -247,6 +247,26 @@ describe('firestore.rules — notification prefs & push tokens', () => {
     );
   });
 
+  it('push tokens: an iPhone registers with the Apple service its token came from', async () => {
+    const at = (id: string) => doc(alice().firestore(), `users/alice/pushTokens/${id}`);
+    const ios = (id: string, apnsEnvironment: unknown) => ({ token: id, platform: 'ios', apnsEnvironment, updatedAt: 1 });
+    await assertSucceeds(setDoc(at('ios-dev'), ios('ios-dev', 'development')));
+    await assertSucceeds(setDoc(at('ios-prod'), ios('ios-prod', 'production')));
+    await assertSucceeds(setDoc(at('droid'), { token: 'droid', platform: 'android', updatedAt: 1 }));
+
+    // An iPhone that does not say which service: the server could not send to it.
+    await assertFails(setDoc(at('ios-none'), { token: 'ios-none', platform: 'ios', updatedAt: 1 }));
+    await assertFails(setDoc(at('ios-bad'), ios('ios-bad', 'sandbox')));
+    // The Apple field on an FCM row, and any field nobody validates.
+    await assertFails(
+      setDoc(at('droid-env'), { token: 'droid-env', platform: 'android', apnsEnvironment: 'production', updatedAt: 1 }),
+    );
+    await assertFails(setDoc(at('extra'), { token: 'extra', platform: 'web', updatedAt: 1, note: 'x' }));
+    // The doc id is the address the server sends to: it must be the token.
+    await assertFails(setDoc(at('other-id'), { token: 'not-the-id', platform: 'web', updatedAt: 1 }));
+    await assertFails(setDoc(at('no-time'), { token: 'no-time', platform: 'web' }));
+  });
+
   it('an account that is not active cannot register for push', async () => {
     const carol = testEnv.authenticatedContext('carol', { status: 'pending', role: 'member' });
     await assertFails(

@@ -1,18 +1,11 @@
 // Push notifications: Firestore-trigger fan-out + the weekly submit reminder.
-// Delivery is FCM via each user's registered pushTokens (see firestore.rules);
-// per-event opt-outs live in users/{uid}.notifPrefs (missing = on).
+// Delivery is to each user's registered pushTokens (see firestore.rules), through
+// messaging.ts: FCM for browsers and Android, Apple's service for iPhones.
+// Per-event opt-outs live in users/{uid}.notifPrefs (missing = on).
 import { onDocumentCreated, onDocumentWritten } from 'firebase-functions/v2/firestore';
 import { onSchedule } from 'firebase-functions/v2/scheduler';
 import { getFirestore } from 'firebase-admin/firestore';
-import { getMessaging } from 'firebase-admin/messaging';
-import {
-  PUSH_CHANNEL_ID,
-  dayKeyFor,
-  encodeNotifRoute,
-  notifRouteUrl,
-  type TimesheetDoc,
-  type UserDoc,
-} from '@sabeel/shared';
+import { dayKeyFor, type PushTokenDoc, type TimesheetDoc, type UserDoc } from '@sabeel/shared';
 import {
   inReminderWindow,
   prefOn,
@@ -21,47 +14,27 @@ import {
   texts,
   type Notif,
 } from './notifyCore';
+import { PUSH_SECRETS, send } from './messaging';
 import { reportError, reportMessage, sentryDsn } from './sentry';
 
 /**
- * Send to every device a user has registered; prune tokens FCM says are dead.
- * Quiet no-op when the user has no tokens (never opted in on any device).
- *
- * The tap destination rides along twice, because the two surfaces consume it
- * differently: Android reads the flat `data` bag (expo-notifications hands it to
- * JS verbatim as long as no key is named `body`), while a browser only ever gets
- * a URL, so the same fields are re-encoded as the query of fcm_options.link.
+ * Send to every device a user has registered; prune the ones the transport says
+ * will never work again. Quiet no-op when the user has no devices (never opted
+ * in anywhere). The doc id IS the token (the rules hold the two equal), so it is
+ * the address used. Every function that calls this binds PUSH_SECRETS.
  */
 async function sendToUser(uid: string, notif: Notif): Promise<void> {
-  const db = getFirestore();
-  const tokensSnap = await db.collection('users').doc(uid).collection('pushTokens').get();
-  if (tokensSnap.empty) return;
-  const tokens = tokensSnap.docs.map((d) => d.id);
-  const res = await getMessaging().sendEachForMulticast({
-    tokens,
-    notification: { title: notif.title, body: notif.body },
-    data: encodeNotifRoute(notif.route),
-    // Name the channel on EVERY send. Without this FCM posts to its own fallback
-    // channel, which Android labels "Miscellaneous", and the channel the app
-    // created is never addressed by anything — see PUSH_CHANNEL_ID. Nothing
-    // errors either side, so only the payload can hold this honest.
-    android: { notification: { channelId: PUSH_CHANNEL_ID } },
-    webpush: { fcmOptions: { link: notifRouteUrl(notif.route) } },
-  });
-  await Promise.all(
-    res.responses.map((r, i) => {
-      const code = r.error?.code ?? '';
-      const dead =
-        code === 'messaging/registration-token-not-registered' ||
-        code === 'messaging/invalid-argument';
-      return dead ? tokensSnap.docs[i].ref.delete() : Promise.resolve();
-    }),
-  );
+  const snap = await getFirestore().collection('users').doc(uid).collection('pushTokens').get();
+  if (snap.empty) return;
+  const devices = snap.docs.map((d) => ({ ...(d.data() as PushTokenDoc), token: d.id }));
+  const { stale } = await send(devices, notif);
+  const dead = new Set(stale);
+  await Promise.all(snap.docs.filter((d) => dead.has(d.id)).map((d) => d.ref.delete()));
 }
 
 /** A new profile doc is always a pending signup — tell the admins. */
 export const notifyNewUser = onDocumentCreated(
-  { document: 'users/{uid}', secrets: [sentryDsn] },
+  { document: 'users/{uid}', secrets: [sentryDsn, ...PUSH_SECRETS] },
   async (event) => {
     try {
       const user = event.data?.data() as UserDoc | undefined;
@@ -87,7 +60,7 @@ export const notifyNewUser = onDocumentCreated(
 
 /** Timesheet lifecycle: submissions go to the approver, decisions to the owner. */
 export const notifyTimesheet = onDocumentWritten(
-  { document: 'timesheets/{sheetId}', secrets: [sentryDsn] },
+  { document: 'timesheets/{sheetId}', secrets: [sentryDsn, ...PUSH_SECRETS] },
   async (event) => {
     try {
       const before = event.data?.before?.exists
@@ -150,7 +123,7 @@ export const notifyTimesheet = onDocumentWritten(
  * reminderEligible). Once-a-day dedup via lastReminderDayKey.
  */
 export const weeklyReminder = onSchedule(
-  { schedule: 'every 60 minutes', secrets: [sentryDsn] },
+  { schedule: 'every 60 minutes', secrets: [sentryDsn, ...PUSH_SECRETS] },
   async () => {
     try {
       const now = Date.now();

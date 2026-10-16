@@ -62,13 +62,19 @@ export interface UserDoc {
   claimsUpdatedAt?: number;
 }
 
-/** users/{uid}/pushTokens/{token} — one doc per device/browser that can receive pushes. */
-export type PushPlatform = 'web' | 'android';
-export interface PushTokenDoc {
-  token: string;
-  platform: PushPlatform;
-  updatedAt: number;
-}
+/**
+ * users/{uid}/pushTokens/{token} — one doc per device/browser that can receive
+ * pushes, in one of two shapes (firestore.rules accepts exactly these).
+ *
+ * A browser or an Android phone holds an FCM token. An iPhone holds Apple's own
+ * device token, which FCM cannot address, so the server sends to Apple directly
+ * (functions/src/apns.ts), and the row says which of Apple's two services issued
+ * the token, because each refuses the other's.
+ */
+export type ApnsEnvironment = 'development' | 'production';
+export type PushTokenDoc =
+  | { token: string; platform: 'web' | 'android'; updatedAt: number }
+  | { token: string; platform: 'ios'; apnsEnvironment: ApnsEnvironment; updatedAt: number };
 
 export type ActivityStatus = 'active' | 'archived';
 

@@ -30,7 +30,8 @@
     "check:version": "node scripts/check-version.mjs",
     "check:ios": "node scripts/check-ios-config.mjs",
     "build:ios": "bash scripts/build-ios.sh",
-    "check:web-push": "node scripts/check-web-push.mjs"
+    "check:web-push": "node scripts/check-web-push.mjs",
+    "check:push": "node scripts/check-push.mjs"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.0",
