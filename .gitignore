@@ -24,6 +24,8 @@ pubsub-debug.log
 .env.local
 *.local.env
 functions/.env
+# The Sentry auth token the native build uploads source maps with.
+app/.env.sentry-build-plugin
 # e2e artifacts
 e2e-shots/
 app/dist-web/
