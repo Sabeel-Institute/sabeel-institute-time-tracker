@@ -14,7 +14,7 @@ TestFlight).
 
 | | Now | Destination |
 |---|---|---|
-| iPhone | TestFlight internal testing. The first build, 0.28.0 build 1 from tag `v0.28.0`, is being uploaded. Internal group "Sabeel Time Tracker Internal" (Faisal; 19 staff invited to App Store Connect, added as they accept). App Store Connect app `6823429437` | The App Store, **unlisted**, after App Review. Nothing submitted; the Time Tracker follows Kanban through review |
+| iPhone | TestFlight internal testing. The first build, 0.28.0 build 1 from tag `v0.28.0`, is VALID and in internal testing (2026-10-16). Internal group "Sabeel Time Tracker Internal" (Faisal; 19 staff invited to App Store Connect, added as they accept). App Store Connect app `6823429437` | The App Store, **unlisted**, after App Review. Nothing submitted; the Time Tracker follows Kanban through review |
 | Android | Google Play internal testing: 0.28.0 (28000) a completed release. Play signs with the app's own key (since 2026-10-16). The "Sabeel staff" tester list is still to be ticked. The download page's APK carries the same key, so it and a Play install update each other | Google Play **production**, a public listing (Play has no unlisted) |
 | Web | Live at `https://sabeel-institute-time-tracker.web.app`, with `/privacy` and `/support` | |
 
