@@ -41,7 +41,7 @@ phase boundary.
   the sign-in gate `beforeSignUp`/`beforeSignIn` (registered with Identity
   Platform by the deploy), and iPhone push sent to Apple directly (`apns.ts`,
   secret `APNS_KEY`). Email/Password enabled once the gate was live. The review
-  account `app-review@oursabeel.com` made with the Admin SDK, approved as a
+  account `apps-reviewer@oursabeel.com` made with the Admin SDK, approved as a
   member, approver Faisal. The Android release signing key made; its SHA-1 and
   SHA-256 on the Firebase Android app.
 
@@ -84,7 +84,7 @@ phase boundary.
   tap opened the week it named. Nothing raises the notification prompt by
   itself any more: Home's card and the settings screen ask, from a press.
   **Review access** (Faisal, 2026-10-15): one email-and-password account,
-  `app-review@oursabeel.com`, an ordinary member made by an admin with Faisal as
+  `apps-reviewer@oursabeel.com`, an ordinary member made by an admin with Faisal as
   its approver, behind a neutral "Sign in with email". Held there by the
   server: blocking functions on Identity Platform refuse every password sign-up
   and any other address's password sign-in; rules and callables never give a

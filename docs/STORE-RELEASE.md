@@ -105,7 +105,7 @@ Faisal, 2026-10-15 (relayed by the LMS session), in three steps:
 
 **What exists.** A plain **Sign in with email** link under the Google button:
 email, password, Sign in. No sign-up, no password reset, nothing about
-reviewers. Behind it one account, `app-review@oursabeel.com`
+reviewers. Behind it one account, `apps-reviewer@oursabeel.com`
 (`PASSWORD_ACCOUNT_EMAIL` in `@sabeel/shared`), an ordinary member whose
 approver is Faisal, held there by the server:
 
@@ -296,7 +296,7 @@ language, controlled substances, gambling or purchases; shares location No.
 **Play target audience:** 18 and over only. **Ads:** none.
 
 **Play App access:** sign-in required. Instructions: "On the sign-in screen tap
-'Sign in with email' and use these credentials", with `app-review@oursabeel.com`
+'Sign in with email' and use these credentials", with `apps-reviewer@oursabeel.com`
 and the password from the vault (3).
 
 ## Review notes
@@ -317,7 +317,7 @@ Staff sign in with the institute's Google Workspace accounts (the
 education/enterprise exemption under Guideline 4.8).
 
 For review, tap "Sign in with email" on the sign-in screen and use the account
-in the sign-in information (app-review@oursabeel.com). It is an ordinary member
+in the sign-in information (apps-reviewer@oursabeel.com). It is an ordinary member
 account made by an administrator: it records its own hours (Home > Add hours
 manually, or Clock in), sees its week (My timesheet) and submits it for
 approval (My timesheet > Submit). Approving timesheets, managing activities,

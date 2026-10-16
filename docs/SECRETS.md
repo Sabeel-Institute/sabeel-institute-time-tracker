@@ -82,7 +82,7 @@ is lost, delete that key in the Google Cloud console (project
   release key.
 
 ## The email-and-password account's password
-`PASSWORD_ACCOUNT_EMAIL` (`app-review@oursabeel.com`) signs in with a long
+`PASSWORD_ACCOUNT_EMAIL` (`apps-reviewer@oursabeel.com`) signs in with a long
 generated password. It lives in the vault (`sabeel/review/`), and goes into App
 Store Connect's App Review Information sign-in fields when the app is submitted;
 nowhere else: never in this repo, a chat or a log.

@@ -38,7 +38,7 @@ export const ALLOWED_EMAIL_DOMAIN = 'oursabeel.com';
  * its own hours. firestore.rules restates it; signInGate.test.ts holds the two
  * equal.
  */
-export const PASSWORD_ACCOUNT_EMAIL = 'app-review@oursabeel.com';
+export const PASSWORD_ACCOUNT_EMAIL = 'apps-reviewer@oursabeel.com';
 
 /**
  * The marker in a sign-in or sign-up the blocking functions refused. It reaches
