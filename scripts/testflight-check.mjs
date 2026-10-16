@@ -78,15 +78,32 @@ const signature = sign('sha256', Buffer.from(unsigned), {
 });
 const token = `${unsigned}.${signature.toString('base64url')}`;
 
+// App Store Connect has bad hours: requests that hang, and 500s that clear a
+// minute later. Those are retried; any other answer is final.
 async function get(path) {
-  const res = await fetch(`https://api.appstoreconnect.apple.com${path}`, {
-    headers: { authorization: `Bearer ${token}` },
-  });
-  if (!res.ok) {
-    console.error(`App Store Connect answered ${res.status} for ${path}: ${(await res.text()).slice(0, 300)}`);
-    process.exit(2);
+  for (let attempt = 1; ; attempt++) {
+    let failure;
+    try {
+      const res = await fetch(`https://api.appstoreconnect.apple.com${path}`, {
+        headers: { authorization: `Bearer ${token}` },
+        signal: AbortSignal.timeout(45_000),
+      });
+      if (res.ok) return res.json();
+      failure = `answered ${res.status}: ${(await res.text()).slice(0, 300)}`;
+      if (res.status < 500 && res.status !== 429) {
+        console.error(`App Store Connect ${failure} for ${path}`);
+        process.exit(2);
+      }
+    } catch (e) {
+      failure = `did not answer (${e.cause?.code ?? e.name})`;
+    }
+    if (attempt === 4) {
+      console.error(`App Store Connect ${failure} for ${path}, four times. Run the job again later.`);
+      process.exit(2);
+    }
+    console.error(`App Store Connect ${failure.split(':')[0]}; trying again in ${attempt * 15} s.`);
+    await new Promise((r) => setTimeout(r, attempt * 15_000));
   }
-  return res.json();
 }
 
 const apps = await get(`/v1/apps?filter[bundleId]=${encodeURIComponent(bundleId)}`);
@@ -104,7 +121,8 @@ const highest = taken.length ? Math.max(...taken) : 0;
 if (Number(build) <= highest) {
   console.error(
     `Version ${version} already has build ${highest} on App Store Connect, so build ${build} cannot go up.\n` +
-      `Raise expo.ios.buildNumber in app/app.json above ${highest}, commit, and build again.`,
+      'An upload is built from its release tag, so a new one is the next patch version:\n' +
+      'cut it with npm run release, then run the iOS workflow on its tag (docs/IOS-BUILD.md).',
   );
   process.exit(1);
 }
