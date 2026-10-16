@@ -17,7 +17,8 @@
       "supportsTablet": false,
       "googleServicesFile": "./GoogleService-Info.plist",
       "infoPlist": {
-        "CFBundleDisplayName": "Sabeel Time Tracker"
+        "CFBundleDisplayName": "Sabeel Time Tracker",
+        "CFBundleName": "Sabeel Time Tracker"
       },
       "config": {
         "usesNonExemptEncryption": false
