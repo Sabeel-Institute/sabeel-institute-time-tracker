@@ -118,9 +118,9 @@ Testers page. `npm run release` publishes every release there
 - [x] **The app in Play Console, and the publishing account on it** (2026-10-15).
 - [x] **Play signs with this app's own key** (2026-10-16): App integrity, App
   signing, "Change key", "Export and upload a key from Java keystore".
-- [ ] **Testers:** tick the "Sabeel staff" email list (account-wide, shared with
-  the other Sabeel apps) on the app's Internal testing → Testers page, then send
-  staff the join link from that page.
+- [x] **Testers:** the "Sabeel staff" email list (account-wide, shared with the
+  other Sabeel apps) is ticked on Internal testing → Testers (2026-10-16).
+- [ ] **Send staff the join link** from that page (Play sends no email).
 
 ## The stores: TestFlight, App Review, Play production
 
