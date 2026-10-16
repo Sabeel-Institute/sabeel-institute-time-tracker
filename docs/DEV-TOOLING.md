@@ -258,6 +258,12 @@ Design decisions worth not undoing:
   inside one are scoped to `role="dialog"`: the field that opened the picker
   carries the same text as the selected row inside it, and an unscoped click
   lands on the field, which the backdrop is covering, and hangs.
+- **A sign-in that loses the provisioning race is reloaded once, and
+  counted**, at provisioning as in each tour: under load the page's profile
+  listener can deliver nothing for ten seconds, and the app then says "Can't
+  sign in" about an account the run demonstrably made. A run full of them is
+  telling you the machine is overloaded. Any throw outside the tour also tears
+  the emulators down, so a failed run leaves nothing holding the ports.
 - **Five accounts, because gated screens have no other coverage.** The admin
   sees every screen; the member's Home and the non-admin manager's read-only
   Users are layouts the person who owns the app never renders; the pending gate

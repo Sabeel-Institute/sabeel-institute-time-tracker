@@ -124,8 +124,20 @@ for (const sig of ['SIGINT', 'SIGTERM', 'SIGHUP']) {
     shutdown(130);
   });
 }
+/*
+ * …and on a throw outside the tour. Provisioning and seeding run at the top
+ * level, outside the tour's try/catch, so a timeout there used to end the
+ * process with the whole emulator group still running (seen 2026-10-16), and
+ * the next run of anything on this machine met it.
+ */
+process.on('uncaughtException', (e) => {
+  console.error(e);
+  shutdown(1);
+});
 
 const results = [];
+/** Sign-ins that lost the provisioning race and were reloaded (see `open`). */
+let raced = 0;
 /**
  * The notification settings screen must always say SOMETHING about this device —
  * exactly one of the four states, never none and never two.
@@ -224,7 +236,19 @@ async function provision({ email }) {
   await page.goto(baseUrl + '/');
   await page.getByText('Time Tracker', { exact: true }).waitFor({ timeout: 30000 });
   await devSignIn(page, email);
-  await page.getByText('waiting for an administrator', { exact: false }).waitFor({ timeout: 40000 });
+  // The provisioning race `open` describes, met here at the first sign-in of
+  // a fresh stack. Seen 2026-10-16 under load: onUserCreate made the profile
+  // within two seconds, and the page's profile listener delivered nothing for
+  // forty. The account exists, so "Can't sign in" is the client, not the
+  // server. Reload once, and count it.
+  const gate = page.getByText('waiting for an administrator', { exact: false });
+  const refused = page.getByText('Can’t sign in');
+  await gate.or(refused).waitFor({ timeout: 40000 });
+  if (await refused.isVisible().catch(() => false)) {
+    raced += 1;
+    await page.reload();
+    await gate.waitFor({ timeout: 40000 });
+  }
   await ctx.close();
   const snap = await db.collection(COLLECTIONS.users).where('email', '==', email).get();
   if (snap.empty) throw new Error(`${email} was never provisioned`);
@@ -834,7 +858,6 @@ const goBack = async (page) => {
  * actually showing; `web-e2e.mjs` learned this and dumps its pages on failure.
  */
 let lastOpened = null;
-let raced = 0;
 
 /**
  * THE SWEEP'S OWN PREMISE, checked before a single screen is measured.
