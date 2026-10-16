@@ -8,8 +8,9 @@ the developer; the nonprofit's staff are the admins/managers in the app.
 
 **It is in production and the team uses it.** Live at
 `sabeel-institute-time-tracker.web.app` since 2026-07-16; the Android APK is
-installed from a public GitHub Pages download page. There is no app-store
-presence.
+installed from a public GitHub Pages download page. The iPhone app is built on
+GitHub's macOS runners for TestFlight (App Store Connect app 6823429437). There
+is no Play Store presence.
 
 Source of truth: `docs/PRODUCT_BRIEF.md` (decisions & data model),
 `docs/PHASE_STATUS.md` (live build status), `docs/DEV-TOOLING.md` (what each
@@ -89,9 +90,13 @@ Do not silently change any of these.
 
 ## Stack (locked)
 
-- One Expo codebase (`app/`): Android (local Gradle builds, committed `android/`,
-  **NO iOS, NO EAS**) + web via react-native-web (`expo export --platform web` →
-  Firebase Hosting). Platform seams as `.web.ts(x)` siblings.
+- One Expo codebase (`app/`): Android (local Gradle builds, committed `android/`)
+  + iOS (`expo prebuild --platform ios` into a gitignored `app/ios/`, pods pinned by
+  `app/Podfile.lock`, built on a Mac or GitHub's macOS runners; `docs/IOS-BUILD.md`)
+  + web via react-native-web (`expo export --platform web` → Firebase Hosting).
+  **NO EAS.** Never a bare `npx expo prebuild`: it deletes the committed
+  `android/`. Platform seams as `.web.ts(x)` siblings, plus `.ios.tsx` where iOS's
+  native control behaves differently from Android's (`DateTimeField`).
 - Firebase **JS SDK on all surfaces** (not react-native-firebase — no web support).
 - Backend: Cloud Functions (TS, nodejs22, us-central1) + Firestore. No Storage, no
   email in v1. Sentry on web/native/functions.
@@ -102,7 +107,8 @@ Do not silently change any of these.
   add a second copy. `scripts/check-version.mjs` enforces store legality from
   lint/CI, `web:export`, `publish-apk.sh` and the release. A published version is
   spent forever — never reuse one. The rule and the traps behind it are in the
-  skill ("The version number is a store contract").
+  skill ("The version number is a store contract"). `expo.ios.buildNumber` stays
+  `"1"`: every version goes to TestFlight once, from its own tag.
 
 ## Dev & test loops
 
@@ -128,9 +134,15 @@ Do not silently change any of these.
 - Android: `scripts/emulator.sh headless` (AVD `tb_emu`), then `npx expo
   run:android` in `app/`. Firebase emulators from the AVD = `10.0.2.2`. There are
   NO physical devices.
+- iOS (on the Mac): the simulator loop in `docs/IOS-BUILD.md` — Metro on its own
+  port (another project holds 8081), the app pinned to it with `RCT_jsLocation`,
+  emulators at `127.0.0.1`. `npm run check:ios` checks the iOS config;
+  `scripts/build-ios.sh` builds an `.ipa`; `.github/workflows/ios.yml` builds on
+  GitHub and, with `testflight=true` on a release tag, uploads.
 - Releases: `npm run release -- <X.Y.Z> --notes FILE` — bumps the version, rebuilds
   the manual PDF, builds both APK variants, verifies the production bundle on the
-  AVD, publishes. **Never hand-bump versions.**
+  AVD, publishes. **Never hand-bump versions.** The iPhone build of that release
+  is the iOS workflow run on its tag (`docs/IOS-BUILD.md`, "Releasing").
 - CI (GitHub Actions): lint + typecheck + knip + unit + emulator tests + the
   layout sweep on every push. Keep it green, and **check the actual run** —
   don't assume. No deploys from CI. `functions/test/unit/ci-coverage.test.ts`

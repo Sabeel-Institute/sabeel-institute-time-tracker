@@ -2,7 +2,7 @@
   "name": "sabeel-institute-time-tracker",
   "version": "0.0.0",
   "private": true,
-  "description": "Sabeel Institute Time Tracker \u2014 hours tracking for a small nonprofit (Android + web from one Expo codebase, Firebase backend)",
+  "description": "Sabeel Institute Time Tracker — hours tracking for a small nonprofit (Android, iPhone and web from one Expo codebase, Firebase backend)",
   "workspaces": [
     "packages/*",
     "functions",
@@ -28,6 +28,8 @@
     "release": "node scripts/release.mjs",
     "verify": "npm run lint && npm run typecheck && npm run knip && npm test",
     "check:version": "node scripts/check-version.mjs",
+    "check:ios": "node scripts/check-ios-config.mjs",
+    "build:ios": "bash scripts/build-ios.sh",
     "check:web-push": "node scripts/check-web-push.mjs"
   },
   "devDependencies": {

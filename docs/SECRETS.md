@@ -30,3 +30,11 @@ See `functions/.env.example`.
   (public; needed by native Google Sign-In). Not the Android client id.
 - `app/google-services.json` — committed placeholder until the real Firebase Android
   app exists; replace per `TODO.md`.
+
+## iOS build (the Mac and GitHub)
+`app/.env.sentry-build-plugin` (gitignored) holds `SENTRY_ORG`, `SENTRY_PROJECT`,
+`SENTRY_AUTH_TOKEN`, `IOS_TEAM_ID`, `ASC_KEY_ID`, `ASC_ISSUER_ID`, read by
+`scripts/load-build-env.sh`. The App Store Connect key lives at
+`~/.appstoreconnect/private_keys/AuthKey_<ASC_KEY_ID>.p8`. On GitHub the same values
+come from the secrets `IOS_BUILD_ENV`, `APP_ENV_LOCAL`, `ASC_KEY_P8`, `IOS_DIST_P12`,
+`IOS_DIST_P12_PASSWORD` and `IOS_PROFILE`; `docs/IOS-BUILD.md` says what each is.

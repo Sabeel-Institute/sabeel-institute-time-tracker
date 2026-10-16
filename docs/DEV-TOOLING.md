@@ -23,6 +23,8 @@ Firebase or the emulators belong there; what we built in response belongs here.
 | `npm run knip` | dead-code audit |
 | `npm run emulators:free` | kill whatever is squatting on emulator ports |
 | `npm run release -- <version> --notes FILE` | cut an Android release |
+| `npm run check:ios` | the iOS config: app.json against the plist, plugins, export compliance, icon, privacy manifest, DSN |
+| `npm run build:ios` | `scripts/build-ios.sh`: every gate, then archive and export a signed `.ipa` (Mac only, never uploads) |
 
 ## Setting up a machine
 
@@ -417,6 +419,28 @@ dependency whose version is pinned transitively by `@expo/metro`, free to drift
 from it, and flagged by knip. Being repo config rather than a wrapper-script env
 var, it also covers a hand-run `npx expo start`, which no script sets `TMPDIR`
 for.
+
+## The iOS scripts
+
+The iPhone build has its own runbook, `docs/IOS-BUILD.md`. What each script is
+for, in one line:
+
+- `scripts/check-ios-config.mjs` — the iOS settings live in two files that must
+  agree (`app/app.json`, `app/GoogleService-Info.plist`), and every mismatch it
+  catches surfaces otherwise at upload, at review or at runtime.
+- `scripts/build-ios.sh` — the gates first (a locked keychain is found in a
+  second, not twenty minutes into an archive), then prebuild, the pods held to
+  `app/Podfile.lock`, archive, export. Automatic signing on the Mac, manual with
+  `IOS_PROFILE_NAME` on GitHub.
+- `scripts/load-build-env.sh` — the build machine's values from the gitignored
+  `app/.env.sentry-build-plugin`, parsed rather than sourced.
+- `scripts/testflight-check.mjs` — before an upload: is this commit the
+  `v<version>` tag on GitHub, and has Apple not taken the build number.
+
+`scripts/free-emulator-ports.sh` and `scripts/preflight-metro.mjs` find port
+owners with `ss` and `/proc`, which a Mac does not have, so on the Mac both
+report every port free. Check by hand there: `lsof -nP -iTCP:<port>
+-sTCP:LISTEN`.
 
 ## `scripts/release.mjs`
 
