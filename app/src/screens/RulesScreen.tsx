@@ -39,10 +39,10 @@ export function RulesScreen() {
         only by members of your team.
       </Text>
       <Text style={styles.body}>
-        By continuing you agree to the institute’s rules: post only what belongs to your work
-        or class, and nothing abusive, harassing, hateful, sexual or otherwise objectionable.
-        The institute does not tolerate either. Administrators may remove content and suspend
-        accounts that break these rules.
+        By continuing you agree to the institute’s rules: post only what belongs to your work,
+        post nothing abusive, harassing, hateful, sexual or otherwise objectionable, and never
+        abuse another member. The institute tolerates neither. Administrators may remove content
+        and suspend accounts that break these rules.
       </Text>
       <Text style={styles.body}>
         To report something or someone, use <Text style={styles.strong}>Report a problem</Text>{' '}
