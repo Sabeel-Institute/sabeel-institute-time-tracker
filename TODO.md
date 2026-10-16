@@ -1,8 +1,7 @@
 # Things only you can do (collected by Claude)
 
 Manual console/account steps I can't (or shouldn't) do autonomously. Delete lines as
-you complete them. Nothing here blocks Phases 0–5 — everything runs against the
-Firebase emulators until deploy time (Phase 6).
+you complete them.
 
 ## Firebase / Google Cloud (needed for deploy)
 
@@ -16,10 +15,11 @@ Firebase emulators until deploy time (Phase 6).
   (`packages/shared/src/constants.ts`).
 - [x] **google-services.json committed** — done (Android app registered).
 - [x] **Firestore location confirmed `nam5`** (2026-07-17, Faisal).
-- [x] **OAuth consent screen — published** (2026-07-16, confirmed by Faisal). Any
-  Google account can now sign in; access is gated by the app's own admin-approval
-  flow. App uses only basic non-sensitive scopes (email/profile/openid) so no
-  Google verification was required.
+- [x] **OAuth consent screen — published** (2026-07-16, confirmed by Faisal). The
+  consent screen admits any Google account; the server keeps only verified
+  `@oursabeel.com` accounts (`onUserCreate`), and an admin approves each. App
+  uses only basic non-sensitive scopes (email/profile/openid) so no Google
+  verification was required.
 - [x] **Android debug SHA-1 registered** + `google-services.json` re-downloaded
   (now has the `client_type: 1` Android OAuth client). Native Google Sign-In is
   wired and the app builds; complete a real sign-in on a device/emulator with a
@@ -63,7 +63,7 @@ and it has one.
 
   On the site: a browser that has never been asked shows **Enable
   notifications**, on Home and on Notification settings. That is expected, not a
-  fault — the app no longer asks on sign-in, because a browser only honours a
+  fault — the app does not ask on sign-in, because a browser only honours a
   permission request raised straight from a press.
 
 ## Fix web sign-in inside in-app/partitioned browsers (missing-initial-state error)
@@ -92,14 +92,8 @@ redeploys:
   events flowing with user ids.
 - [x] Native @sentry/react-native wired 2026-07-17 (v1.0.0-beta.11) — Android
   crashes/ANRs/errors report with user ids.
-- [ ] **Readable release stack traces** (optional, one-time): create an auth
-  token at sentry.io → **Settings → Auth Tokens → Create New Token** (scope:
-  `project:releases`), then on this machine copy
-  `app/android/sentry.properties.example` to `sentry.properties` (same
-  folder, gitignored) and fill in `auth.token=` and your org slug
-  (`defaults.org=` — it's in your sentry.io URL). NEVER paste the token in
-  chat or commit it. Tell Claude it's in place → the next release build
-  uploads source maps automatically and stacks become readable.
+- [x] **Readable release stack traces** — `app/android/sentry.properties` in
+  place; source-map upload verified 2026-07-18 (`4c6750a`).
 
 ## First admin (after first deploy)
 
@@ -113,8 +107,9 @@ redeploys:
 
 ## Google Play, internal testing
 
-Staff install from Play through a join link that never changes, as for Kanban.
-`npm run release` publishes every release there (`scripts/publish-play.mjs`).
+Staff install from Play through the join link on the app's Internal testing →
+Testers page. `npm run release` publishes every release there
+(`scripts/publish-play.mjs`); `docs/DEPLOY.md`, "Play testers".
 
 - [x] **Release keystore + SHA-1** (2026-10-15) — signing config wired to the
   release key, its SHA-1 and SHA-256 registered on the Firebase Android app,
@@ -123,27 +118,31 @@ Staff install from Play through a join link that never changes, as for Kanban.
 - [x] **The app in Play Console, and the publishing account on it** (2026-10-15).
 - [x] **Play signs with this app's own key** (2026-10-16): App integrity, App
   signing, "Change key", "Export and upload a key from Java keystore".
-- [ ] **If the first release stays a draft,** roll it out once: Internal
-  testing, Start rollout (`npm run release` says so when Play keeps it a
-  draft).
-- [ ] **Testers:** tick the "Sabeel staff" email list on Internal testing,
-  Testers, and share the join link.
+- [ ] **Testers:** tick the "Sabeel staff" email list (account-wide, shared with
+  the other Sabeel apps) on the app's Internal testing → Testers page, then send
+  staff the join link from that page.
 
-## App Store phase (not now — versioning groundwork done 2026-07-26)
+## The stores: TestFlight, App Review, Play production
 
-The version scheme is already what Apple requires (`X.Y.Z`, one source of truth,
-enforced in CI — see `docs/PHASE_STATUS.md`). Nothing below blocks Android work.
-
-- [ ] **Apple Developer Program enrolment** ($99/yr, org enrolment needs a D-U-N-S
-  number and can take weeks — start it well before you want to ship). Only you
-  can do this; it needs the nonprofit's legal identity and a payment method.
-- [ ] **A Mac.** iOS builds and App Store uploads cannot be produced on Linux, and
-  this project has no EAS. Decide between a physical Mac and a hosted one before
-  planning the port — it changes the build loop, not the code.
-
-Once those exist, the remaining work is mine, not yours:
-
-- `CFBundleVersion` (the iOS build number) needs its own scheme — it is separate
-  from the version and cannot simply mirror the Android `versionCode`.
-- An `ios/` directory (the repo is Android-only today), the Google sign-in seam
-  re-pointed at an iOS OAuth client, and APNs wired for push.
+- [ ] **TestFlight staff:** 19 staff are invited to App Store Connect (Developer
+  role); add each to "Sabeel Time Tracker Internal" once they accept (`docs/IOS-BUILD.md`,
+  "Releasing to TestFlight").
+- [ ] **The production native sign-in round trip, on a phone** (a Play or
+  download-page APK, or TestFlight): a Google account with no account in the
+  project is refused and no Auth user appears; then an `@oursabeel.com` account
+  signs in. Before submitting to App Review (`docs/STORE-RELEASE.md`).
+- [ ] **Confirm `privacy@oursabeel.com` exists** and reaches someone: the
+  privacy policy and the support page name it, and a reviewer may write to it.
+- [ ] **App Review submission** (App Store Connect), after Kanban is through
+  review, with the answers and text in `docs/STORE-RELEASE.md`, "Before
+  submitting": App Privacy, age rating, the listing, App Review Information
+  (the review account in the sign-in fields), manual release; then the unlisted
+  request.
+- [ ] **Google Play production** (Play Console), the same file: App content
+  (privacy policy URL, App access, ads, content rating, target audience, Data
+  safety), the store listing, then a production release, which Play reviews.
+- [ ] **Texas SB 2420:** ask a lawyer before the first public listing (Play
+  production is one).
+- [ ] **Renew the distribution certificate and the three App Store profiles
+  before 2027-10-16**, starting in September 2027 (`docs/IOS-BUILD.md`,
+  "Renewal").

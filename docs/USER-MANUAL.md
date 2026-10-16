@@ -12,6 +12,13 @@ The app works the same on the website
 (https://sabeel-institute-time-tracker.web.app), the Android app and the iPhone
 app — same account, same data, live everywhere.
 
+**Getting the phone app.** Android: the download page
+(https://faisal-shah.github.io/sabeel-time-tracker/), or Google Play by
+invitation from your administrator. iPhone: TestFlight, by invitation from your
+administrator. If your Android phone has the app from the download page older
+than version 0.28.0, uninstall it once before installing a newer one; nothing is
+lost, because everything is kept online.
+
 ---
 
 ## The big picture (2 minutes)

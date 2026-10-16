@@ -1,16 +1,19 @@
 #!/usr/bin/env node
 /**
- * Cut an Android release: bump every version file, re-render the manual,
- * build both APK variants and the Play bundle, verify the build on the AVD,
- * publish to GitHub and the download page, then to Play's internal testing.
+ * Cut an Android release: bump the version in app/app.json, re-render the
+ * manual, build both APK variants and the Play bundle, verify the build on the
+ * AVD, push, publish to GitHub and the download page, then to Play's internal
+ * testing. The web deploy and the iPhone build follow (docs/DEPLOY.md).
  *
- *   node scripts/release.mjs 1.0.0-beta.12 --notes notes.md
- *   node scripts/release.mjs 1.0.0-beta.12 --notes notes.md --dry-run
+ *   node scripts/release.mjs 0.29.0 --notes notes.md
+ *   node scripts/release.mjs 0.29.0 --notes notes.md --dry-run
  *   node scripts/release.mjs --verify-only          # boot-check current APKs
  *
  * Encodes the rules this project keeps re-learning by hand:
  *
- *  - **Distribution is ALWAYS a GitHub release.** Never attach an APK to chat.
+ *  - **Every channel ships the one verified build**: the GitHub release and
+ *    the download page (APKs), Play internal testing (the bundle). Never
+ *    attach an APK to chat.
  *  - **Both variants, every time.** arm64 for real phones (~36MB); universal
  *    because arm64-only crashes on an x86_64 emulator with "Unexpected CPU
  *    variant" — which is exactly what verification runs on.
@@ -204,13 +207,13 @@ function publish(v, built, notesFile) {
   const notesPath = join(OUT_DIR, `notes-${v}.md`);
   writeFileSync(notesPath, notes);
   const assets = [built.arm64, built.universal, join(root, 'docs/USER-MANUAL.pdf')].join(' ');
-  console.log('▸ publishing GitHub release (the ONLY distribution channel)');
+  console.log('▸ publishing the GitHub release');
   sh(`gh release create v${v} --title "v${v}" --notes-file ${notesPath} ${assets}`);
 }
 
 /**
- * The public download page (GitHub Pages) is how the TEAM actually installs the
- * app — this repo is private, so its releases are not publicly downloadable.
+ * The public download page (GitHub Pages) is where the team installs the APK:
+ * one link that never changes, and the page says which version it serves.
  *
  * The APK is a **Release asset**, never a committed blob: it uploads to the
  * pages repo's fixed rolling tag `timetracker-latest` (permanent URL) and only
@@ -316,7 +319,7 @@ buildAab();
 verifyOnAvd(version, built.universal);
 pushReleaseCommit(version);
 publish(version, built, notesFile);
-console.log(`\n✔ v${version} released, committed and pushed. Now: firebase deploy --only hosting.`);
+console.log(`\n✔ v${version} released, committed and pushed. Now: firebase deploy --only hosting --project dev.`);
 // Push the just-built, just-verified arm64 APK to the public download page as a
 // Release asset (never a commit). Same artifact, same run — provenance is tight.
 publishDownloadPage(built.arm64);

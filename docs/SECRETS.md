@@ -3,13 +3,22 @@
 Client Firebase config is **not** secret and is committed (`app/src/firebase-config.ts`).
 Everything below is either a server secret or gitignored local config.
 
+## The vault
+Every secret file and gitignored config file below has a copy in the vault,
+`~/.config/secrets-vault/` on the Linux build machine: `sources.tsv` maps each
+copy (`sabeel/time-tracker/…`, `sabeel/apple/…`, `sabeel/google-play/…`,
+`sabeel/review/…`) to its live path. `bash vault.sh collect` copies every live
+file in again and verifies; `bash vault.sh verify` compares the copies with the
+live files. A new machine restores from it; a new secret file goes into
+`sources.tsv` and is collected in the same batch.
+
 ## Cloud Functions secrets (Secret Manager)
 Set with `firebase functions:secrets:set <NAME>`; bind in code via `defineSecret`.
 
 | Name | Used by | Where to find the value |
 |---|---|---|
 | `SENTRY_DSN` | functions error capture (`functions/src/sentry.ts`) | Sentry → Project → Client Keys (DSN) |
-| `APNS_KEY` | push to iPhones (`functions/src/messaging.ts`, bound to every sender via `PUSH_SECRETS`) | The team's APNs key, `AuthKey_X5R8FL94BC.p8` (the same key the LMS and Kanban use). Set with `firebase functions:secrets:set APNS_KEY --data-file <the .p8>` |
+| `APNS_KEY` | push to iPhones (`functions/src/messaging.ts`, bound to every sender via `PUSH_SECRETS`) | The team's APNs key, `AuthKey_X5R8FL94BC.p8` (the same key the LMS and Kanban use): `~/.config/secrets-vault/sabeel/apple/` on Linux, `~/.apns/` on the Mac. Set with `firebase functions:secrets:set APNS_KEY --data-file <the .p8> --project dev` |
 
 The emulator reads stand-ins from the gitignored `functions/.secret.local`
 (`APNS_KEY=unused-in-emulator`; CI writes the same line). The emulated functions
@@ -38,15 +47,22 @@ See `functions/.env.example`.
 ## App client env (`app/.env.local`, gitignored)
 | Name | Used by | Value |
 |---|---|---|
-| `EXPO_PUBLIC_SENTRY_DSN` | app Sentry seam (`app/src/sentry*.ts`) | Sentry DSN (deferred to launch) |
+| `EXPO_PUBLIC_SENTRY_DSN` | app Sentry seam (`app/src/sentry*.ts`) | Sentry → the app project → Client Keys (DSN); an iPhone build refuses without it (`check:ios`) |
+| `EXPO_PUBLIC_FCM_VAPID_KEY` | web push (`docs/DEPLOY.md`, `npm run check:web-push`) | Firebase console → Project settings → Cloud Messaging → Web Push certificates |
 | `EXPO_PUBLIC_USE_EMULATORS` | dev only — point the app at local emulators | `1` |
+
+## Android Sentry upload (`app/android/sentry.properties`, gitignored)
+`auth.token` and `defaults.org`, read by Sentry's Gradle plugin from
+`app/android/` (template: `sentry.properties.example`). With it a release build
+uploads its source maps; without it the build succeeds and Android stack traces
+stay minified.
 
 ## Android release signing key
 `~/keystores/sabeel-time-tracker-release.jks` (alias and password in
 `sabeel-time-tracker-release.credentials.txt` beside it), named for Gradle by
 `~/.config/sabeel-time-tracker/keystore.properties` (mode 600, outside the repo).
 It is also Google Play's app signing key for this app. Losing it means no update
-can ever be signed again: back it up (Faisal's vault holds a copy).
+can ever be signed again: the vault holds a copy (`sabeel/time-tracker/android/`).
 
 ## Google Play publishing key
 `~/keys/sabeel-play-publisher.json`, the key of
@@ -67,8 +83,9 @@ is lost, delete that key in the Google Cloud console (project
 
 ## The email-and-password account's password
 `PASSWORD_ACCOUNT_EMAIL` (`app-review@oursabeel.com`) signs in with a long
-generated password. It lives in Faisal's vault and in App Store Connect's App
-Review Information, nowhere else: never in this repo, a chat or a log.
+generated password. It lives in the vault (`sabeel/review/`), and goes into App
+Store Connect's App Review Information sign-in fields when the app is submitted;
+nowhere else: never in this repo, a chat or a log.
 
 ## iOS build (the Mac and GitHub)
 `app/.env.sentry-build-plugin` (gitignored) holds `SENTRY_ORG`, `SENTRY_PROJECT`,

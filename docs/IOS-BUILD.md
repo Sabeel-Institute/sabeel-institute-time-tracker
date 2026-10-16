@@ -1,10 +1,11 @@
 # iOS — building and checking the iPhone app
 
 The app is one Expo codebase on three surfaces: web, Android and iOS. Linux
-builds web and Android; **iOS builds only on a Mac**, with Xcode: the rented
-build Mac, or GitHub's macOS runners. This file is the runbook for whoever is
-at the Mac, including a Claude Code session that has none of the context of the
-one that set it up.
+builds web and Android; **iOS builds only on a Mac**, with Xcode: GitHub's
+macOS runners, which build every release, or the rented Mac
+(`ssh user300503@tx477.macincloud.com`), for simulator checks. This file is
+the runbook for whoever is at the Mac, including a Claude Code session that has
+none of the context of the one that set it up.
 
 | | |
 |---|---|
@@ -76,7 +77,8 @@ required-reason APIs into `PrivacyInfo.xcprivacy` beside the data types
 
 ## Files a clone does not have
 
-All gitignored. Without each, something builds and quietly does not work.
+All gitignored, each with a copy in the vault (`docs/SECRETS.md`). Without
+each, something builds and quietly does not work.
 
 | File | What it carries | Without it |
 |---|---|---|
@@ -303,23 +305,55 @@ masks each value on its own, since a line mask does not cover a value printed
 by itself.
 
 **Renewal, before 16 October 2027**, when the distribution certificate and the
-three apps' App Store profiles expire: a new key and signing request with
-`openssl`, `POST /v1/certificates` (`DISTRIBUTION`), `POST /v1/profiles`
-(`IOS_APP_STORE`) per app on the new certificate, the pair packed with
-`openssl pkcs12 -export -legacy`, the three signing secrets set again in all
-three repos, then the old certificate revoked.
+three apps' App Store profiles expire. One certificate signs three apps, so its
+secrets `IOS_DIST_P12`, `IOS_DIST_P12_PASSWORD` and `IOS_PROFILE` live in three
+repos: this one, `Sabeel-Institute/lms` and `faisal-shah/sabeel-institute-kanban`,
+each with its own profile ("Sabeel Time Tracker App Store CI", "Sabeel LMS App
+Store CI", "Sabeel Kanban App Store CI"). The key, certificate, `.p12`, its
+password and the three profiles are in `~/.config/sabeel-lms/ios-distribution/`
+on the Linux build machine, copied in the vault at
+`~/.config/secrets-vault/sabeel/apple/ios-distribution/`.
+
+1. A new key and signing request with `openssl`.
+2. `POST /v1/certificates` (`DISTRIBUTION`), then `POST /v1/profiles`
+   (`IOS_APP_STORE`) per app on the new certificate, authenticated with the App
+   Store Connect API key as `testflight-check.mjs` does.
+3. The new key and certificate packed with `openssl pkcs12 -export -legacy`;
+   the files replaced in `~/.config/sabeel-lms/ios-distribution/`, then
+   `bash vault.sh collect`.
+4. The three secrets set again in all three repos (each its own `IOS_PROFILE`),
+   and the new identity imported on the Mac if it signs there.
+5. A workflow run in each repo, then the old certificate revoked.
 
 ## Releasing to TestFlight
 
 1. Cut the release as usual (`npm run release -- X.Y.Z --notes FILE`, from
    Linux). It tags `vX.Y.Z` on the commit Android and the web ship.
-2. Start the workflow on that tag with `testflight=true`.
+2. Get Faisal's go-ahead: an upload is a release.
+3. Start the workflow on that tag with `testflight=true` (the command under
+   "Builds on GitHub"), and follow it with
+   `gh run watch -R faisal-shah/sabeel-institute-time-tracker`.
+4. Apple processes the upload before anyone can install it, typically minutes
+   to an hour; App Store Connect, TestFlight lists the build when it is done.
+5. The internal group **"Sabeel Time Tracker Internal"** gets every build
+   automatically; nothing is added per build.
+
+**Testers** are App Store Connect users. To add someone: invite them in App
+Store Connect, Users and Access, with the Developer role; once they accept, add them to the group
+(TestFlight, "Sabeel Time Tracker Internal", Testers). On the iPhone they
+install Apple's TestFlight app and accept its invitation; TestFlight then
+offers each new build.
+
+**A TestFlight build expires 90 days after upload**, and the app then stops
+opening on testers' phones. A release at least every 90 days keeps the iPhones
+working.
 
 **Every version uploads once, as build 1.** `expo.ios.buildNumber` stays `"1"`:
 Apple wants it to increase within a version and lets it restart for the next.
 If Apple turns a build away after taking its number, cut the next patch
-version. Raising the build number instead would need a commit, and the upload
-must be the tagged one.
+version: an upload is built from its release tag, so a raised build number
+would need a commit the tag does not hold (`testflight-check.mjs` says the
+same).
 
 ## Open on iOS
 

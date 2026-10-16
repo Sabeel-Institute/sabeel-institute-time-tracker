@@ -1,41 +1,34 @@
-# Store release: what the stores require, and how this app meets it
+# The Time Tracker on the App Store and Google Play
 
-The decisions behind putting the Time Tracker through Apple's App Review (and,
-when it comes, Google Play): no account creation in the phone apps, the privacy
-policy, how a reviewer signs in, Sign in with Apple, export compliance, the
-privacy manifest and the App Privacy answers. The iPhone build itself is `docs/IOS-BUILD.md`.
+This app's store record: where it stands, how it keeps the decisions every
+Sabeel app shares, its answers to each store's questions, its review account
+and what is left before submitting. The method and the shared decisions, with
+their reasoning, are the **`sabeel-app-stores` skill**
+([SKILL.md](https://github.com/Sabeel-Institute/brand/blob/main/skills/sabeel-app-stores/SKILL.md));
+the sections below carry its numbers. When this file and the skill disagree on
+a shared decision, the skill wins and this file is fixed. Building and shipping:
+`docs/DEPLOY.md` (web, Android, Play) and `docs/IOS-BUILD.md` (iPhone,
+TestFlight).
 
-The shape is shared with the sibling apps: the Kanban
-(`sabeel-institute-kanban/docs/STORE-RELEASE.md`, the original statement of
-this design) and the LMS. Where this file and theirs agree, theirs has the
-longer argument.
+## Where it stands (2026-10-16)
 
-## 1. The rule: the phone apps never create an account
+| | Now | Destination |
+|---|---|---|
+| iPhone | TestFlight internal testing. The first build, 0.28.0 build 1 from tag `v0.28.0`, is being uploaded. Internal group "Sabeel Time Tracker Internal" (Faisal; 19 staff invited to App Store Connect, added as they accept). App Store Connect app `6823429437` | The App Store, **unlisted**, after App Review. Nothing submitted; the Time Tracker follows Kanban through review |
+| Android | Google Play internal testing: 0.28.0 (28000) a completed release. Play signs with the app's own key (since 2026-10-16). The "Sabeel staff" tester list is still to be ticked. The download page's APK carries the same key, so it and a Play install update each other | Google Play **production**, a public listing (Play has no unlisted) |
+| Web | Live at `https://sabeel-institute-time-tracker.web.app`, with `/privacy` and `/support` | |
 
-> **The iPhone and Android apps must never cause an account to come into
-> existence.** Accounts are made on the website only.
+## How the Time Tracker keeps the shared decisions
 
-Faisal's standing rule for every Sabeel app, applied here on 2026-10-15.
+### 1. No account is created in the app
 
-**Why.** Both stores require in-app account DELETION only if the app supports
-account CREATION:
+Both stores require in-app account deletion only from an app that creates
+accounts, or (Play) points at a sign-up flow; this app does neither, so the
+institute's hours are never at the mercy of a self-service delete. Faisal's
+standing rule, applied here 2026-10-15.
 
-- **Apple 5.1.1(v):** "If your app supports account creation, you must also
-  offer account deletion within the app."
-- **Google Play:** triggers if a user can create an account in the app, **or if
-  the app directs the user to an account creation flow outside it.**
-
-Satisfying neither trigger is what lets the apps ship without a deletion flow
-that would have to decide what happens to the hours somebody logged, which are
-the institute's records. "They already had a Google account" is no argument:
-the app account is the Firebase Auth user and `users/{uid}`, which
-`onUserCreate` makes the first time a Google identity signs in.
-
-## 2. How: ask before signing in
-
-Native Google sign-in is pure Google OAuth: it yields an ID token and touches
-nothing in this Firebase project. `signInWithCredential` is the line that
-creates the account. So the phone app asks first:
+Native Google sign-in yields Google's ID token and creates nothing;
+`signInWithCredential` is the line that would. So the phone app asks first:
 
 ```mermaid
 sequenceDiagram
@@ -57,233 +50,344 @@ sequenceDiagram
 ```
 
 - **`functions/src/accountExists.ts`**: unauthenticated (there is no session
-  yet), verifies GOOGLE's ID token rather than Firebase's, pinned to the web
-  OAuth client id so a token minted for another client cannot be replayed, and
-  answers one boolean. It cannot be done on the client:
+  yet); verifies Google's ID token, pinned to the web OAuth client id so a
+  token minted for another client cannot be replayed; answers one boolean, and
+  "no" for an unverified address. The client cannot ask instead:
   `fetchSignInMethodsForEmail` returns nothing under email enumeration
-  protection, the default since September 2023.
-- **`app/src/auth/google.ts`** `exchangeGoogleIdToken`: no account means no
+  protection.
+- **`app/src/auth/google.ts`** `exchangeGoogleIdToken`: no account, no
   `signInWithCredential`, and the remembered Google account is cleared so
-  another can be chosen. The emulator dev sign-in goes through the same
-  function, so an emulator build on a phone refuses exactly as production does.
-- **`app/src/auth/google.web.ts`**: the web keeps creating accounts (an unknown
-  `@oursabeel.com` address lands pending, an admin approves). Nothing needs to
-  detect a platform: the seam is the platform.
-- **The refusal copy names no website.** "Sign in on the website first" is
-  Play's second trigger almost word for word. The instruction lives out of
-  band: the user manual (1.1) and the support page. One support question per
-  newcomer is the price of the exemption.
+  another can be chosen. The emulator dev sign-in goes through it too.
+- **`app/src/auth/google.web.ts`**: the web creates accounts. A first Google
+  sign-in there makes the Auth user; `onUserCreate`
+  (`functions/src/authTrigger.ts`) deletes any that is not a verified
+  `@oursabeel.com` address and makes the rest pending for an admin.
+- **The refusal names no website** (`NO_ACCOUNT_MESSAGE`,
+  `app/src/auth/signInMessage.ts`). "Sign in on the website first" lives out of
+  band: the user manual (1.1) and `/support`, which nothing in the app links to.
+- Status does not matter, only existence: a pending or disabled account signs
+  in to its gate screen, and creates nothing.
 
-**Status does not matter, only existence.** A pending or disabled account
-exists, so it signs in and sees its gate screen exactly as before; signing in
-to an existing account creates nothing.
+Proved by `functions/test/integration/accountExists.integration.test.ts` (each
+"no" also counts the Auth users afterwards), `app/src/auth/googleGate.test.ts`
+(`signInWithCredential` is never called without an account; shown red with the
+exchange moved ahead of the question) and `app/src/auth/signInMessage.test.ts`.
+Seen on the iPhone simulator with an emulator build (2026-10-15): an unknown
+address refused, the Auth user count unchanged. **Not yet verified: the
+production round trip on a phone** (see "Before submitting").
 
-## 3. What moves, and what does not
+`accountExists` was deployed before the first build that calls it
+(2026-10-15); a later callable an app build depends on goes live the same way
+(`docs/DEPLOY.md`, runbook step 0b). APKs older than 0.28.0 predate the gate:
+on a first native sign-in they still make an account (pending, or deleted if
+not `@oursabeel.com`) until they are replaced, which takes an uninstall (8).
 
-**Moves to the web:** creating an account. Nothing new had to be built there:
-the web's Google sign-in already was the creation flow.
+### 2. Sign in with Apple is not required
 
-**Stays in the phone apps:** everything else, including the admin actions
-(approve, roles, disable). None of them creates an identity.
+Guideline 4.8's education/enterprise exemption: Google sign-in is accepted only
+for the institute's own Workspace accounts (`onUserCreate`), each approved by
+an admin. The email account (3) is first-party, made by the institute.
 
-## 4. Privacy and support pages
+### 3. Review access
 
-Served by Hosting as static files outside the signed-in app, because a store
-crawler and a reviewer read them without signing in:
+A reviewer cannot pass Google's sign-in checks for a Workspace account, so the
+reviewer gets one ordinary member account through an email door. Decided by
+Faisal, 2026-10-15 (relayed by the LMS session), in three steps:
 
-| Path | File | Linked from |
-|---|---|---|
-| `/privacy` | `app/public/privacy.html` | the sign-in screen (reachable before signing in, 5.1.1(i)), the bottom of Home, App Store Connect |
-| `/support` | `app/public/support.html` | App Store Connect's support URL only |
-
-`firebase.json` rewrites both ahead of the SPA catch-all.
-`functions/test/unit/hostingPages.test.ts` holds the rewrites, the files, the
-URLs in `@sabeel/shared` and two rules together: the policy links to nothing
-but mail, and nothing in the app links to the support page, which tells a
-newcomer to sign in on the website first.
-
-The policy states what is collected, who processes it (Google, Google Cloud
-and Firebase, Apple for iPhone notifications, Sentry), that hours and
-timesheets are kept as the institute's records, and how to ask for deletion:
-**privacy@oursabeel.com**, acted on within 30 days. That is the one address for
-every Sabeel app (decided 2026-08-18).
-
-## 5. Deploy order
-
-The gate calls `accountExists`, so **the function must be live before any app
-build that contains the gate reaches a phone**: deploy functions first, then
-cut the release. A build that calls a callable that does not exist fails every
-native sign-in.
-
-1. `firebase deploy --only functions` (adds `accountExists`), and `hosting` for
-   `/privacy` and `/support`.
-2. Then the Android release and the first iPhone build.
-
-Android APKs already installed (0.27.1 and older) do not call it and keep
-creating an account on a first native sign-in until they update. That is the
-old behaviour, not a new hole; the first release with the gate closes it.
-
-## 6. Apple specifics
-
-### Sign in with Apple (4.8): not required
-
-Guideline 4.8 requires an equivalent privacy-preserving login when an app uses
-a third-party login service for the user's primary account. It does not apply
-where the app is used with the organisation's own account system, which is
-this app: Google sign-in is accepted only for the institute's own
-`@oursabeel.com` Google Workspace accounts (enforced by `onUserCreate`, which
-deletes any other), and every account is approved by an administrator before
-it can do anything. Workspace is the institute's account system; Google is
-where it is hosted. The one email-and-password account (§ 7) is first-party,
-made by the institute, so it changes nothing here. Say so in the review notes
-(§ 8) rather than add Apple sign-in reflexively.
-
-### Export compliance
-
-`expo.ios.config.usesNonExemptEncryption: false` writes
-`ITSAppUsesNonExemptEncryption = NO`. The app uses only the encryption the
-operating system provides (HTTPS to Firebase, Google and Sentry), which is
-exempt, so no export compliance documentation is needed and builds reach
-testers without the questionnaire.
-
-### Privacy manifest
-
-`expo.ios.privacyManifests` (Expo writes `PrivacyInfo.xcprivacy`):
-`NSPrivacyTracking` false, no tracking domains, the UserDefaults reason
-`CA92.1`, and five collected types, all linked to the user, none for tracking,
-purpose App Functionality: email address, name, user ID, other user content,
-crash data. At `pod install` React Native merges the pods' own required-reason
-APIs into the same file. `npm run check:ios` refuses a manifest that is
-missing, declares no types, or tracks.
-
-### Purpose strings
-
-None needed: the app asks for no camera, photos, location, contacts or
-microphone. The notification permission has no purpose string on iOS.
-
-### App Privacy answers (App Store Connect)
-
-The questionnaire must agree with the manifest and the policy.
-
-| Question | Answer |
-|---|---|
-| Do you or your third-party partners collect data from this app? | Yes |
-| Contact Info | **Name**, **Email Address**: App Functionality; linked to the user; not used for tracking |
-| User Content | **Other User Content** (hours, notes, timesheets): App Functionality; linked; not tracking |
-| Identifiers | **User ID**: App Functionality; linked; not tracking |
-| Diagnostics | **Crash Data**: App Functionality; linked (Sentry carries the account id); not tracking |
-| Everything else (Health, Financial, Location, Sensitive, Contacts, Browsing, Search, Purchases, Usage Data, Performance Data, Other Data) | Not collected |
-| Used to track you | Nothing |
-
-Two judgement calls, written down so they are not re-argued: the user document
-stores the **link** to the Google account's avatar, which the app never shows,
-so it is not declared as Photos; and the device push token is a delivery
-address for the app's own notifications, not a tracking identifier, so it is
-not declared as Device ID (the Kanban and LMS answer the same way).
-
-## 7. Review access: one email-and-password member
-
-**The problem.** A reviewer must be able to sign in (2.1). Sign-in is Google
-with the institute's Workspace accounts, and a Workspace account cannot be
-handed to a reviewer: Google's login challenge for a sign-in from an unusual
-place goes to whoever holds the account's phone, and an administrator can lift
-it for ten minutes at most. An App Review session arrives later, from somewhere
-unusual, with nobody to answer.
-
-**Decided by Faisal, 2026-10-15** (relayed by home-lms), in three steps:
-
-- An email door for the reviewer: *"sign in thru email should never be able to
-  be an admin or manager. Just a member. No need for special data for it."*
+- *"sign in thru email should never be able to be an admin or manager. Just a
+  member. No need for special data for it."*
 - *"That way there's no special code for app reviewer."* The account is made
-  and approved the ordinary way, with no script or seed for it, and its
-  timesheets go to Faisal: *"assign me as the timesheet manager for them."*
+  and approved the ordinary way, with no script or seed, and its timesheets go
+  to Faisal: *"assign me as the timesheet manager for them."*
 - *"That sign in with password for kanban and timesheet should only accept that
   one email. The sign in page shouldn't indicate its a special thing for a
   reviewer."*
 
-**What exists.** The sign-in screen has a plain **Sign in with email** link
-under the Google button: email, password, Sign in. No sign-up, no password
-reset, and nothing that mentions reviewers. Behind it, one account,
-`app-review@oursabeel.com` (`PASSWORD_ACCOUNT_EMAIL` in `@sabeel/shared`), an
-ordinary member, held there by the server rather than the screen:
+**What exists.** A plain **Sign in with email** link under the Google button:
+email, password, Sign in. No sign-up, no password reset, nothing about
+reviewers. Behind it one account, `app-review@oursabeel.com`
+(`PASSWORD_ACCOUNT_EMAIL` in `@sabeel/shared`), an ordinary member whose
+approver is Faisal, held there by the server:
 
 | Lock | Where | Proved by |
 |---|---|---|
-| Every password **sign-up** through the public API is refused, before an account exists | `beforeSignUp` blocking function (`functions/src/signInGate.ts`); needs Identity Platform, which the project has | `functions/test/gate/signInGate.gate.test.ts`, raw REST `accounts:signUp` against the Auth emulator |
-| A password **sign-in** for any other address is refused | `beforeSignIn` blocking function | the same, with a second password account the Admin SDK made |
-| A password session for any other address is signed out; a password session is never a manager or an admin, whatever its claims | `firestore.rules` (`isSignedIn`, `isManager`, `isAdmin`) and `functions/src/auth.ts` | `rules.passwordSession.test.ts`, `auth.unit.test.ts` |
-| A password-only account cannot be promoted | `setUserAccess` (`functions/src/users.ts`) | `users.integration.test.ts` |
+| Every password **sign-up** through the public API is refused before an account exists | `beforeSignUp` (`functions/src/signInGate.ts`); the project is on Identity Platform | `functions/test/gate/signInGate.gate.test.ts` (raw REST `accounts:signUp` against the Auth emulator), `functions/test/unit/signInGate.test.ts` |
+| A password **sign-in** for any other address is refused | `beforeSignIn` | the same, with a second password account the Admin SDK made |
+| A password session for any other address is signed out; a password session is never a manager or admin, whatever its claims | `firestore.rules` (`isSignedIn`, `isManager`, `isAdmin`), `functions/src/auth.ts` | `functions/test/integration/rules.passwordSession.test.ts`, `functions/test/unit/auth.unit.test.ts` |
+| A password-only account cannot be promoted | `setUserAccess` (`functions/src/users.ts`) | `functions/test/integration/users.integration.test.ts` |
 
 Each denial test was shown red with its lock removed. The account sees its own
-hours and timesheets and nothing else (`rules.passwordSession.test.ts`).
+hours and timesheets and nothing else.
 
-**The address is public, on purpose** (decided 2026-10-15): it sits in this
-repo and in the rules as a literal. Its protection is a long generated password
-plus Firebase's rate limiting, and the account can see nothing but its own
-hours, so a claim-based indirection to hide it would protect nothing.
+**The address is public, on purpose** (decided 2026-10-15): it is in this repo
+and in the rules as a literal. Its protection is a long generated password and
+Firebase's rate limiting, and it can see nothing but its own hours.
 
-**Making the account: ordinary admin steps, no code in this repo.**
+**How it was made** (2026-10-15), in this order on production: the blocking
+functions deployed (they register with Identity Platform on deploy), then
+Email/Password enabled, so the provider was never open without the gate. Then:
 
-1. Create it with the Admin SDK (`createUser` with the address, a long
-   generated password and `emailVerified: true`). Not the console's "Add user":
-   that makes an unverified account, which `onUserCreate` deletes as it would
-   any unverified address. The Admin SDK is not seen by the sign-up gate, which
-   is the point of the gate.
-2. `onUserCreate` provisions it pending, like any new account.
-3. Approve it as a **member** (Users screen on the web, or the same writes the
-   screen makes), and set its timesheet approver to Faisal (Users screen,
-   Approver).
-4. The password goes into Faisal's vault and into App Store Connect's review
-   notes, nowhere else.
+1. Created with the Admin SDK: `createUser` with the address, a long generated
+   password and `emailVerified: true`. Not the console's "Add user", which makes
+   an unverified account that `onUserCreate` deletes. The Admin SDK is not seen
+   by the sign-up gate, which is the point of the gate.
+2. `onUserCreate` provisioned it pending.
+3. Approved as a **member** on the Users screen, approver Faisal.
 
-Order on production: the blocking functions deployed (they register with
-Identity Platform on deploy) **before** Email/Password is enabled, so the
-provider is never open without the gate.
+**The password** is in `~/.config/sabeel-review/time-tracker-app-review.txt` on
+the Linux build machine, copied in the vault at
+`~/.config/secrets-vault/sabeel/review/time-tracker-app-review.txt`; at
+submission it goes into App Store Connect's App Review Information **sign-in
+fields** and Play Console's **App access**. Never into the review notes text,
+this repo, a chat or a log.
 
-## 8. Review notes
+**Resetting it:** the Admin SDK's `updateUser(uid, { password })` with a new
+long generated password, reaching the project as `scripts/grant-admin.mjs`
+does (Application Default Credentials, `GCLOUD_PROJECT=sabeel-institute-time-tracker`),
+without printing it; the new value into the file above, `bash vault.sh
+collect`; then App Store Connect's sign-in fields and Play's App access.
 
-The text for App Store Connect's review notes. The credentials go in App Store
-Connect's sign-in fields, not in this repo.
+**No sample data.** The reviewer adds hours (Home, Add hours manually, or Clock
+in), sees its week (My timesheet) and submits it. The account does not expire
+and nothing in it ages. Before each submission: it signs in, and its approver
+is still Faisal (an approver pointer drops when its holder loses the manager
+or admin role).
+
+### 4. What users post
+
+| Content | Who writes it | Who sees it |
+|---|---|---|
+| Hours, with an optional note | each member, for themselves (managers may correct) | the member, managers, admins |
+| Activity names | managers and admins | every active user |
+| Rejection reasons | the approver | the member, the approver, managers, admins |
+| Weekly timesheet submissions | each member | the member, their approver, managers, admins |
+
+Both stores count this as user-generated content. As the skill decides
+(2026-10-16), **before the first App Store submission or Play production
+release, whichever comes first**, the app adds:
+
+1. **The institute's rules, accepted once**, at first sign-in before anything
+   can be posted, with "I agree": the skill's text, with "Sabeel Time Tracker is
+   for Sabeel Institute's staff and volunteers, and what you post is seen only
+   by you, your approver and the institute's managers and administrators", and
+   Report a problem on Home. No minimum age.
+2. **Report a problem** on Home (beside Notification settings; the app has no
+   More tab): what the person types reaches the admins, who answer within 24
+   hours by removing the content or disabling the account.
+
+**Status: neither is built.**
+
+Deliberately not: **no blocking between members** (a member who blocked their
+approver could no longer have their hours approved; an admin disabling the
+account blocks an abusive user from the service: `setUserAccess` disables it
+and revokes its sessions) and **no word filter or automatic removal** (only
+institute-made accounts post; admins remove content).
+
+### 5. Adults only
+
+Staff and volunteers with `@oursabeel.com` accounts, all adults; no users
+under 13, so COPPA does not apply. The privacy policy's "Children" section says
+the app is not offered to children under 13. Texas SB 2420 is open
+("Before submitting").
+
+### 6. Privacy
+
+| Page | URL | File | Linked from |
+|---|---|---|---|
+| Privacy policy | `https://sabeel-institute-time-tracker.web.app/privacy` | `app/public/privacy.html` | the sign-in screen (reachable before signing in, 5.1.1(i)), the bottom of Home, both store listings |
+| Support | `https://sabeel-institute-time-tracker.web.app/support` | `app/public/support.html` | the App Store support URL only |
+
+Both are static, outside the signed-in app, rewritten ahead of the SPA
+catch-all in `firebase.json`. **Nothing in the app links to `/support`**: it
+tells a newcomer to sign in on the website first (1).
+`functions/test/unit/hostingPages.test.ts` holds the rewrites, the files, the
+URLs in `@sabeel/shared`, that the policy links to nothing but mail, and that
+the app never links to the support page.
+
+The policy states what is collected: name, email and the Google profile picture
+link; hours (start, stop, activity, optional note, time zone); weekly
+timesheets with who approved or returned them and why; a notification address
+per device and notification settings; crash diagnostics carrying only the
+account id. Third parties: Google (sign-in), Google Cloud and Firebase (hosting,
+data in the US, Android and browser notifications), Apple (iPhone
+notifications), Sentry (crash diagnostics). No advertising, no tracking, no
+sale. Hours and timesheets are kept as the institute's records; the account and
+personal data are removed on request to **privacy@oursabeel.com**, within 30
+days.
+
+### 8. Play signs with the app's own key
+
+Since 2026-10-16: Play's Google-generated key replaced with the app's release
+key (App integrity, App signing, Change key, Export and upload a key from Java
+keystore, PEPK). A Play install and the download page's APK update each other.
+`scripts/publish-play.mjs` completes a release only when the APKs Play
+generated carry that certificate; the earlier 0.27.1 (27001) bundle, processed
+before the change, stays unreleased. APKs older than 0.28.0 are debug-signed:
+a phone with one uninstalls it once before installing a release-signed build;
+nothing is lost.
+
+### 9. Distribution
+
+- **iPhone now:** TestFlight, internal group "Sabeel Time Tracker Internal",
+  which gets every build. Staff are invited to App Store Connect (Developer
+  role), accept, and are added to the group (`docs/IOS-BUILD.md`).
+- **Android now:** Play internal testing, the account-wide "Sabeel staff" list
+  ticked on the app's Internal testing → Testers page; testers join through
+  that page's link (Play sends no email) (`docs/DEPLOY.md`, "Play testers").
+  Also the APK on `https://faisal-shah.github.io/sabeel-time-tracker/`.
+- **Destination:** the App Store, unlisted, after Kanban is through review; and
+  Google Play production, a public listing, which Play reviews in full.
+
+### 10. Small things each store checks
+
+- **Export compliance:** `expo.ios.config.usesNonExemptEncryption: false`
+  (HTTPS only), so builds reach testers without the questionnaire.
+- **Privacy manifest:** `expo.ios.privacyManifests`: `NSPrivacyTracking` false,
+  no tracking domains, UserDefaults reason `CA92.1`, and five collected types
+  (email address, name, user ID, other user content, crash data), all linked,
+  none tracking, purpose App Functionality. `npm run check:ios` refuses a
+  manifest that is missing, declares no types, or tracks.
+- **Purpose strings:** none needed; the app asks for no camera, photos,
+  location, contacts or microphone.
+- **Xcode 26 and the iOS 26 SDK:** `ios.yml` runs on `macos-26`.
+- **Play target API 36**, from React Native's Gradle defaults.
+
+## Store answers
+
+Each must agree with the privacy policy and the privacy manifest.
+
+**Apple App Privacy**
+
+| Question | Answer |
+|---|---|
+| Do you or your third-party partners collect data from this app? | Yes |
+| Contact Info | **Name**, **Email Address**: App Functionality; linked; not tracking |
+| User Content | **Other User Content** (hours, notes, timesheets): App Functionality; linked; not tracking |
+| Identifiers | **User ID**: App Functionality; linked; not tracking |
+| Diagnostics | **Crash Data**: App Functionality; linked (Sentry carries the account id); not tracking |
+| Everything else | Not collected |
+| Used to track you | Nothing |
+
+Two judgement calls: the Google profile picture **link** is stored and never
+shown, so it is not declared as Photos; the device push token is a delivery
+address for the app's own notifications, not a Device ID.
+
+**Apple age rating:** user-generated content **Yes**; messaging and chat **Yes**
+(rejection reasons are written feedback from an approver to a member); social
+media No; advertising No; every content category None; unrestricted web access
+No. Keep the rating Apple calculates (expected 4+).
+
+**Play Data safety**
+
+| Question | Answer |
+|---|---|
+| Account creation | **No** (1), so the deletion questions fall away |
+| Personal info | Name, Email address, User IDs: collected, not shared, App functionality |
+| App activity | Other user-generated content (hours, notes, timesheets): collected, not shared, App functionality |
+| App info and performance | Crash logs, Diagnostics: collected, not shared, App functionality |
+| Device or other IDs | Not declared (the push token, as on Apple); if Play's SDK index lists Firebase Messaging for it, declare it, App functionality |
+| Encrypted in transit | Yes |
+| Deletion | By request, to `privacy@oursabeel.com` |
+
+**Play content rating (IARC):** a productivity app; users interact **Yes**
+(an "Users Interact" notice, not a higher age); no violence, sexuality,
+language, controlled substances, gambling or purchases; shares location No.
+
+**Play target audience:** 18 and over only. **Ads:** none.
+
+**Play App access:** sign-in required. Instructions: "On the sign-in screen tap
+'Sign in with email' and use these credentials", with `app-review@oursabeel.com`
+and the password from the vault (3).
+
+## Review notes
+
+For App Store Connect's App Review Information notes and, adapted, Play's App
+access instructions. Credentials go in the sign-in fields, never here. The 1.2
+paragraph is true only once the rules screen and Report a problem exist (4).
 
 ```text
-To sign in: on the sign-in screen tap "Sign in with email" and use the
-credentials provided in the App Review Information. That account is an
-ordinary member: it records its own hours (Home > Add hours manually, or
-Clock in) and submits its week for approval (My timesheet > Submit).
+This app is for the staff and volunteers of Sabeel Institute, a nonprofit
+adult-education institute, to record the hours they work and submit them
+weekly for approval. Accounts are provisioned by the institute through its web
+application; the app refuses any identity that does not already have an
+account, and no account is created from the app. Guideline 5.1.1(v) is
+therefore not engaged.
 
-This app does not support account creation. Accounts are created by the
-organisation through its web application; the app refuses sign-in for any
-identity that does not already have an account, and no account is created
-from the app under any circumstance. Guideline 5.1.1(v) is therefore not
-engaged.
+Staff sign in with the institute's Google Workspace accounts (the
+education/enterprise exemption under Guideline 4.8).
 
-Staff sign in with the organisation's own Google Workspace accounts
-(@oursabeel.com) only, each approved by an administrator: the organisation's
-existing account system, so Guideline 4.8 does not require Sign in with
-Apple. The email sign-in is a first-party account the organisation created;
-there is no third-party login on it.
+For review, tap "Sign in with email" on the sign-in screen and use the account
+in the sign-in information (app-review@oursabeel.com). It is an ordinary member
+account made by an administrator: it records its own hours (Home > Add hours
+manually, or Clock in), sees its week (My timesheet) and submits it for
+approval (My timesheet > Submit). Approving timesheets, managing activities,
+reports and user administration belong to manager and administrator roles,
+which are granted only to the institute's own Workspace accounts.
 
-Account deletion is requested by email; the privacy policy states the
-address, the process and what is retained. The hours and timesheets people
-record are retained as the organisation's business records.
+What a member records is visible only to them, to the colleague who approves
+their timesheets, and to the institute's managers and administrators. Nothing
+is public, searchable or discoverable, and users cannot contact strangers.
+Guideline 1.2:
+- Terms: every user accepts the institute's rules, which prohibit
+  objectionable content and abusive users, before they can post.
+- Reporting: Home > Report a problem. The report goes to the institute's
+  administrators, who act on it within 24 hours by removing the content and
+  disabling the author's account.
+- Blocking abusive users from the service: administrators disable the
+  account, which signs it out and stops it signing in. Blocking between
+  members is not offered because the app carries required work: a member who
+  blocked their approver could no longer have their hours approved.
+- Contact: https://sabeel-institute-time-tracker.web.app/support
+
+Account deletion is requested by email; the privacy policy (linked on the
+sign-in screen) states the address, the process and what is retained. The
+hours and timesheets people record are retained as the institute's records.
 ```
 
-## 9. What is verified, and what is not
+## Before submitting
 
-- `accountExists`: five emulator tests, each "no" also counting the auth users
-  afterwards (`functions/test/integration/accountExists.integration.test.ts`).
-- The ordering: `app/src/auth/googleGate.test.ts`, the load-bearing assertion
-  being that `signInWithCredential` is never called without an account; shown
-  red with the exchange moved ahead of the question.
-- The iPhone simulator, emulator build (2026-10-15): an unknown address is
-  refused with the copy above and the auth user count does not move; once a
-  web-style sign-in has created the account, the phone signs in to the pending
-  screen.
-- The web still creates accounts: the web suites drive sign-up through it.
+**App Store** (App Store Connect, app `6823429437`)
 
-**Not yet verified: the native round trip against production.** A personal
-Google account with no account in the project, on a production build: refused,
-and no auth record created; then a Workspace account signs in. It needs a
-production build (a Release build on the simulator, or TestFlight on an iPhone)
-and a person to sign in with real Google accounts. Do it before submitting for
-review.
+- [ ] The rules screen and Report a problem (4). Not built.
+- [ ] The production native sign-in round trip on a phone (a Play or
+      download-page APK, or TestFlight): a Google account with no account in
+      the project is refused and no Auth user appears; then an
+      `@oursabeel.com` account signs in. Not done.
+- [ ] App Privacy, as above. Not entered.
+- [ ] Age rating, as above. Not entered.
+- [ ] Listing: description, keywords, category, support URL and privacy policy
+      URL (6), screenshots at the required sizes. Not started.
+- [ ] App Review Information: contact, sign-in required, the review account in
+      the sign-in fields (3), the notes above. Not entered.
+- [ ] Version release: manual.
+- [ ] Submit after Kanban is through review; then the Account Holder files
+      Apple's unlisted request (the app submitted, not a beta).
+
+**Google Play production** (Play Console)
+
+- [ ] The rules screen and Report a problem (4), as above.
+- [ ] App content: privacy policy URL, App access, ads, content rating, target
+      audience, Data safety, as above. Not entered.
+- [ ] Store listing: short and full description, icon, feature graphic, phone
+      screenshots, category, contact email. Not started.
+- [ ] A production release, which Play reviews. The publishing service account
+      has "Release apps to testing tracks" only, so the release is promoted in
+      Play Console (or the account given production).
+
+**Both**
+
+- [ ] Confirm `privacy@oursabeel.com` exists (a Workspace group, two admins).
+- [ ] Texas SB 2420 (5): a question for a lawyer before the first public
+      listing, which Play production is.
+- [x] `/privacy` and `/support` live; the privacy link on the sign-in screen
+      and Home.
+- [x] The review account made and approved (3); the sign-in gate live.
+- [x] Export compliance and the privacy manifest (10).
+- [x] Play signs with the app's own key (8).
+
+## Open
+
+- **Google's sign-in alert names the app "SabeelTimeTracker"**: Apple's
+  web-authentication prompt uses `CFBundleName` (the Xcode target's name), not
+  the display name. Faisal to choose a short name.
+- The store listing copy, screenshots and category (both stores).

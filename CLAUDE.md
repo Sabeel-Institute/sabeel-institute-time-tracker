@@ -7,15 +7,18 @@ entries against activities, admin-approved Google sign-in, and reports. Faisal i
 the developer; the nonprofit's staff are the admins/managers in the app.
 
 **It is in production and the team uses it.** Live at
-`sabeel-institute-time-tracker.web.app` since 2026-07-16; the Android APK is
-installed from a public GitHub Pages download page. The iPhone app is built on
-GitHub's macOS runners for TestFlight (App Store Connect app 6823429437); App
-Review is prepared in `docs/STORE-RELEASE.md`. There is no Play Store presence.
+`sabeel-institute-time-tracker.web.app` since 2026-07-16. Android: the APK from
+a public GitHub Pages download page, and Google Play internal testing for
+invited staff. iPhone: TestFlight for invited staff, built on GitHub's macOS
+runners (App Store Connect app 6823429437). Destination: the App Store,
+unlisted, and Google Play production. Where it stands and the store answers:
+`docs/STORE-RELEASE.md`.
 
 Source of truth: `docs/PRODUCT_BRIEF.md` (decisions & data model),
-`docs/PHASE_STATUS.md` (live build status), `docs/DEV-TOOLING.md` (what each
-script guards against — **read it before debugging the harness or cutting a
-release**).
+`docs/PHASE_STATUS.md` (live build status, deploy log), `docs/DEPLOY.md`
+(deploy and the release runbook), `docs/IOS-BUILD.md` (the iPhone build and
+TestFlight), `docs/DEV-TOOLING.md` (what each script guards against — **read it
+before debugging the harness or cutting a release**).
 
 ## Converge on the optimum; do not accrete
 
@@ -26,9 +29,9 @@ than layering a patch on top. Prefer deleting and replacing over accreting; wher
 the sibling kanban app already has the clean pattern, converge onto it. The goal
 is that this does not quietly become a legacy codebase.
 
-**What that does and does not license.** There is no public API and no store
-listing, so internal refactoring is cheap and should be taken. But the team is
-*on this app*: Firestore holds their real hours, and they have APKs installed. So
+**What that does and does not license.** There is no public API and no public
+store listing, so internal refactoring is cheap and should be taken. But the
+team is *on this app*: Firestore holds their real hours, and they have APKs installed. So
 a change to stored shapes needs a migration, and a change that breaks an older
 installed build needs a release they can actually get. "Breaking is free" was
 true before the first deploy and has not been true since.
@@ -155,9 +158,12 @@ Do not silently change any of these.
   `scripts/build-ios.sh` builds an `.ipa`; `.github/workflows/ios.yml` builds on
   GitHub and, with `testflight=true` on a release tag, uploads.
 - Releases: `npm run release -- <X.Y.Z> --notes FILE` — bumps the version, rebuilds
-  the manual PDF, builds both APK variants, verifies the production bundle on the
-  AVD, publishes. **Never hand-bump versions.** The iPhone build of that release
-  is the iOS workflow run on its tag (`docs/IOS-BUILD.md`, "Releasing").
+  the manual PDF, builds both APK variants and the Play bundle, verifies the
+  production bundle on the AVD, pushes, publishes the GitHub release and the
+  download page, then Play internal testing. **Never hand-bump versions.** The
+  web deploy follows it (`docs/DEPLOY.md`); the iPhone build of that release is
+  the iOS workflow run on its tag (`docs/IOS-BUILD.md`, "Releasing to
+  TestFlight").
 - CI (GitHub Actions): lint + typecheck + knip + unit + emulator tests + the
   layout sweep on every push. Keep it green, and **check the actual run** —
   don't assume. No deploys from CI. `functions/test/unit/ci-coverage.test.ts`
@@ -266,10 +272,10 @@ committed by design — rules are enforced server-side. Client DSNs go in gitign
 
 - Agent: all code, rules, indexes, tests, emulator runs, CI, exact click-by-click
   console checklists, diagnosing pasted logs.
-- Faisal only: third-party consoles (Firebase/GCP/Sentry), OAuth/SHA-1
-  registration, the Workspace Drive folder + service account, anything with
-  production secrets. Everything Faisal must do himself is tracked in `TODO.md` —
-  keep it current.
+- Faisal only: third-party consoles (Firebase/GCP/Sentry, Google Play Console,
+  App Store Connect, Apple Developer), OAuth/SHA-1 registration, anything with
+  production secrets, and the go-ahead for every release and TestFlight upload.
+  Everything Faisal must do himself is tracked in `TODO.md` — keep it current.
 
 ## Conventions
 
@@ -292,7 +298,7 @@ committed by design — rules are enforced server-side. Client DSNs go in gitign
 - **Publishing the APK: a Release asset, NEVER committed.** The public download is
   a GitHub Release asset on the pages repo (`faisal-shah.github.io`), fixed rolling
   tag `timetracker-latest` — the URL never changes. `scripts/publish-apk.sh`
-  uploads the asset, bumps only the version label on the page, and asserts the
-  pages repo holds ZERO `.apk` blobs. **Never `git add` a binary to any repo** —
-  committing per-release APKs bloated the pages history and had to be rewritten
-  out, twice. `*.apk` is gitignored there as the backstop.
+  uploads the asset, stamps the version and the publish time on the page, and
+  asserts the pages repo holds ZERO `.apk` blobs. **Never `git add` a binary to
+  any repo** — committing per-release APKs bloated the pages history and had to
+  be rewritten out, twice. `*.apk` is gitignored there as the backstop.

@@ -22,7 +22,10 @@ Firebase or the emulators belong there; what we built in response belongs here.
 | `npm run test:screens` | every screen at five widths, asserted — the LAYOUT sweep (in CI) |
 | `npm run knip` | dead-code audit |
 | `npm run emulators:free` | kill whatever is squatting on emulator ports |
-| `npm run release -- <version> --notes FILE` | cut an Android release |
+| `npm run release -- <version> --notes FILE` | cut a release: GitHub release, download page, Play internal testing (`docs/DEPLOY.md`) |
+| `npm run publish:play -- --check` / `-- --internal` | the Play gates alone / rerun the Play upload alone |
+| `npm run check:web-push` | the exported web bundle carries the VAPID key (`docs/DEPLOY.md`) |
+| `npm run check:push` | FCM and Apple accept a message from the project |
 | `npm run check:ios` | the iOS config: app.json against the plist, plugins, export compliance, icon, privacy manifest, DSN |
 | `npm run build:ios` | `scripts/build-ios.sh`: every gate, then archive and export a signed `.ipa` (Mac only, never uploads) |
 
@@ -45,6 +48,9 @@ no root, and is idempotent:
 `--jdk21-aliases ST` sets `ST_JDK21_HOME`, which
 `scripts/test-emulator.sh` reads to find JDK 21 without disturbing the Gradle
 default.
+
+Releasing needs more (access, the download-page clone, the keys, the manual
+renderer's tools): `docs/DEPLOY.md`, "Before your first release".
 
 **The Android emulator needs hardware virtualization, which a VM may not have.**
 `emulator -accel-check` is authoritative — `accel: 3` means no KVM, and if
@@ -444,14 +450,17 @@ report every port free. Check by hand there: `lsof -nP -iTCP:<port>
 
 ## `scripts/release.mjs`
 
-Replaces a hand-run sequence repeated for beta.8 → beta.11, where the version
-lived in **four** files that had already drifted (`app.json` said beta.7 while
-builds said beta.11). It bumps all four, re-renders the manual PDF, builds both
-APKs, verifies on the AVD, and publishes.
+One command, because a hand-run release lets the version and the build stamps
+drift apart. It bumps the version in `app/app.json` (the only copy) and the
+manual's label, re-renders the manual PDF, builds both APKs and the Play bundle,
+verifies on the AVD, pushes, publishes the GitHub release and the download page,
+and last puts the bundle on Play internal testing (`scripts/publish-play.mjs`).
 
 Guards worth keeping:
 
-- **Distribution is ALWAYS a GitHub release.** Never attach an APK to chat.
+- **Every channel ships the one verified build**: the GitHub release and the
+  download page (APKs), Play internal testing (the bundle). Never attach an APK
+  to chat.
 - **Both variants, every time.** arm64-only crashes on an x86_64 emulator with
   "Unexpected CPU variant" — which is what verification runs on.
 - **The production check is the ABSENCE of the dev sign-in row.** An
@@ -464,38 +473,39 @@ Guards worth keeping:
   `app/src/build-info.ts` from that release commit. The APK bundles it and the
   later `firebase deploy --only hosting` regenerates it from the SAME commit — so
   the sign-in footer (`v<version> · <hash>`) is identical on the APK and the web.
-  Building before the commit would stamp two different commits (that was a bug).
-  So there is no manual "commit the bump" step now; if a post-commit step fails,
-  recover with `git reset --hard HEAD~1`. Finish with `firebase deploy --only
-  hosting && git push`.
+  Building before the commit would stamp two different commits.
+- **Pushes the branch itself**, after the AVD check and before `gh release
+  create`, and refuses to tag unless `origin` then holds the release commit
+  (`docs/DEPLOY.md`). A failure before the push recovers with `git reset --hard
+  HEAD~1`; after it, fix forward. Finish with `firebase deploy --only hosting
+  --project dev`.
 
 `--dry-run` stops after the bump (before the commit); `--verify-only` re-runs the
 AVD check against already-built APKs.
 
 ### A release is not finished until the download page points at it
 
-This repo is **private**, so its GitHub releases are not publicly downloadable —
-the team would need repo access just to install the APK. They install from a
-public GitHub Pages site instead:
+The team installs the APK from a public GitHub Pages site, whose link never
+changes and which says which version it serves:
 
 **https://faisal-shah.github.io/sabeel-time-tracker/** — served from the
 `faisal-shah.github.io` repo, branch **`master`** (not main). It links the web
-app, the Android APK and USER-MANUAL.pdf.
+app, the Android APK and USER-MANUAL.pdf. `publish-apk.sh` needs that repo
+cloned at `../faisal-shah.github.io` (or `TT_PAGES_DIR`): without the clone it
+uploads the APK and leaves the page's version and date as they were.
 
-**The APK is a GitHub Release ASSET, never a committed blob** (revised
-2026-07-21). It uploads to the pages repo's fixed rolling tag
+**The APK is a GitHub Release ASSET, never a committed blob.** It uploads to the
+pages repo's fixed rolling tag
 `timetracker-latest`, so the download URL is permanent:
 `…/releases/download/timetracker-latest/sabeel-time-tracker-arm64-v8a.apk`.
-Only the version *label* on the page is committed. `release.mjs` runs
-`scripts/publish-apk.sh` for this automatically; it can also be run by hand.
+Only the version and publish-time stamp on the page are committed. `release.mjs`
+runs `scripts/publish-apk.sh` for this automatically; it can also be run by hand.
 
-Why this replaced committing the binary: per-release APKs (~31–38 MB each) were
-committed to the pages repo and git keeps every version forever. The history
-bloated to ~100 MB and had to be rewritten out (force-push) — twice, once with a
-concurrent Kanban release landing mid-rewrite. Assets sidestep all of it: no
-blob in history, nothing to drop, no force-push.
+Why an asset, not a commit: git keeps every committed version of a ~35 MB APK
+forever, and dropping them takes a force-push of a repo the Kanban publisher
+shares. An asset leaves no blob in history, nothing to drop, no force-push.
 
-The rules that survive into the asset model:
+The rules:
 
 - **Take the APK from the tested build, not a stale tree.** `release.mjs` passes
   the arm64 APK it just built and verified on the AVD, in the same run — so it is

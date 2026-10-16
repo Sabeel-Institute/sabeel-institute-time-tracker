@@ -1,10 +1,11 @@
 # Sabeel Institute Time Tracker
 
-Hours tracking for a small nonprofit: an Android app + website built from **one Expo
-codebase**, on Firebase (Auth, Firestore, Cloud Functions, Hosting).
+Hours tracking for a small nonprofit: an Android app, an iPhone app and a website
+built from **one Expo codebase**, on Firebase (Auth, Firestore, Cloud Functions,
+Hosting).
 
-- **Sign in with Google** — any Google account can sign in; new accounts wait as
-  *pending* until an admin approves them.
+- **Sign in with Google** — `@oursabeel.com` accounts only, made on the website;
+  new accounts wait as *pending* until an admin approves them.
 - **Clock in/out or manual entries**, assigned to projects/events, with notes.
 - **Honor system** — hours count immediately; managers can correct entries.
 - **Timesheets** (daily/weekly) shown in the timezone where the work happened.
@@ -14,7 +15,7 @@ codebase**, on Firebase (Auth, Firestore, Cloud Functions, Hosting).
 
 | Path | What |
 |---|---|
-| `app/` | Expo app (Android + web via react-native-web) |
+| `app/` | Expo app (Android, iOS, and web via react-native-web) |
 | `functions/` | Cloud Functions (TypeScript, nodejs22) |
 | `packages/shared/` | Shared types, timezone/duration math, validation |
 | `firestore.rules` / `firestore.indexes.json` | Firestore config-as-code |
@@ -33,3 +34,9 @@ cd app && npx expo run:android
 ```
 
 See `CLAUDE.md` for working rules and `docs/PRODUCT_BRIEF.md` for the full design.
+
+## Releasing
+
+`docs/DEPLOY.md` (web, functions, Android: GitHub release, download page, Google
+Play internal testing), `docs/IOS-BUILD.md` (iPhone: TestFlight),
+`docs/STORE-RELEASE.md` (App Store and Play decisions), `docs/SECRETS.md`.

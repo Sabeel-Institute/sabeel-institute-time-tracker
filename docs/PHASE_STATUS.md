@@ -34,6 +34,26 @@ phase boundary.
   under different `EXPO_PUBLIC_*` env — an emulator-mode bundle must never ship).
   Live smoke: prod sign-in page clean, no dev row, no console errors.
 
+- 2026-08-29 — **v0.27.0 and v0.27.1** (the notification channel and icon; the
+  dead "Miscellaneous" channels retired): GitHub releases and the download page.
+
+- 2026-10-15 — **Functions**: `accountExists` (native sign-in asks it first),
+  the sign-in gate `beforeSignUp`/`beforeSignIn` (registered with Identity
+  Platform by the deploy), and iPhone push sent to Apple directly (`apns.ts`,
+  secret `APNS_KEY`). Email/Password enabled once the gate was live. The review
+  account `app-review@oursabeel.com` made with the Admin SDK, approved as a
+  member, approver Faisal. The Android release signing key made; its SHA-1 and
+  SHA-256 on the Firebase Android app.
+
+- 2026-10-16 — **Play app signing key** changed from the Google-generated one to
+  the app's own release key (Change key, Export and upload a key from Java
+  keystore, PEPK). **v0.28.0** released, tag `v0.28.0` at `f387267`: GitHub
+  release, download page, hosting with `/privacy` and `/support`. Play internal
+  testing: 0.28.0 (28000) a completed release, its Play-generated APKs signed
+  with the app's own key; the earlier 0.27.1 (27001) bundle left unreleased,
+  its APKs Google-signed. First TestFlight build (0.28.0, build 1) dispatched
+  from the tag (`ios.yml`, `testflight=true`).
+
 ## Decision log
 
 - 2026-10-15 — **The iPhone app, and the phone apps stop creating accounts.**
@@ -66,7 +86,21 @@ phase boundary.
   server: blocking functions on Identity Platform refuse every password sign-up
   and any other address's password sign-in; rules and callables never give a
   password session a manager or admin role; setUserAccess will not promote a
-  password-only account (`docs/STORE-RELEASE.md` § 7).
+  password-only account (`docs/STORE-RELEASE.md`, "Review access").
+
+- 2026-08-29 — **One notification channel id across all three Sabeel apps**
+  (`sabeel-alerts`), each with its own display name — here "Timesheet alerts and
+  reminders". Ids are namespaced per application, so sharing one costs nothing
+  and makes the three read as one family in a phone's settings. Importance HIGH,
+  fixed at creation: Android never lets an app raise it afterwards, which is why
+  the old `'default'` channel was replaced rather than repaired, and deleted so
+  it stops appearing as a switch that does nothing. Registration also retires the
+  two channels the TRANSPORTS invented while no send named one —
+  `fcm_fallback_notification_channel` and
+  `expo_notifications_fallback_notification_channel`, both of which Android
+  labels "Miscellaneous", so an upgraded phone showed two identical dead entries
+  by that name. The manifest names PUSH_CHANNEL_ID as FCM's default channel, so
+  nothing can recreate them.
 
 - 2026-08-27 — **The layout sweep (`npm run test:screens`).** This repo's
   highest-value missing test, named as such in `CLAUDE.md`, now exists:
@@ -297,23 +331,6 @@ phase boundary.
   print stylesheet + manual-PDF generator migrated. No dark mode (light-only,
   pinned). Hardcoded colors now ESLint-banned under `app/**` (theme + print
   exempt). Authority: `docs/BRAND.md` and the shared `sabeel-color-scheme` skill.
-
-## Decision log
-
-- 2026-07-15 — Approval is **admin-only** (Faisal): no org-domain auto-approval;
-  every new sign-in is pending; admins see name+email when approving. Managers are
-  operational only (activities, reports, entry corrections).
-- 2026-07-15 — Phone-first for everyone including managers; web = big screen/print.
-- 2026-07-16 — **Timesheet workflow supersedes the honor system** (Phase 7):
-  Sun–Sat calendar-week periods clipped to month boundaries; users submit each
-  period; a sticky self-chosen approver (any active manager/admin; assignable by
-  managers/admins too, stamped at submission) approves or rejects with reason;
-  approved = locked, admin-only reopen (delete = back to draft); zero-hour submits
-  OK, mid-period submit of the current week OK, never future periods; reporting/
-  CSV reporting counts approved timesheets only (manager opt-in unofficial view).
-- 2026-07-16 — Admin grants move in-app (Manage users); self-demotion still
-  blocked server-side. Greenfield wipe at deploy: all data + users except the
-  admin.
 - 2026-07-17 — **Activities are just names**: the project/event `type` field is
   gone from UI, rules, and types (existing docs may carry a vestigial field —
   ignored). Admins/managers encode whatever taxonomy they want in the name.
@@ -326,16 +343,17 @@ phase boundary.
   with the reminder separately silenceable. Same-day overlapping entries are
   flagged in the UI and block submission (back-to-back is fine) — client-side
   only; approvers see the same highlight.
-- 2026-08-29 — **One notification channel id across all three Sabeel apps**
-  (`sabeel-alerts`), each with its own display name — here "Timesheet alerts and
-  reminders". Ids are namespaced per application, so sharing one costs nothing
-  and makes the three read as one family in a phone's settings. Importance HIGH,
-  fixed at creation: Android never lets an app raise it afterwards, which is why
-  the old `'default'` channel was replaced rather than repaired, and deleted so
-  it stops appearing as a switch that does nothing. Registration also retires the
-  two channels the TRANSPORTS invented while no send named one —
-  `fcm_fallback_notification_channel` and
-  `expo_notifications_fallback_notification_channel`, both of which Android
-  labels "Miscellaneous", so an upgraded phone showed two identical dead entries
-  by that name. The manifest names PUSH_CHANNEL_ID as FCM's default channel, so
-  nothing can recreate them.
+- 2026-07-16 — **Timesheet workflow supersedes the honor system** (Phase 7):
+  Sun–Sat calendar-week periods clipped to month boundaries; users submit each
+  period; a sticky self-chosen approver (any active manager/admin; assignable by
+  managers/admins too, stamped at submission) approves or rejects with reason;
+  approved = locked, admin-only reopen (delete = back to draft); zero-hour submits
+  OK, mid-period submit of the current week OK, never future periods; reporting/
+  CSV reporting counts approved timesheets only (manager opt-in unofficial view).
+- 2026-07-16 — Admin grants move in-app (Manage users); self-demotion still
+  blocked server-side. Greenfield wipe at deploy: all data + users except the
+  admin.
+- 2026-07-15 — Approval is **admin-only** (Faisal): no org-domain auto-approval;
+  every new sign-in is pending; admins see name+email when approving. Managers are
+  operational only (activities, reports, entry corrections).
+- 2026-07-15 — Phone-first for everyone including managers; web = big screen/print.
