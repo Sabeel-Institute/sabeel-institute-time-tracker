@@ -51,7 +51,7 @@ function oneLine(s: string): string {
  * adjacent words with no space between, which is what lets a long name span
  * several.
  */
-export function encodedWords(s: string): string {
+function encodedWords(s: string): string {
   const words: string[] = [];
   let chunk = '';
   for (const ch of s) {
@@ -73,7 +73,7 @@ function unstructured(s: string): string {
 }
 
 /** `Name <address>`, with the name quoted or encoded as RFC 5322 and 2047 require. */
-export function mailbox(name: string, address: string): string {
+function mailbox(name: string, address: string): string {
   const n = oneLine(name);
   if (!n) return `<${address}>`;
   // The address on a line of its own, so the last word's line stays short.
@@ -89,7 +89,7 @@ const PLATFORM_NAMES: Record<ReportPlatform, string> = {
 };
 
 /** The subject administrators see in their inbox. */
-export function reportSubject(report: Pick<ReportDoc, 'app' | 'displayName'>): string {
+function reportSubject(report: Pick<ReportDoc, 'app' | 'displayName'>): string {
   return `[${report.app}] Report from ${oneLine(report.displayName)}`;
 }
 
@@ -97,7 +97,7 @@ export function reportSubject(report: Pick<ReportDoc, 'app' | 'displayName'>): s
  * The body, as plain text: who, when (in the administrators' time zone),
  * which app, then what the person wrote, verbatim.
  */
-export function reportBody(id: string, report: ReportDoc): string {
+function reportBody(id: string, report: ReportDoc): string {
   const tz = REPORT_EMAIL_TIME_ZONE;
   const at = report.createdAt;
   const when = `${dayKeyFor(at, tz)} ${timeOfDayFor(at, tz)} ${tzLabelFor(at, tz)} (${tz})`;

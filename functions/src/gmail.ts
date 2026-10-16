@@ -25,7 +25,7 @@ export interface GoogleEndpoints {
   gmail: string;
 }
 
-export const GOOGLE_ENDPOINTS: GoogleEndpoints = {
+const GOOGLE_ENDPOINTS: GoogleEndpoints = {
   iamCredentials: 'https://iamcredentials.googleapis.com',
   oauthToken: 'https://oauth2.googleapis.com/token',
   gmail: 'https://gmail.googleapis.com',
