@@ -26,6 +26,7 @@
     "test:screens": "node scripts/screens-e2e.mjs",
     "emulators:free": "bash scripts/free-emulator-ports.sh",
     "release": "node scripts/release.mjs",
+    "publish:play": "node scripts/publish-play.mjs",
     "verify": "npm run lint && npm run typecheck && npm run knip && npm test",
     "check:version": "node scripts/check-version.mjs",
     "check:ios": "node scripts/check-ios-config.mjs",

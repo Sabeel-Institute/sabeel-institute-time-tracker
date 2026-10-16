@@ -111,16 +111,23 @@ redeploys:
 - [x] Done 2026-07-16: wipe confirmed and executed, admin kept (approver=self),
   live smoke passed.
 
-## Play Store phase (not now — deferred 2026-07-20)
+## Google Play, internal testing
 
-Nothing here blocks sideloaded testing. The APKs already ARE release builds
-(minified, production bundle); only the signing key is the debug one, which is
-valid to 2052 and functionally identical for testing.
+Staff install from Play through a join link that never changes, as for Kanban.
+`npm run release` publishes every release there (`scripts/publish-play.mjs`).
 
 - [x] **Release keystore + SHA-1** (2026-10-15) — signing config wired to the
   release key, its SHA-1 and SHA-256 registered on the Firebase Android app,
   `google-services.json` re-downloaded. Everyone with a debug-signed APK
   uninstalls once before installing a release-signed build.
+- [x] **The app in Play Console, and the publishing account on it** (2026-10-15).
+- [ ] **The first release, in Play Console** (Internal testing, Create new
+  release): choose "Export and upload a key from Java keystore" so Play signs
+  with this app's own key, then upload `sabeel-time-tracker-0.27.1-27001.aab`.
+  `publish-play.mjs` refuses to make an app's first release, because that is
+  where the signing key is chosen.
+- [ ] **Testers:** tick the "Sabeel staff" email list on Internal testing,
+  Testers, and share the join link.
 
 ## App Store phase (not now — versioning groundwork done 2026-07-26)
 

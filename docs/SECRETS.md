@@ -48,6 +48,15 @@ See `functions/.env.example`.
 It is also Google Play's app signing key for this app. Losing it means no update
 can ever be signed again: back it up (Faisal's vault holds a copy).
 
+## Google Play publishing key
+`~/keys/sabeel-play-publisher.json`, the key of
+`sabeel-play-publisher@sabeel-institute-kanban.iam.gserviceaccount.com`, read by
+`scripts/publish-play.mjs` (or the path in `PLAY_KEY`). One service account
+publishes every Sabeel app; Play Console gives it "Release apps to testing
+tracks" app by app. Outside the repo because the repo is public. If it leaks or
+is lost, delete that key in the Google Cloud console (project
+`sabeel-institute-kanban`, IAM, Service Accounts) and make a new JSON key there.
+
 ## Non-secret client config in the repo
 - `app/src/firebase-config.ts` — Firebase web app config (public).
 - `packages/shared/src/constants.ts` → `WEB_CLIENT_ID` — the **Web** OAuth client id

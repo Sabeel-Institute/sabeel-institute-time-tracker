@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 /**
  * Cut an Android release: bump every version file, re-render the manual,
- * build both APK variants, verify the build on the AVD, publish to GitHub.
+ * build both APK variants and the Play bundle, verify the build on the AVD,
+ * publish to GitHub and the download page, then to Play's internal testing.
  *
  *   node scripts/release.mjs 1.0.0-beta.12 --notes notes.md
  *   node scripts/release.mjs 1.0.0-beta.12 --notes notes.md --dry-run
@@ -108,6 +109,16 @@ function buildApks(v) {
     built[variant] = dst;
   }
   return built;
+}
+
+/**
+ * The App Bundle for Google Play: every ABI in one file, from which Play cuts
+ * each phone's APK. Same JS and the same key as the APKs above, so its upload
+ * (`scripts/publish-play.mjs`, the last step) ships the build the AVD checked.
+ */
+function buildAab() {
+  console.log('▸ building the Play bundle…');
+  sh('./gradlew bundleRelease -q', join(root, 'app/android'));
 }
 
 /** Boot the universal APK on the AVD and prove it is a PRODUCTION bundle. */
@@ -301,6 +312,7 @@ console.log(`▸ build-info → v${version} @ ${shOut('git rev-parse --short HEA
 sh(`node ${join(root, 'scripts/gen-build-info.mjs')}`);
 
 const built = buildApks(version);
+buildAab();
 verifyOnAvd(version, built.universal);
 pushReleaseCommit(version);
 publish(version, built, notesFile);
@@ -308,6 +320,11 @@ console.log(`\n✔ v${version} released, committed and pushed. Now: firebase dep
 // Push the just-built, just-verified arm64 APK to the public download page as a
 // Release asset (never a commit). Same artifact, same run — provenance is tight.
 publishDownloadPage(built.arm64);
+// Last, because it is the one step that reaches every tester's phone by
+// itself. If it fails, the rest of the release stands; rerun it alone with
+// `npm run publish:play -- --internal`.
+console.log('▸ publishing the bundle to Play internal testing');
+sh(`node ${join(root, 'scripts/publish-play.mjs')} --internal`);
 
 // Release over. The build leaves a Gradle daemon sitting on ~3.7GB, which is
 // worth knowing about — but this no longer STOPS it, for two reasons established

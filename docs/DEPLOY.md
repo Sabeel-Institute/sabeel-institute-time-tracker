@@ -60,10 +60,21 @@ firebase deploy --only hosting --project dev
 ```
 
 `npm run release` bumps `app/app.json` (the only place the version lives),
-re-renders the manual PDF, builds both APK variants, **installs the universal
-APK on the AVD and refuses to publish unless it is a production bundle** (the
-check that matters is the ABSENCE of the dev sign-in row), pushes the branch,
-creates the GitHub release, then calls `scripts/publish-apk.sh`.
+re-renders the manual PDF, builds both APK variants and the Play bundle,
+**installs the universal APK on the AVD and refuses to publish unless it is a
+production bundle** (the check that matters is the ABSENCE of the dev sign-in
+row), pushes the branch, creates the GitHub release, calls
+`scripts/publish-apk.sh`, and last puts the bundle on Google Play's internal
+testing track with `scripts/publish-play.mjs`.
+
+`publish-play.mjs` (`npm run publish:play -- --check`, or `-- --internal` to
+rerun the upload alone) refuses a debug-signed bundle, one that does not carry
+HEAD's commit or app.json's version, and an upload whose versionCode Play reads
+differently. It never makes the app's first release: that one is made in Play
+Console, where the app signing key is chosen (`TODO.md`), and an upload through
+the API first would have Google generate a key of its own, for good. Everyone on
+the "Sabeel staff" tester list gets each release from Play; the join link never
+changes. The publishing key is in `docs/SECRETS.md`.
 
 `publish-apk.sh` updates the public download page
 (https://faisal-shah.github.io/sabeel-time-tracker/):
