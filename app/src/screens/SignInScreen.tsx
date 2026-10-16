@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { Image, Keyboard, StyleSheet, Text, TextInput, View } from 'react-native';
 import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
 import { PRIVACY_URL } from '@sabeel/shared';
@@ -31,6 +31,9 @@ export function SignInScreen() {
   const [emailOpen, setEmailOpen] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  // The keyboard's Next takes the email field to the password field, and its
+  // Go signs in, so nobody has to reach the button under the keyboard.
+  const passwordField = useRef<TextInput>(null);
 
   // Cancellations never get here — both auth seams swallow them. What does is
   // either an answer (the phone app's refusal of an identity with no account)
@@ -107,8 +110,12 @@ export function SignInScreen() {
               style={styles.input}
               placeholder="Email"
               placeholderTextColor={t.text.muted}
+              returnKeyType="next"
+              submitBehavior="submit"
+              onSubmitEditing={() => passwordField.current?.focus()}
             />
             <TextInput
+              ref={passwordField}
               value={password}
               onChangeText={setPassword}
               secureTextEntry
@@ -117,6 +124,7 @@ export function SignInScreen() {
               style={styles.input}
               placeholder="Password"
               placeholderTextColor={t.text.muted}
+              returnKeyType="go"
               onSubmitEditing={() => void emailSignIn()}
             />
             <Button
