@@ -1,5 +1,6 @@
 import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
 import { retryProvisioning, signOut } from '../session';
+import { NOT_INSTITUTE_ACCOUNT_MESSAGE } from '../auth/signInMessage';
 import { Button } from '../components/ui';
 import { getTheme, spacing } from '../theme';
 
@@ -40,10 +41,7 @@ export function NotProvisionedScreen({ email }: { email: string }) {
   return (
     <Gate
       title="Can’t sign in"
-      message={
-        'This app is for Sabeel Institute accounts only. Sign in with your\n' +
-        '@oursabeel.com Google account.'
-      }
+      message={NOT_INSTITUTE_ACCOUNT_MESSAGE}
       email={email}
     />
   );

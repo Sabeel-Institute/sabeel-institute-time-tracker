@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { SIGN_IN_REFUSED } from '@sabeel/shared';
-import { NO_ACCOUNT_MESSAGE, signInMessage } from './signInMessage';
+import { NO_ACCOUNT_MESSAGE, NOT_INSTITUTE_ACCOUNT_MESSAGE, signInMessage } from './signInMessage';
 
 describe('signInMessage', () => {
   it('turns the phone app’s refusal into the refusal copy, unreported', () => {
@@ -8,6 +8,16 @@ describe('signInMessage', () => {
       text: NO_ACCOUNT_MESSAGE,
       report: false,
     });
+  });
+
+  it('an account the server deleted while signing in is told the app is for institute accounts, unreported', () => {
+    // onUserCreate deleted an outside address faster than the SDK's own look
+    // at the new account, which then answers USER_NOT_FOUND as this code.
+    expect(signInMessage({ code: 'auth/user-token-expired', message: 'Firebase: Error (auth/user-token-expired).' })).toEqual({
+      text: NOT_INSTITUTE_ACCOUNT_MESSAGE,
+      report: false,
+    });
+    expect(NOT_INSTITUTE_ACCOUNT_MESSAGE).toMatch(/Sabeel Institute accounts only/);
   });
 
   it('names no website and no way to get an account', () => {

@@ -16,6 +16,17 @@ import { SIGN_IN_REFUSED } from '@sabeel/shared';
  */
 export const NO_ACCOUNT_MESSAGE = "This account isn't set up for the app yet. Contact your administrator.";
 
+/**
+ * The refusal of an address outside the institute, which the onUserCreate
+ * trigger deletes. Said in one of two places, depending on how fast the
+ * trigger was: here, when it deleted the account before sign-in finished (the
+ * SDK's own look at the new account then fails), or on the "Can't sign in"
+ * screen, when Auth confirms the deletion while the app waits for a profile
+ * (session.ts). The same words either way.
+ */
+export const NOT_INSTITUTE_ACCOUNT_MESSAGE =
+  'This app is for Sabeel Institute accounts only. Sign in with your @oursabeel.com Google account.';
+
 const UNREACHABLE_MESSAGE = 'Could not reach the server. Check your connection and try again.';
 
 /**
@@ -32,6 +43,10 @@ export function signInMessage(e: unknown): { text: string; report: boolean } {
     case 'auth/no-account':
       // An answer, not a failure: nothing to report.
       return { text: NO_ACCOUNT_MESSAGE, report: false };
+    case 'auth/user-token-expired':
+      // A brand-new account gone before sign-in finished: the trigger deleted
+      // an address outside the institute. An answer too, unreported.
+      return { text: NOT_INSTITUTE_ACCOUNT_MESSAGE, report: false };
     case 'auth/invalid-credential':
     case 'auth/wrong-password':
     case 'auth/user-not-found':

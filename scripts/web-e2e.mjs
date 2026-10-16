@@ -629,10 +629,15 @@ async function main() {
   await slow.getByText('waiting for an administrator', { exact: false }).waitFor({ timeout: 30000 });
 
   console.log('▸ …while an address outside the institute is refused, in seconds…');
-  // onUserCreate deletes it; Auth saying so is what the refusal rests on.
+  // onUserCreate deletes it. A warm trigger beats the sign-in itself (the
+  // sign-in screen says why); a slow one leaves a session that Auth then
+  // reports deleted ("Can't sign in"). The same words, either way, and never
+  // "still setting up".
   const outsider = await newPage('outsider');
   await devSignIn(outsider, 'someone.outside@gmail.com');
-  await outsider.getByText('Can’t sign in').waitFor({ timeout: 25000 });
+  await outsider
+    .getByText('This app is for Sabeel Institute accounts only', { exact: false })
+    .waitFor({ timeout: 25000 });
   if ((await outsider.getByText('Still setting up your account', { exact: false }).count()) !== 0)
     throw new Error('a deleted account was told it is still being set up');
 
@@ -654,7 +659,13 @@ async function main() {
 
   await browser.close();
 
-  const realErrors = consoleErrors.filter((e) => !/WebChannelConnection|transport errored/.test(e));
+  // The set-up checks provoke two on purpose: a held connection (Firestore
+  // says it cannot reach the backend) and Auth's 400 for a deleted account.
+  const provoked = (e) =>
+    /^\[(slow|stuck|outsider)\]/.test(e) && /Could not reach Cloud Firestore backend|status of 400/.test(e);
+  const realErrors = consoleErrors.filter(
+    (e) => !/WebChannelConnection|transport errored/.test(e) && !provoked(e),
+  );
   if (realErrors.length) {
     console.error('console errors:\n' + realErrors.join('\n'));
     throw new Error('console errors during e2e');
