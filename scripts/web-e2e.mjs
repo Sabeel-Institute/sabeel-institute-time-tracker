@@ -72,6 +72,20 @@ async function uidByEmail(email) {
  * looks like: it is a plain CSS attribute selector and matches hidden nodes
  * just as happily.
  */
+/**
+ * Nothing of Home: none of the screens where hours are posted is reachable.
+ * Called once the rules screen's title is on screen, which is the settled
+ * state (App.tsx draws the rules INSTEAD of the navigator), so an absence here
+ * is not a screen that has not loaded yet.
+ */
+async function expectNoHome(page, who) {
+  // Not 'Report a problem': the rules themselves say where it is.
+  for (const text of ['Salaam,', 'Clock in', 'Add hours manually', 'My timesheet']) {
+    const n = await page.getByText(text, { exact: text !== 'Salaam,' }).count();
+    if (n !== 0) throw new Error(`${who} can see "${text}" behind the rules`);
+  }
+}
+
 const firstOnScreen = (locator) => locator.filter({ visible: true }).first();
 const lastOnScreen = (locator) => locator.filter({ visible: true }).last();
 
@@ -163,8 +177,13 @@ async function main() {
   await admin.getByText('waiting for an administrator', { exact: false }).waitFor();
   await admin.screenshot({ path: join(shots, '1-admin-pending.png'), animations: 'disabled', timeout: 8000 }).catch(() => {});
 
-  console.log('▸ grant-admin bootstrap → page must un-gate LIVE (claims refresh)…');
+  console.log('▸ grant-admin bootstrap → page must un-gate LIVE (claims refresh) onto the rules…');
   grantAdmin('admin@oursabeel.com');
+  // Approved, but the institute's rules come first: the rules screen, and
+  // nothing of Home behind it (App.tsx renders one or the other).
+  await admin.getByText('Before you continue', { exact: true }).waitFor({ timeout: 30000 });
+  await expectNoHome(admin, 'an admin who has not accepted the rules');
+  await admin.getByText('I agree', { exact: true }).click();
   await admin.getByText('Salaam,', { exact: false }).waitFor({ timeout: 30000 });
   await admin.screenshot({ path: join(shots, '2-admin-home.png'), animations: 'disabled', timeout: 8000 }).catch(() => {});
 
@@ -178,13 +197,44 @@ async function main() {
   await admin.getByText('volunteer@oursabeel.com').waitFor();
   await admin.screenshot({ path: join(shots, '3-users-pending.png'), animations: 'disabled', timeout: 8000 }).catch(() => {});
 
-  console.log('▸ admin taps Approve → volunteer page must flip to Home live…');
+  console.log('▸ admin taps Approve → volunteer page must flip to the rules live…');
   await admin.getByText('Approve', { exact: true }).click();
-  // The session poll force-refreshes the token every few seconds, so the
-  // volunteer un-gates on its own within ~one poll interval of approval.
-  await vol.getByText('Salaam,', { exact: false }).waitFor({ timeout: 30000 });
-  await vol.screenshot({ path: join(shots, '4-volunteer-home.png'), animations: 'disabled', timeout: 8000 }).catch(() => {});
+  // The claims refresh un-gates the volunteer on its own; what it un-gates
+  // onto is the institute's rules, before anything they could post with.
+  await vol.getByText('Before you continue', { exact: true }).waitFor({ timeout: 30000 });
+  await vol.getByText('By continuing you agree to the institute', { exact: false }).waitFor();
+  await vol.getByText('on Home; administrators respond within 24 hours', { exact: false }).waitFor();
+  await expectNoHome(vol, 'a volunteer who has not accepted the rules');
+  await vol.screenshot({ path: join(shots, '4a-rules.png'), animations: 'disabled', timeout: 8000 }).catch(() => {});
   await admin.screenshot({ path: join(shots, '5-users-after.png'), animations: 'disabled', timeout: 8000 }).catch(() => {});
+
+  console.log('▸ the rules stand in front of a notification tap, which waits for them…');
+  // A tapped notification for a screen where hours are posted. Reloading with
+  // the route: the rules screen again (nothing was accepted), and not the
+  // timesheet the route names.
+  const sharedEarly = await import('@sabeel/shared');
+  const volToday = sharedEarly.dayKeyFor(Date.now(), sharedEarly.deviceTimeZone());
+  await vol.goto(`${baseUrl}/?screen=Timesheet&periodKey=${sharedEarly.periodKeyFor(volToday)}`);
+  await vol.getByText('Before you continue', { exact: true }).waitFor({ timeout: 45000 });
+  await expectNoHome(vol, 'a reload before accepting');
+  if ((await vol.getByText('No hours in this week.').count()) !== 0)
+    throw new Error('a notification route reached the timesheet past the rules');
+  await vol.getByText('I agree', { exact: true }).click();
+  // Accepted: the waiting route opens the week it named.
+  await vol.getByText('No hours in this week.').waitFor({ timeout: 30000 });
+
+  console.log('▸ accepted once: never again — not on reload, not after signing out and in…');
+  await vol.goto(baseUrl + '/');
+  await vol.getByText('Salaam,', { exact: false }).waitFor({ timeout: 45000 });
+  await vol.screenshot({ path: join(shots, '4-volunteer-home.png'), animations: 'disabled', timeout: 8000 }).catch(() => {});
+  await vol.getByText('Sign out', { exact: true }).click();
+  await vol.getByText('Time Tracker', { exact: true }).waitFor({ timeout: 30000 });
+  await devSignIn(vol, 'volunteer@oursabeel.com');
+  // Home is only ever drawn once the rules are accepted, so Home appearing is
+  // the proof; a rules screen here would never draw it.
+  await vol.getByText('Salaam,', { exact: false }).waitFor({ timeout: 45000 });
+  if ((await vol.getByText('Before you continue', { exact: true }).count()) !== 0)
+    throw new Error('the rules came back after signing in again');
 
   // Volunteer must NOT see the admin button.
   const manageCount = await vol.getByText('Manage users').count();
@@ -504,6 +554,45 @@ async function main() {
     { timeout: 10000 },
   );
   await vol.screenshot({ path: join(shots, '17-notification-settings.png'), animations: 'disabled', timeout: 8000 }).catch(() => {});
+
+  console.log('▸ report a problem: the draft survives Back, Send stores one report and clears the field…');
+  await vol.goto(baseUrl + '/');
+  await vol.getByText('Salaam,', { exact: false }).waitFor({ timeout: 45000 });
+  await firstOnScreen(vol.getByText('Report a problem', { exact: true })).click();
+  const reportField = () =>
+    vol.getByRole('textbox', { name: 'What or who are you reporting, and what is wrong?' });
+  await reportField().waitFor();
+  const REPORT_TEXT =
+    'The note on my Tuesday Tutoring entry was changed to something I did not write.';
+  await reportField().fill(REPORT_TEXT);
+  await vol.screenshot({ path: join(shots, '18-report-problem.png'), animations: 'disabled', timeout: 8000 }).catch(() => {});
+  // Back, then in again: what was typed is still there.
+  await vol.getByRole('link', { name: /,\s*back$/i }).first().click();
+  await vol.getByText('Salaam,', { exact: false }).waitFor();
+  await firstOnScreen(vol.getByText('Report a problem', { exact: true })).click();
+  await reportField().waitFor();
+  if ((await reportField().inputValue()) !== REPORT_TEXT)
+    throw new Error('the unsent report was lost on Back: ' + (await reportField().inputValue()));
+  await vol.getByText('Send', { exact: true }).click();
+  await vol.getByText('Sent. An administrator will reply by email within a day.', { exact: true }).waitFor({ timeout: 30000 });
+  if ((await reportField().inputValue()) !== '') throw new Error('the field kept the sent report');
+  await vol.screenshot({ path: join(shots, '19-report-sent.png'), animations: 'disabled', timeout: 8000 }).catch(() => {});
+  // Exactly one report, the volunteer's, kept by the server; under the
+  // emulator the email is skipped, never sent.
+  const reportsRes = await fetch(
+    `http://${EMULATOR_HOSTS.firestore}/v1/projects/${PROJECT}/databases/(default)/documents/reports`,
+    { headers: { Authorization: 'Bearer owner' } },
+  );
+  const reports = ((await reportsRes.json()).documents ?? []).map((d) => d.fields);
+  if (reports.length !== 1) throw new Error(`expected one stored report, found ${reports.length}`);
+  const [kept] = reports;
+  const keptOk =
+    kept.uid?.stringValue === volUid &&
+    kept.text?.stringValue === REPORT_TEXT &&
+    kept.email?.stringValue === 'volunteer@oursabeel.com' &&
+    kept.platform?.stringValue === 'web' &&
+    kept.mail?.mapValue?.fields?.status?.stringValue === 'skipped';
+  if (!keptOk) throw new Error('the stored report is not the one sent: ' + JSON.stringify(kept).slice(0, 400));
 
   await browser.close();
 

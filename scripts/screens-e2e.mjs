@@ -81,6 +81,7 @@ import {
   periodLabel,
   periodRangeFor,
   periodsOfMonth,
+  RULES_VERSION,
 } from '@sabeel/shared';
 import {
   ROOT,
@@ -194,6 +195,9 @@ const MEMBER = { email: 'volunteer@oursabeel.com', name: 'Fatima Abdul-Rahman' }
 // tests them.
 const MANAGER = { email: 'programme.coordinator@oursabeel.com', name: 'Abdur-Rahman Oyelaran' };
 const PENDING = { email: 'newcomer@oursabeel.com', name: 'Newcomer' };
+// Approved, but has not yet accepted the institute's rules: the one screen it
+// sees, at every width, because the tour never taps I agree.
+const UNACCEPTED = { email: 'first.day@oursabeel.com', name: 'Yusuf First-Day' };
 
 await mkdir(SHOTS, { recursive: true });
 
@@ -234,6 +238,7 @@ const memberUid = await provision(MEMBER);
 const managerUid = await provision(MANAGER);
 const pendingUid = await provision(PENDING);
 if (!pendingUid) throw new Error('the pending account was never provisioned');
+const unacceptedUid = await provision(UNACCEPTED);
 
 /** Approve + set a role the way an admin does — claims AND doc, or the two disagree. */
 async function setAccess(uid, next, extra = {}) {
@@ -243,16 +248,29 @@ async function setAccess(uid, next, extra = {}) {
     .doc(uid)
     .set({ ...next, ...extra, claimsUpdatedAt: Date.now() }, { merge: true });
 }
+/**
+ * The institute's rules, accepted, as the acceptRules callable records it. The
+ * web e2e proves the screen and the callable; here the three tours are about
+ * the screens behind it.
+ */
+const accepted = { rulesVersion: RULES_VERSION, rulesAcceptedAt: Date.now() };
 await setAccess(adminUid, { status: 'active', role: 'manager', admin: true }, {
   displayName: ADMIN.name,
   approverUid: adminUid,
+  ...accepted,
 });
 await setAccess(memberUid, { status: 'active', role: 'member', admin: false }, {
   displayName: MEMBER.name,
   approverUid: adminUid,
+  ...accepted,
 });
 await setAccess(managerUid, { status: 'active', role: 'manager', admin: false }, {
   displayName: MANAGER.name,
+  approverUid: adminUid,
+  ...accepted,
+});
+await setAccess(unacceptedUid, { status: 'active', role: 'member', admin: false }, {
+  displayName: UNACCEPTED.name,
   approverUid: adminUid,
 });
 // PENDING is left exactly as the trigger left it — that IS the state under test.
@@ -452,7 +470,7 @@ await timesheet(adminUid, DECIDED, {
 });
 
 console.log(
-  `  seeded ${ACTIVITIES.length} activities, ${entryDocs.length + 1} entries, 3 timesheets, 4 accounts`,
+  `  seeded ${ACTIVITIES.length} activities, ${entryDocs.length + 1} entries, 3 timesheets, 5 accounts`,
 );
 console.log(`  breakpoint read from source: ${WIDE_BREAKPOINT}px`);
 console.log(
@@ -777,10 +795,11 @@ const gridLayout = (page) =>
   });
 
 // ---- The tour ---------------------------------------------------------------
-const ADMIN_SCREENS = 17;
+const ADMIN_SCREENS = 18;
 const MEMBER_SCREENS = 3;
 const MANAGER_SCREENS = 2;
 const PENDING_SCREENS = 1;
+const UNACCEPTED_SCREENS = 1;
 
 /** Only what is on screen. `getByText` matches a hidden node; a person cannot tap one. */
 const vis = (loc) => loc.filter({ visible: true }).first();
@@ -1013,6 +1032,18 @@ async function tourAdmin(tag, width) {
   await checkDeviceState(page, tag);
   await goBack(page);
 
+  /** One field and Send, with a report of real length typed in (Send enabled). */
+  await visit('report-problem', async () => {
+    await tap(page, 'Report a problem');
+    const field = page.getByRole('textbox', { name: 'What or who are you reporting, and what is wrong?' });
+    await field.waitFor({ timeout: 20000 });
+    await field.fill(
+      'On the Saturday mentoring week, two of my entries now carry a note I did not write, ' +
+        'and the activity on Friday was changed from Food Drive to Tutoring. Could someone look?',
+    );
+  });
+  await goBack(page);
+
   await visit('approvals', async () => {
     await vis(page.getByText(/^Approvals( \(\d+\))?$/)).click();
     await vis(page.getByText(MEMBER.name)).waitFor({ timeout: 20000 });
@@ -1242,6 +1273,34 @@ async function tourPending(tag, width) {
   await ctx.close();
 }
 
+/**
+ * APPROVED, NOT YET AGREED: the institute's rules, which stand in front of
+ * everything else. Like the gate it has no navigator, so Sign out is its only
+ * way out; and nothing of Home may be on screen behind it.
+ */
+async function tourUnaccepted(tag, width) {
+  const { ctx, page, errors } = await open(UNACCEPTED, width);
+  const { visit, count } = visitor(page, tag);
+  await visit('rules', async () => {
+    await page.getByText('Before you continue', { exact: true }).waitFor({ timeout: 45000 });
+    await vis(page.getByText('I agree', { exact: true })).waitFor({ timeout: 20000 });
+  });
+  const behind = await page.evaluate(() =>
+    [...document.querySelectorAll('[tabindex]')]
+      .filter((e) => e.getBoundingClientRect().width > 2)
+      .map((e) => (e.textContent ?? '').trim())
+      .filter((l) => /^(Clock in|Add hours manually|My timesheet|Report a problem)$/.test(l)),
+  );
+  check(`${tag} / nothing to post with behind the rules`, behind.length === 0, JSON.stringify(behind));
+  check(
+    `${tag} / unaccepted reached every screen`,
+    count() === UNACCEPTED_SCREENS,
+    `${count()}/${UNACCEPTED_SCREENS}`,
+  );
+  check(`${tag} / unaccepted raised no page errors`, errors.length === 0, errors.join(' | '));
+  await ctx.close();
+}
+
 // ---- Run --------------------------------------------------------------------
 try {
   for (const width of WIDTHS) {
@@ -1251,6 +1310,7 @@ try {
     await tourMember(tag, width);
     await tourManager(tag, width);
     await tourPending(tag, width);
+    await tourUnaccepted(tag, width);
   }
 } catch (e) {
   check('the tour completed', false, String(e).split('\n')[0].slice(0, 200));
@@ -1267,7 +1327,7 @@ try {
 }
 
 const failed = results.filter((r) => !r.ok);
-const perWidth = ADMIN_SCREENS + MEMBER_SCREENS + MANAGER_SCREENS + PENDING_SCREENS;
+const perWidth = ADMIN_SCREENS + MEMBER_SCREENS + MANAGER_SCREENS + PENDING_SCREENS + UNACCEPTED_SCREENS;
 console.log(`\n${results.length - failed.length}/${results.length} checks passed`);
 console.log(`${SHOTS} — ${WIDTHS.length} widths x ${perWidth} screens`);
 console.log('SWEEP_WIDTHS=320 runs one width, for a tight loop.');

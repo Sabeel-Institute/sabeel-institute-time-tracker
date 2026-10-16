@@ -1,7 +1,7 @@
 import { useEffect } from 'react';
 import { ActivityIndicator, View } from 'react-native';
 import { doc, updateDoc } from 'firebase/firestore';
-import { COLLECTIONS, deviceTimeZone } from '@sabeel/shared';
+import { COLLECTIONS, deviceTimeZone, hasAcceptedRules } from '@sabeel/shared';
 import { db } from './src/firebase';
 import { registerPush, useNotifTaps } from './src/notify';
 import { setNotifRoutingSession, flushNotifRoute } from './src/notifRouting';
@@ -30,6 +30,8 @@ import { ApprovalsScreen } from './src/screens/ApprovalsScreen';
 import { TimesheetReviewScreen } from './src/screens/TimesheetReviewScreen';
 import { NeedsAttentionScreen } from './src/screens/NeedsAttentionScreen';
 import { NotificationSettingsScreen } from './src/screens/NotificationSettingsScreen';
+import { ReportProblemScreen } from './src/screens/ReportProblemScreen';
+import { RulesScreen } from './src/screens/RulesScreen';
 import { navigationRef, type RootStackParamList } from './src/nav';
 import { getTheme } from './src/theme';
 import { initSentry } from './src/sentry';
@@ -104,6 +106,11 @@ export default function App() {
       ) : (
         <PendingScreen email={email} />
       );
+  } else if (!hasAcceptedRules(session.profile)) {
+    // Active, but the institute's rules are not yet accepted (once per account,
+    // recorded server-side). Before the navigator exists, so no screen where
+    // anything can be posted is reachable until they are.
+    content = <RulesScreen />;
   } else {
     const { profile, claims, user } = session;
     content = (
@@ -171,6 +178,15 @@ export default function App() {
             {() => (
               <NotificationSettingsScreen uid={user.uid} profile={profile} claims={claims} />
             )}
+          </Stack.Screen>
+          <Stack.Screen
+            name="ReportProblem"
+            options={{
+              headerShown: true,
+              title: 'Report a problem',
+            }}
+          >
+            {() => <ReportProblemScreen uid={user.uid} />}
           </Stack.Screen>
           <Stack.Screen
             name="EntryEdit"

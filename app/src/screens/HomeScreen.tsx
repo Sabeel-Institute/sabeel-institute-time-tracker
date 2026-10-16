@@ -3,6 +3,7 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import {
+  APP_NAME,
   dayKeyFor,
   deviceTimeZone,
   formatDuration,
@@ -98,7 +99,7 @@ export function HomeScreen({
   };
 
   return (
-    <Screen title="Sabeel Time Tracker" width="content">
+    <Screen title={APP_NAME} width="content">
       <Text style={styles.greeting}>Salaam, {profile.displayName}</Text>
       <Text style={styles.today}>Today: {formatDuration(todayMinutes)}</Text>
 
@@ -226,6 +227,13 @@ export function HomeScreen({
           label="Notification settings"
           kind="secondary"
           onPress={() => nav.navigate('NotificationSettings')}
+        />
+        {/* Where the institute's rules say it is ("on Home"): the app has no
+            More tab, and this is where people look for help. */}
+        <Button
+          label="Report a problem"
+          kind="secondary"
+          onPress={() => nav.navigate('ReportProblem')}
         />
         <Button label="Sign out" kind="secondary" onPress={() => signOut()} />
         <TextLink label="Privacy policy" url={PRIVACY_URL} />
