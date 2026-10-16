@@ -59,6 +59,26 @@ phase boundary.
 
 ## Decision log
 
+- 2026-10-16 — **The institute's rules and Report a problem** (the
+  `sabeel-app-stores` skill, decision 4, decided by Faisal for every Sabeel
+  app; `docs/STORE-RELEASE.md`, 4). An active account sees the rules once,
+  after the pending gate and instead of the navigator, until I agree records
+  `rulesVersion`/`rulesAcceptedAt` through the new `acceptRules` callable;
+  the rules keep both fields out of client writes. Report a problem sits on
+  Home beside Notification settings: one field and Send. The new
+  `reportProblem` callable takes active accounts only, five reports an hour,
+  keeps `reports/{id}` (no client access) and emails it from
+  `apps-noreply@oursabeel.com` to `apps-reports@oursabeel.com`, Reply-To the
+  reporter, by keyless domain-wide delegation as `report-mailer@`; a failed
+  send is kept as `failed` and the person told so. Proved by 3 new
+  integration and rules test files, 3 new unit test files and both browser
+  suites, each denial shown red with its lock removed. Deploy order: rules, indexes and
+  functions before the first build with the rules screen, plus the Token
+  Creator grant (`docs/DEPLOY.md`). Not deployed or released yet. The
+  emulator ports gained two pins (Eventarc 61007, Cloud Tasks 61008): the
+  functions emulator starts both on 9299/9499 otherwise, and a sibling
+  checkout's suite holding them failed this one's start.
+
 - 2026-10-15 — **The iPhone app, and the phone apps stop creating accounts.**
   The app builds for iOS (`docs/IOS-BUILD.md`): on the build Mac, and on
   GitHub's macOS runners with manual signing (first green run 38842003528, a

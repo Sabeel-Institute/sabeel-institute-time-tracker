@@ -70,6 +70,8 @@ users/{uid}
   timeZone?: string                   # last-seen device tz (weekly reminder scheduling)
   lastReminderPeriodKey?: string      # server-only reminder dedup
   createdAt, approvedAt?, approvedBy?
+  rulesVersion?, rulesAcceptedAt?     # the institute's rules, accepted; server-written
+                                      #   only (acceptRules); absent = rules screen first
   pushTokens/{token}                  # subcollection, owner-only: an FCM token (web/android), or Apple's (ios) with its apnsEnvironment
     token, platform: 'web' | 'android', updatedAt
 
@@ -95,6 +97,11 @@ timesheets/{uid}_{periodKey}          # one doc per (user, period) once submitte
   submittedAt, decidedAt?, decidedBy?, rejectReason?
   totalMinutes, entryCount            # informational snapshot; live truth = the period's entries
   createdAt, updatedAt
+
+reports/{id}                          # Report a problem; written by reportProblem only,
+  app, uid, displayName, email, role  #   no client access; also emailed to apps-reports@
+  text, createdAt, platform?, appVersion?
+  mail: { status: 'pending' | 'sent' | 'failed' | 'skipped', messageId?, error? }
 
 timesheetEvents/{id}                  # append-only history; server-written, no client access
   sheetId, uid, periodKey             # submit/approve/reject/withdraw/reopen all mutate or
@@ -130,7 +137,8 @@ Roles via **custom claims** (`role`, `status`, `admin`) set only by the `setUser
 - `activities`: read = any active user; create/update = manager; delete = never (archive only).
 - `timeEntries`: read = owner or manager; writes gated by the covering timesheet's state (`canTouchPeriod`, one `get()` on `timesheets/{uid}_{periodKey}`) and `periodKey == periodKeyOf(dayKey)` recomputed in rules (pure integer date math — spoofing a periodKey cannot dodge a lock); clock-in create requires the same batch to set `users/{uid}.activeEntryId` (checked with `getAfter()`); on-behalf writes are closed-entries-only and must set `lastEditedBy`; the owner's clock-out carve-out bypasses the period lock but may touch only `end/durationMinutes/updatedAt`.
 - `timesheets/{uid}_{periodKey}`: the full lifecycle state machine lives in rules (submit/resubmit/decide/withdraw/reopen — see the data-model section); the doc id must equal `uid + '_' + periodKey` so entry rules can `get()` it deterministically. Deciding revalidates the stamped approver as a *current* manager, so authority can't outlive the role.
-- `meta`, `timesheetEvents`: server-only (`allow read, write: if false`) — the canary's count baseline and the append-only timesheet history. A client that could write the latter could forge the record it exists to preserve.
+- `meta`, `timesheetEvents`, `reports`: server-only (`allow read, write: if false`) — the canary's count baseline, the append-only timesheet history, and Report a problem's records. A client that could write the history could forge the record it exists to preserve; a report names who sent it and what they said about someone, and is for the administrators alone, who read it in their email.
+- `users/{uid}.rulesVersion`/`rulesAcceptedAt` are in no client allow-list: accepting the institute's rules is recorded by the `acceptRules` callable only.
 - One-active-session enforced by the `activeEntryId == null` precondition at clock-in; the rare race is harmless at this scale.
 
 Rules tests with `@firebase/rules-unit-testing` (tajweed's exact harness).
@@ -140,12 +148,16 @@ Rules tests with `@firebase/rules-unit-testing` (tajweed's exact harness).
 1. `setUserAccess` (callable, **admin-only** — only admins approve/disable users or change roles) — writes user doc + custom claims atomically.
 2. `exportCsv` (callable, manager) — filters `{uid?, activityId?, from, to}` (dayKey range), returns CSV string (well under the 10 MB callable limit).
 3. `autoCloseStaleSessions` (scheduled hourly, Phase 6) — closes sessions running >12h at start+12h, `autoClosed: true`, clears pointer.
+4. `acceptRules` (callable, active accounts) — records the institute's rules as accepted on the caller's profile (`docs/STORE-RELEASE.md`, 4).
+5. `reportProblem` (callable, active accounts) — Report a problem: keeps `reports/{id}` (five an hour per account) and emails it from `apps-noreply@` to `apps-reports@`, Reply-To the reporter, by keyless domain-wide delegation (`functions/src/gmail.ts`).
 
 Not functions: profile creation (client create under rules), totals (aggregation queries), statements (print view).
 
 ## Screens (one codebase — every screen works on every platform; everyone, managers included, is primarily on the phone, so all screens including manager tools are designed phone-first; web is the occasional big-screen/print surface)
 
 - SignIn (Google button), Pending/Disabled gate screens
+- Rules: the institute's rules, once per account, after the gate and before Home (I agree / Sign out)
+- Report a problem (from Home): one field and Send
 - Home: big Clock In/Out, activity picker, running-timer banner, today's total
 - ManualEntry; Timesheet (day/week toggle, edit own entries); Account
 - Manager: Users (pending approvals, roles), Activities (create/archive), Dashboard (totals per activity/person, week/month/year), Reports (filters → CSV), PersonDetail (lifetime hours + printable statement — web print CSS)

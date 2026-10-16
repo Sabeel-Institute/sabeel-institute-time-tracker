@@ -10,6 +10,8 @@ Hosting).
 - **Honor system** — hours count immediately; managers can correct entries.
 - **Timesheets** (daily/weekly) shown in the timezone where the work happened.
 - **Reports** — dashboard totals, CSV export, lifetime hours + printable statements.
+- **The institute's rules**, accepted once, and **Report a problem**, which emails
+  the institute's administrators.
 
 ## Layout
 

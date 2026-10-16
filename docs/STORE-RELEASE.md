@@ -161,21 +161,66 @@ or admin role).
 | Activity names | managers and admins | every active user |
 | Rejection reasons | the approver | the member, the approver, managers, admins |
 | Weekly timesheet submissions | each member | the member, their approver, managers, admins |
+| Reports (Report a problem) | each member | the administrators, by email; nobody in the app |
 
 Both stores count this as user-generated content. As the skill decides
-(2026-10-16), **before the first App Store submission or Play production
-release, whichever comes first**, the app adds:
+(2026-10-16), the app has the institute's rules and Report a problem, **built
+2026-10-16** (branch `rules-and-report`); they reach people with the first
+release after it, the functions deployed first (`docs/DEPLOY.md`).
 
-1. **The institute's rules, accepted once**, at first sign-in before anything
-   can be posted, with "I agree": the skill's text, with "Sabeel Time Tracker is
-   for Sabeel Institute's staff and volunteers, and what you post is seen only
-   by you, your approver and the institute's managers and administrators", and
-   Report a problem on Home. No minimum age.
-2. **Report a problem** on Home (beside Notification settings; the app has no
-   More tab): what the person types reaches the admins, who answer within 24
-   hours by removing the content or disabling the account.
+1. **The institute's rules, accepted once.** `app/src/screens/RulesScreen.tsx`,
+   the skill's text with "Sabeel Time Tracker is for Sabeel Institute's staff
+   and volunteers, and what you post is seen only by members of your team" and
+   Report a problem "on Home"; **I agree** and **Sign out**; no minimum age.
+   `App.tsx` shows it to an active account whose profile lacks the current
+   `RULES_VERSION` (`hasAcceptedRules` in `@sabeel/shared`), after the pending
+   gate and INSTEAD of the navigator, so nothing that posts is reachable and a
+   tapped notification waits for it. **I agree** calls `acceptRules`
+   (`functions/src/acceptRules.ts`), which writes `rulesVersion` and
+   `rulesAcceptedAt` (the server's clock) on the caller's own profile, active
+   accounts only; `firestore.rules` keep both fields out of every client
+   write. Once per account, on every device; raising `RULES_VERSION` asks
+   everyone again. Existing accounts, the review account included, see it once
+   on their next open.
+2. **Report a problem**, on Home beside Notification settings (the app has no
+   More tab): one field, "What or who are you reporting, and what is wrong?",
+   and **Send**; the draft survives Back. `reportProblem`
+   (`functions/src/reportProblem.ts`) takes an active account only (a password
+   session as the ordinary member it is), 1 to 2000 characters, at most five
+   an hour counted from the stored reports in the same transaction as the
+   write. It keeps `reports/{id}` (app, uid, name, email, role, text, time,
+   platform, version, and the email's outcome), which no client reads or
+   writes, then emails it from `apps-noreply@oursabeel.com` to
+   `apps-reports@oursabeel.com` with Reply-To the reporter
+   (`functions/src/reportMail.ts`). The send is keyless domain-wide delegation
+   (`functions/src/gmail.ts`): the function's own identity has IAM sign a JWT
+   as `report-mailer@sabeel-institute-time-tracker.iam.gserviceaccount.com`
+   with subject `apps-noreply@` and scope `gmail.send`, exchanges it for a
+   token, and Gmail sends. A failed send keeps the report, marked `failed`
+   with Google's reason, and tells the person "Your report was saved but the
+   email did not go out; it will be looked at."; nothing retries. The admins
+   answer within 24 hours by removing the content or disabling the account.
 
-**Status: neither is built.**
+| Promise | Proved by |
+|---|---|
+| A signed-out, pending or disabled caller, or a password session for another address, stores and sends nothing | `functions/test/integration/reportProblem.integration.test.ts` |
+| An active caller's report is stored once and emailed once, to `apps-reports@`, Reply-To them; the review account reports as a member | the same |
+| The sixth report in an hour is refused, nothing stored or sent; older reports and other people's do not count | the same |
+| A failed send keeps the report as `failed` with Google's reason; the real send path, against a local stand-in for Google's three endpoints, records Gmail's id | the same, and `functions/test/unit/gmail.test.ts` |
+| The email: From, To, Reply-To, Subject, RFC 2047 names, the body, no header injection | `functions/test/unit/reportMail.test.ts` |
+| No client reads or writes a report, or marks the rules accepted | `functions/test/integration/rules.reports.test.ts` |
+| `acceptRules` records once; a pending or disabled account records nothing | `functions/test/integration/acceptRules.integration.test.ts` |
+| The rules stand before Home and before a notification's screen; after I agree, never again (reload, signing out and in); the draft survives Back; Send stores one report and clears the field | `scripts/web-e2e.mjs` |
+| Both screens at five widths; nothing to post with behind the rules | `scripts/screens-e2e.mjs` |
+
+Shown red with the lock removed: the active check (weakened to signed-in,
+both callables), the rate limit (off by one), the failed-send record (deleted
+instead of kept), the per-person count, Reply-To (set to the sender), the
+`reports` rule (opened), the two profile fields (added to the self-update and
+the admin's allow-lists), the rules gate in `App.tsx` (the e2e and the sweep),
+and the kept draft (the e2e). **Not yet verified:** a production send (it
+needs the deploy and the Token Creator grant, `docs/DEPLOY.md`), and both
+screens on a phone.
 
 Deliberately not: **no blocking between members** (a member who blocked their
 approver could no longer have their hours approved; an admin disabling the
@@ -207,10 +252,13 @@ the app never links to the support page.
 The policy states what is collected: name, email and the Google profile picture
 link; hours (start, stop, activity, optional note, time zone); weekly
 timesheets with who approved or returned them and why; a notification address
-per device and notification settings; crash diagnostics carrying only the
-account id. Third parties: Google (sign-in), Google Cloud and Firebase (hosting,
-data in the US, Android and browser notifications), Apple (iPhone
-notifications), Sentry (crash diagnostics). No advertising, no tracking, no
+per device and notification settings; that and when the institute's rules
+were accepted; reports sent with Report a problem, whose text, name and email
+address are emailed to the institute's administrators; crash diagnostics
+carrying only the account id. Third parties: Google (sign-in), Google Cloud and
+Firebase (hosting, data in the US, Android and browser notifications), Apple
+(iPhone notifications), Google Workspace (the email that carries a report),
+Sentry (crash diagnostics). No advertising, no tracking, no
 sale. Hours and timesheets are kept as the institute's records; the account and
 personal data are removed on request to **privacy@oursabeel.com**, within 30
 days.
@@ -262,7 +310,7 @@ Each must agree with the privacy policy and the privacy manifest.
 |---|---|
 | Do you or your third-party partners collect data from this app? | Yes |
 | Contact Info | **Name**, **Email Address**: App Functionality; linked; not tracking |
-| User Content | **Other User Content** (hours, notes, timesheets): App Functionality; linked; not tracking |
+| User Content | **Other User Content** (hours, notes, timesheets, reports sent with Report a problem): App Functionality; linked; not tracking |
 | Identifiers | **User ID**: App Functionality; linked; not tracking |
 | Diagnostics | **Crash Data**: App Functionality; linked (Sentry carries the account id); not tracking |
 | Everything else | Not collected |
@@ -283,7 +331,7 @@ No. Keep the rating Apple calculates (expected 4+).
 |---|---|
 | Account creation | **No** (1), so the deletion questions fall away |
 | Personal info | Name, Email address, User IDs: collected, not shared, App functionality |
-| App activity | Other user-generated content (hours, notes, timesheets): collected, not shared, App functionality |
+| App activity | Other user-generated content (hours, notes, timesheets, reports): collected, not shared, App functionality |
 | App info and performance | Crash logs, Diagnostics: collected, not shared, App functionality |
 | Device or other IDs | Not declared (the push token, as on Apple); if Play's SDK index lists Firebase Messaging for it, declare it, App functionality |
 | Encrypted in transit | Yes |
@@ -303,7 +351,8 @@ and the password from the vault (3).
 
 For App Store Connect's App Review Information notes and, adapted, Play's App
 access instructions. Credentials go in the sign-in fields, never here. The 1.2
-paragraph is true only once the rules screen and Report a problem exist (4).
+paragraph is true of a build with the rules screen and Report a problem (4),
+the first release after 2026-10-16.
 
 ```text
 This app is for the staff and volunteers of Sabeel Institute, a nonprofit
@@ -348,7 +397,9 @@ hours and timesheets people record are retained as the institute's records.
 
 **App Store** (App Store Connect, app `6823429437`)
 
-- [ ] The rules screen and Report a problem (4). Not built.
+- [x] The rules screen and Report a problem (4): built 2026-10-16; they ship
+      with the next release, its functions deployed first and the Token
+      Creator grant made (`docs/DEPLOY.md`).
 - [ ] The production native sign-in round trip on a phone (a Play or
       download-page APK, or TestFlight): a Google account with no account in
       the project is refused and no Auth user appears; then an
@@ -365,7 +416,7 @@ hours and timesheets people record are retained as the institute's records.
 
 **Google Play production** (Play Console)
 
-- [ ] The rules screen and Report a problem (4), as above.
+- [x] The rules screen and Report a problem (4), as above.
 - [ ] App content: privacy policy URL, App access, ads, content rating, target
       audience, Data safety, as above. Not entered.
 - [ ] Store listing: short and full description, icon, feature graphic, phone

@@ -91,6 +91,13 @@ Do not silently change any of these.
   are made on the web, and **no screen in the app names the website as somewhere
   to get an account**: the refusal says "Contact your administrator."
   `docs/STORE-RELEASE.md` is the decision record.
+- **The institute's rules, and Report a problem; no blocking** (the store
+  decision, `docs/STORE-RELEASE.md` 4). An active account sees the rules once,
+  before anything it could post with (`App.tsx` renders them instead of the
+  navigator), and only the `acceptRules` callable records the acceptance.
+  Report a problem on Home keeps `reports/{id}`, which no client reads or
+  writes, and emails `apps-reports@`. No blocking between members and no word
+  filter: administrators remove content and disable accounts.
 - **Honor system** — entries count immediately; managers may edit/correct. (The
   Phase 7 submit/approve workflow layers on top of this; it does not replace the
   principle.)
@@ -115,8 +122,10 @@ Do not silently change any of these.
   `android/`. Platform seams as `.web.ts(x)` siblings, plus `.ios.tsx` where iOS's
   native control behaves differently from Android's (`DateTimeField`).
 - Firebase **JS SDK on all surfaces** (not react-native-firebase — no web support).
-- Backend: Cloud Functions (TS, nodejs22, us-central1) + Firestore. No Storage, no
-  email in v1. Sentry on web/native/functions.
+- Backend: Cloud Functions (TS, nodejs22, us-central1) + Firestore. No Storage.
+  One email path: Report a problem, sent as `apps-noreply@oursabeel.com` through
+  Gmail by keyless domain-wide delegation (`functions/src/gmail.ts`). Sentry on
+  web/native/functions.
 - Monorepo (npm workspaces): `app`, `functions`, `packages/shared`.
 - Config-as-code: rules and indexes deploy from the repo, never console-edited.
 - **The version is three integers and lives only in `app/app.json` →
@@ -141,7 +150,7 @@ Do not silently change any of these.
   `free-emulator-ports.sh` past this block. Details in `docs/DEV-TOOLING.md`.
 - Browser e2e: `npm run test:e2e` — the full product LIFECYCLE against the
   emulators, at a 420x860 viewport.
-- Layout sweep: `npm run test:screens` — every screen, four roles, five widths
+- Layout sweep: `npm run test:screens` — every screen, five accounts, five widths
   straddling the breakpoint, **asserted**. In CI. `SWEEP_WIDTHS=320` runs one
   width for a tight loop. See `docs/DEV-TOOLING.md`.
 - Dead code: `npm run knip` (a **separate** CI step; `npm run lint` does not
@@ -191,7 +200,7 @@ cover almost everything, and they are faster and far more repeatable than a huma
 on an emulator. That is the default for layout, flows, rules, data and copy.
 
 **`npm run test:screens` is the multi-width version, and it is the one to reach
-for on any layout change.** Every screen, four roles, five widths straddling the
+for on any layout change.** Every screen, five accounts, five widths straddling the
 700px breakpoint — asserted rather than merely screenshotted, and non-zero on any
 failure. It found a real bug on its first run: at 320px the Add-hours date field
 was squashed to `08`, and at 390px and above it was perfect. **That is why one

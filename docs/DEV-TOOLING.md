@@ -205,7 +205,7 @@ system Chrome was the only thing keeping a browser suite off a CI runner.
 
 ## `scripts/screens-e2e.mjs` — the layout sweep
 
-`npm run test:screens`. Every screen, four roles, five viewport widths, looked at
+`npm run test:screens`. Every screen, five accounts, five viewport widths, looked at
 **and checked**; `SWEEP_WIDTHS=320 npm run test:screens` runs one width for a
 tight loop.
 
@@ -258,9 +258,13 @@ Design decisions worth not undoing:
   inside one are scoped to `role="dialog"`: the field that opened the picker
   carries the same text as the selected row inside it, and an unscoped click
   lands on the field, which the backdrop is covering, and hangs.
-- **Four roles, because gated screens have no other coverage.** The admin sees
-  every screen; the member's Home and the non-admin manager's read-only Users are
-  layouts the person who owns the app never renders.
+- **Five accounts, because gated screens have no other coverage.** The admin
+  sees every screen; the member's Home and the non-admin manager's read-only
+  Users are layouts the person who owns the app never renders; the pending gate
+  and the institute's rules (an approved account that never taps I agree) are
+  screens with no navigator, where Sign out is the only way out. The other
+  three accounts are seeded as having accepted the rules, as `acceptRules`
+  records it; `web-e2e.mjs` drives the real acceptance.
 
 **It is not part of `release.mjs`, deliberately.** That script's AVD step exists
 to check the one thing CI cannot — that the production APK boots and is not an

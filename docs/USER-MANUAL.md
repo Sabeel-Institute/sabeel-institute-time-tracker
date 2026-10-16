@@ -68,6 +68,18 @@ approve your account before you can use the app — this screen updates by
 itself the moment they do, no refresh needed. If you seem stuck here, contact
 your admin.
 
+### Then, once: the institute's rules
+
+![The institute's rules](manual/img/rules.png)
+
+Once you are approved, the app shows the institute's rules before anything
+else: what you post is seen only by members of your team, post only what
+belongs to your work, and nothing abusive, harassing, hateful, sexual or
+otherwise objectionable. Read them and tap **I agree**. You see them once: not
+again on this device or any other, and not after signing out and in. Until you
+agree, nothing else in the app opens (**Sign out** is there if you would rather
+not continue).
+
 ## 1.2 Your home screen
 
 ![Home screen](manual/img/home-member.png)
@@ -82,6 +94,8 @@ From top to bottom:
 - **Add hours manually / My timesheet** — the other two things you'll use daily.
 - **My timesheet approver** — who approves your weeks (see 1.5).
 - **Notification settings** — choose which push notifications you get (see 1.9).
+- **Report a problem** — tell the institute's administrators about something
+  or someone in the app (see 1.11).
 - If a timesheet of yours was rejected, a **red banner** appears at the very
   top — tap it to fix things (see 1.7).
 
@@ -262,6 +276,27 @@ this phone or browser from receiving that account's notifications.
 session in the app, so the next sign-in always shows Google's account chooser —
 that's how you switch between accounts.
 
+## 1.11 Reporting a problem
+
+![Report a problem](manual/img/report-problem.png)
+
+If something in the app breaks the institute's rules (a note, an entry, a
+rejection reason) or someone is behaving badly, or anything else is wrong, tap
+**Report a problem** on Home. Say what or who you are reporting and what is
+wrong, in your own words: name the week, the entry or the person, so an
+administrator can find it. Then tap **Send**.
+
+- **"Sent. An administrator will reply by email within a day."** Your report
+  has gone to the institute's administrators, with your name and email
+  address. They reply to you by email, and act on it by correcting or removing
+  the content or disabling the account.
+- **"Your report was saved but the email did not go out; it will be looked
+  at."** The report is kept in the app, and the administrators will see it
+  there. You need not send it again.
+- If you go **Back** before sending, what you typed is still there when you
+  come back.
+- You can send up to five reports an hour.
+
 ---
 
 # Part 2 — For managers & approvers
@@ -400,6 +435,13 @@ mistakes discovered after the fact.
 
 ## 3.4 Odds and ends
 
+- **Reports from "Report a problem"** arrive by email at
+  `apps-reports@oursabeel.com`, not in the app; nobody reviews them inside it.
+  Each says who sent it (name, email, role), when, from which app version, and
+  what they wrote. **Reply** to the email to answer them (it goes to the
+  person), and act through the app's ordinary screens: correct or delete the
+  entry, or disable the account (3.2), which signs them out and keeps them
+  out. The rules promise a response **within 24 hours**.
 - **First admin** of the system is created once during deployment; every
   further admin is granted in-app with the Admin switch.
 - **Error banner**: if a red "Live data error" bar ever appears at the top of
@@ -450,6 +492,10 @@ Sign out (bottom of Home) → Sign in with Google → the account chooser appear
 Sign in once on the website (https://sabeel-institute-time-tracker.web.app)
 with the same account; that creates it. Then sign in on the phone.
 
+**…report something or someone?**
+Home → Report a problem → say what or who, and what is wrong → Send. An
+administrator replies by email within a day.
+
 **…stop the weekly reminder without losing other notifications?**
 Home → Notification settings → switch off **Weekly submit reminder**.
 
@@ -489,6 +535,8 @@ Open that week → Reopen (admin) → the owner fixes and resubmits.
 | What you see | What it means | What to do |
 |---|---|---|
 | "Almost there" screen after signing in | Your account awaits admin approval | Ask your admin; the screen unlocks by itself once approved |
+| "Before you continue" screen | The institute's rules, shown once to every account | Read them and tap **I agree** |
+| "Your report was saved but the email did not go out" | The report is kept, but its email failed | Nothing: the administrators will see it; no need to send it again |
 | "Pick your timesheet approver…" when submitting | No approver chosen yet | Home → My timesheet approver → pick one |
 | "This week's timesheet is submitted/approved…" when clocking in | The current week is locked | Withdraw the submission (or ask an admin to reopen an approved week) |
 | "Clock out before submitting this week" | A session is still running | Clock out, then submit |

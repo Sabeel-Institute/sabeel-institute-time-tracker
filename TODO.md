@@ -20,6 +20,11 @@ you complete them.
   `@oursabeel.com` accounts (`onUserCreate`), and an admin approves each. App
   uses only basic non-sensitive scopes (email/profile/openid) so no Google
   verification was required.
+- [ ] **Report a problem's email: the Token Creator grant**, at the deploy
+  that first brings `reportProblem`: the functions' runtime service account
+  may sign as `report-mailer@sabeel-institute-time-tracker.iam.gserviceaccount.com`.
+  The exact `gcloud` command is `docs/DEPLOY.md`, "One-time, per Firebase
+  project", step 4. Without it every report is kept but its email fails.
 - [x] **Android debug SHA-1 registered** + `google-services.json` re-downloaded
   (now has the `client_type: 1` Android OAuth client). Native Google Sign-In is
   wired and the app builds; complete a real sign-in on a device/emulator with a

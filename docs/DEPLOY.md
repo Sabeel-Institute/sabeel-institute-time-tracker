@@ -62,6 +62,30 @@ Done for production; this is the order for a new project.
    registers on deploy), and only then enable Email/Password, so the provider is
    never open without the gate. Then make the review account
    (`docs/STORE-RELEASE.md`).
+4. Report a problem's email (`docs/STORE-RELEASE.md`, 4), sent as
+   `apps-noreply@oursabeel.com` by keyless domain-wide delegation. In
+   production: the **Gmail API** and the **IAM Service Account Credentials
+   API** are enabled (both since 2026-10-16); the service account
+   `report-mailer@sabeel-institute-time-tracker.iam.gserviceaccount.com`
+   exists and is authorised for `https://www.googleapis.com/auth/gmail.send`
+   in the Workspace Admin console's Domain-wide delegation (2026-10-16); its
+   address is `REPORT_MAILER_SA` in `functions/.env.sabeel-institute-time-tracker`.
+   What the deploy needs on top: the functions' runtime service account may
+   sign as `report-mailer`, Token Creator on that one account:
+   ```sh
+   gcloud iam service-accounts add-iam-policy-binding \
+     report-mailer@sabeel-institute-time-tracker.iam.gserviceaccount.com \
+     --member=serviceAccount:858585609550-compute@developer.gserviceaccount.com \
+     --role=roles/iam.serviceAccountTokenCreator \
+     --project sabeel-institute-time-tracker
+   ```
+   The runtime account is the project's default compute service account;
+   `gcloud functions describe reportProblem --region us-central1 --project
+   sabeel-institute-time-tracker --format='value(serviceConfig.serviceAccountEmail)'`
+   names it. Without the grant every report is kept with `mail.status:
+   'failed'` and "Permission 'iam.serviceAccounts.signJwt' denied", and the
+   person is told the email did not go out. Nothing else is needed: no key and
+   no secret.
 
 ## Deploy
 ```sh
@@ -104,8 +128,10 @@ scripts/emulator.sh headless &       # the release VERIFIES on the AVD; it needs
 
 # 0b. server code the new app calls goes live FIRST (a callable the app has not
 #     got yet fails every use of it): e.g. accountExists, which native sign-in asks
-#     before signing in (docs/STORE-RELEASE.md)
-firebase deploy --only functions --project dev
+#     before signing in, and acceptRules, without which nobody gets past the
+#     rules screen (docs/STORE-RELEASE.md). Rules and indexes with them: the
+#     reports index serves reportProblem's five-an-hour count.
+firebase deploy --only firestore:rules,firestore:indexes,functions --project dev
 
 # 1. cut it — version is X.Y.Z, no suffix, and must increase (see check-version.mjs)
 npm run release -- 0.29.0 --notes notes.md
@@ -253,6 +279,12 @@ callable bug. `scripts/web-e2e.mjs` now waits for a known callable to exist
 - Emulator suite still green locally: `npm test && npm run test:emulator`.
 - Smoke the live site: sign in, get approved, clock in/out, add manual hours, check a
   report + CSV export.
+- **Report a problem**, after a functions deploy that touches it: send one as
+  yourself. It arrives at `apps-reports@oursabeel.com` from "Sabeel Apps No
+  Reply", Reply-To you, and the app says "Sent."; `reports/{id}` in the
+  Firestore console has `mail.status: 'sent'` and Gmail's `messageId`. A
+  `failed` record carries Google's reason (a missing grant reads "Permission
+  'iam.serviceAccounts.signJwt' denied", step 4 above).
 
 ## Backups / disaster recovery
 
@@ -299,8 +331,9 @@ Retention only helps if the problem is noticed while a good backup still exists.
 - compares against the previous run stored at `meta/health` (server-only; the
   rules deny all client access);
 - raises to Sentry when a collection shrinks past its tolerance —
-  `users`/`activities` have **zero tolerance** (activities can't be deleted at
-  all per the rules; users only by deliberate admin action), while
+  `users`/`activities`/`reports` have **zero tolerance** (activities can't be
+  deleted at all per the rules, nothing deletes a report, and users go only by
+  deliberate admin action), while
   `timeEntries`/`timesheets` tolerate `max(5, 20%)` since routine deletion is
   normal there;
 - sends a Sentry **cron check-in**, so the job going *silent* is itself an alert.

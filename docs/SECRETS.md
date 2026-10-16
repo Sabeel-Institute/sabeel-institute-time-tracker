@@ -33,6 +33,14 @@ the emulator never stops to prompt for a value.
 |---|---|---|
 | `APNS_KEY_ID` | push to iPhones | The APNs key's id (`X5R8FL94BC`); `unused-in-emulator` for `demo-sabeel` |
 | `APPLE_TEAM_ID` | push to iPhones | The Apple team (`XRKWA4QRN9`); `unused-in-emulator` for `demo-sabeel` |
+| `REPORT_MAILER_SA` | Report a problem's email (`functions/src/reportProblem.ts`) | The service account that signs the delegation, `report-mailer@sabeel-institute-time-tracker.iam.gserviceaccount.com`; `unused-in-emulator` for `demo-sabeel`, where nothing is sent |
+
+**Report a problem's email has no secret.** The function sends as
+`apps-noreply@oursabeel.com` through domain-wide delegation with no key and no
+password: its own runtime identity asks IAM to sign as `report-mailer`, which
+takes `roles/iam.serviceAccountTokenCreator` on that account (the grant is in
+`docs/DEPLOY.md`), and the Workspace Admin console authorises `report-mailer`
+for `gmail.send` only. `report-mailer` has no key, and must never be given one.
 
 ## Cloud Functions env vars (`functions/.env`, gitignored)
 Plain env vars for values that are not per-project parameters. (A `defineString`
