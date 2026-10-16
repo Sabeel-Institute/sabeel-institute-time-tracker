@@ -1,9 +1,11 @@
 import { useState } from 'react';
 import { Image, StyleSheet, Text, TextInput, View } from 'react-native';
+import { PRIVACY_URL } from '@sabeel/shared';
 import { signInWithGoogle, REAL_GOOGLE_AVAILABLE } from '../auth/google';
 import { devSignInAsGoogle } from '../auth/devSignIn';
+import { signInMessage } from '../auth/signInMessage';
 import { USE_EMULATORS } from '../env';
-import { Button, ErrorText } from '../components/ui';
+import { Button, ErrorText, TextLink } from '../components/ui';
 import { captureError } from '../sentry';
 import { getTheme, spacing } from '../theme';
 import { BUILD_INFO } from '../build-info';
@@ -23,15 +25,21 @@ export function SignInScreen() {
   // production enforces (auth trigger + rules) applies against the emulator too.
   const [devEmail, setDevEmail] = useState('volunteer@oursabeel.com');
 
+  // Cancellations never get here — both auth seams swallow them. What does is
+  // either an answer (the phone app's refusal of an identity with no account)
+  // or a real failure; signInMessage says which, and what to show.
+  const fail = (e: unknown, source: string) => {
+    const { text, report } = signInMessage(e);
+    if (report) captureError(e, { source });
+    setError(text);
+  };
+
   const google = async () => {
     setError(null);
     try {
       await signInWithGoogle();
     } catch (e) {
-      // Cancellations never get here — both auth seams swallow them — so
-      // anything that lands is a real failure worth reporting and showing.
-      captureError(e, { source: 'signInWithGoogle' });
-      setError((e as Error).message);
+      fail(e, 'signInWithGoogle');
     }
   };
 
@@ -44,7 +52,7 @@ export function SignInScreen() {
         .replace(/\b\w/g, (c) => c.toUpperCase());
       await devSignInAsGoogle(devEmail.trim(), name);
     } catch (e) {
-      setError((e as Error).message);
+      setError(signInMessage(e).text);
     }
   };
 
@@ -77,6 +85,9 @@ export function SignInScreen() {
         )}
         <ErrorText error={error} />
       </View>
+      {/* Reachable before signing in, because an App Store reviewer reads it
+          from here (guideline 5.1.1(i)); it is also linked from Home. */}
+      <TextLink label="Privacy policy" url={PRIVACY_URL} align="center" />
       {/* Which build is running — so "what version are you on?" is answerable
           from the screen everyone sees. Stamped at build time by
           scripts/gen-build-info.mjs. */}
@@ -114,7 +125,7 @@ const styles = StyleSheet.create({
     maxWidth: 380,
   },
   logo: { width: '82%', height: 150, marginBottom: spacing(2) },
-  build: { color: t.text.muted, fontSize: 12, textAlign: 'center', marginTop: spacing(2) },
+  build: { color: t.text.muted, fontSize: 12, textAlign: 'center' },
   devLabel: { color: t.text.muted, fontSize: 12, marginTop: spacing(2) },
   input: {
     borderWidth: 1,

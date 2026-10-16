@@ -1,5 +1,5 @@
 import { Children, type ReactNode, useState } from 'react';
-import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Linking, Pressable, StyleSheet, Text, View } from 'react-native';
 import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useListenerError } from '../liveQuery';
@@ -143,6 +143,23 @@ export function Button({
   );
 }
 
+/**
+ * A low-emphasis link out of the app (the privacy policy). Underlined accent
+ * text with a 44pt touch target, the shape of PushNudge's "Not now". On the web
+ * Linking opens a new tab; on a phone, the browser.
+ */
+export function TextLink({ label, url, align = 'left' }: { label: string; url: string; align?: 'left' | 'center' }) {
+  return (
+    <Pressable
+      onPress={() => void Linking.openURL(url).catch(() => undefined)}
+      accessibilityRole="link"
+      style={[styles.textLink, align === 'center' && styles.textLinkCentre]}
+    >
+      <Text style={styles.textLinkText}>{label}</Text>
+    </Pressable>
+  );
+}
+
 export function ErrorText({ error }: { error: string | null }) {
   if (!error) return null;
   return <Text style={styles.error}>{error}</Text>;
@@ -201,6 +218,9 @@ const styles = StyleSheet.create({
     borderColor: t.accent.sage,
   },
   btnDanger: { backgroundColor: t.feedback.danger },
+  textLink: { alignSelf: 'flex-start', minHeight: 44, paddingHorizontal: 4, justifyContent: 'center' },
+  textLinkCentre: { alignSelf: 'center' },
+  textLinkText: { fontSize: 14, color: t.text.accent, textDecorationLine: 'underline' },
   btnDim: { opacity: 0.6 },
   btnLabel: { color: t.text.inverse, fontSize: 16, fontWeight: '600' },
   btnLabelSecondary: { color: t.accent.base },

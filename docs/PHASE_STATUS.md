@@ -36,6 +36,22 @@ phase boundary.
 
 ## Decision log
 
+- 2026-10-15 — **The iPhone app, and the phone apps stop creating accounts.**
+  The app builds for iOS (`docs/IOS-BUILD.md`): on the build Mac, and on
+  GitHub's macOS runners with manual signing (first green run 38842003528, a
+  signed 17 MB `.ipa` whose entitlements, profile and commit stamp the workflow
+  asserts). A TestFlight upload must be the commit tagged `v<version>`, so every
+  version goes up once, as build 1. Two iPhone-only bugs found on the simulator
+  and fixed: the Home title sat inside the Dynamic Island inset (Screen now pads
+  by the safe-area insets; Android moves only on a status bar taller than 32dp),
+  and the date/time field closed after one wheel column (`DateTimeField.ios.tsx`
+  opens a sheet with Done). Then, for App Review, Faisal's standing rule that
+  the phone apps never create an account: native sign-in asks the new
+  `accountExists` callable first and refuses an identity with no account, the
+  web keeps creating them, and `/privacy` and `/support` are static pages with
+  the policy linked from the sign-in screen and Home (`docs/STORE-RELEASE.md`).
+  Deploy order: functions before the first build that calls `accountExists`.
+
 - 2026-08-27 — **The layout sweep (`npm run test:screens`).** This repo's
   highest-value missing test, named as such in `CLAUDE.md`, now exists:
   `scripts/screens-e2e.mjs` tours every screen — 17 as an admin, plus the

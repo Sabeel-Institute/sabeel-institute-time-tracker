@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Privacy Policy — Sabeel Time Tracker</title>
+<!--
+  A STATIC page, served outside the app bundle on purpose.
+
+  Both stores require a privacy policy that a crawler and a reviewer who is not
+  signed in can read. The app's routes are behind sign-in, so a client-side
+  /privacy would return an empty shell to exactly those readers. Expo copies
+  app/public/ into dist-web verbatim, and firebase.json rewrites /privacy here
+  ahead of the SPA catch-all (functions/test/unit/hostingPages.test.ts).
+
+  No navigation and no sign-in link, deliberately: the phone app links here,
+  and must not point at a way to create an account (docs/STORE-RELEASE.md).
+  The colours are the brand palette (app/src/theme/palette.ts).
+-->
+<style>
+  :root {
+    color-scheme: light;
+    --ivory: #F6EBDD; --raspberry: #83114F; --gold: #C6A15B;
+    --ink: #3A2F28; --muted: #6A5748; --line: #DFD1C1;
+  }
+  body {
+    background: var(--ivory); color: var(--ink);
+    font-family: system-ui, -apple-system, sans-serif;
+    max-width: 40rem; margin: 0 auto; padding: 3rem 1.5rem 5rem;
+    line-height: 1.65;
+  }
+  h1 { color: var(--raspberry); font-size: 1.6rem; margin-bottom: .25rem; }
+  h2 { color: var(--raspberry); font-size: 1.05rem; margin: 2.25rem 0 .5rem; }
+  .updated { color: var(--muted); margin-top: 0; font-size: .9rem; }
+  hr { border: 0; border-top: 1px solid var(--gold); margin: 2rem 0; opacity: .5; }
+  a { color: var(--raspberry); }
+  table { border-collapse: collapse; width: 100%; margin: .5rem 0 1rem; }
+  th, td { text-align: left; padding: .5rem .6rem; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { color: var(--muted); font-weight: 600; font-size: .85rem; }
+  .note { color: var(--muted); font-size: .92rem; }
+  code { font-size: .9em; }
+</style>
+</head>
+<body>
+
+<h1>Privacy Policy</h1>
+<p class="updated">Sabeel Time Tracker &middot; last updated 15 October 2026</p>
+
+<p>Sabeel Time Tracker is a private application in which staff and volunteers of
+Sabeel Institute record the hours they work for the institute. It is not a
+public service. Only accounts the institute has approved can use it.</p>
+
+<h2>What we collect</h2>
+
+<table>
+  <tr><th>Information</th><th>Where it comes from</th><th>Why</th></tr>
+  <tr>
+    <td>Your name, your email address, and the link to your Google profile
+      picture</td>
+    <td>Your Google account, when you sign in</td>
+    <td>To identify you to the colleagues who approve your hours</td>
+  </tr>
+  <tr>
+    <td>The hours you record: when you started and stopped, the activity, an
+      optional note, and the time zone you worked in</td>
+    <td>You</td>
+    <td>It is the content of the application</td>
+  </tr>
+  <tr>
+    <td>Your weekly timesheets: when you submitted them, and who approved or
+      returned them, with any reason given</td>
+    <td>You, and the colleague who reviews your hours</td>
+    <td>The institute's record of approved hours</td>
+  </tr>
+  <tr>
+    <td>A notification address for each device you turn notifications on for,
+      and which notifications you want</td>
+    <td>Your device, and your settings</td>
+    <td>To tell you about your timesheets on that device</td>
+  </tr>
+  <tr>
+    <td>Crash and error diagnostics</td>
+    <td>The app, automatically</td>
+    <td>So faults can be found and fixed</td>
+  </tr>
+</table>
+
+<p><strong>Crash reports carry your internal account identifier and nothing
+else</strong> &mdash; no name, no email address, no hours.</p>
+
+<p>We do not use advertising, we do not track you across other apps or
+websites, and we do not sell or share your information with anyone for their
+own purposes.</p>
+
+<h2>Who else can see it</h2>
+
+<p>These service providers process this information on the institute's behalf,
+under agreements requiring them to protect it to the same standard set out here
+and to use it only to provide their service:</p>
+
+<ul>
+  <li><strong>Google</strong> &mdash; sign-in.</li>
+  <li><strong>Google Cloud and Firebase</strong> &mdash; where the application
+    and its data are hosted, in the United States, and the delivery of
+    notifications to Android phones and web browsers.</li>
+  <li><strong>Apple</strong> &mdash; the delivery of notifications to
+    iPhones.</li>
+  <li><strong>Sentry</strong> &mdash; crash and error diagnostics.</li>
+</ul>
+
+<h2>How long we keep it</h2>
+
+<p>The hours recorded in the application, the timesheets and the record of who
+approved them belong to Sabeel Institute rather than to the person who entered
+them, and are retained as organisational records. That remains true after
+somebody leaves.</p>
+
+<p>Your <em>account</em> is a different thing: your sign-in, your profile, your
+contact details, your device registrations and your notification settings are
+removed when your account is removed.</p>
+
+<h2>Deleting your account</h2>
+
+<p>Email <a href="mailto:privacy@oursabeel.com">privacy@oursabeel.com</a> from the
+address on your account and ask us to delete it. We will confirm and act within
+<strong>30 days</strong>.</p>
+
+<p>Deleting your account removes your ability to sign in, your profile, your
+contact details, your device registrations and your notification settings. It
+does not remove the organisational records described above, which the
+institute retains.</p>
+
+<p class="note">You can also ask us at the same address what information we hold
+about you, or ask us to correct it.</p>
+
+<h2>Children</h2>
+
+<p>This application is not intended for and is not offered to children under 13.</p>
+
+<h2>Changes</h2>
+
+<p>If this policy changes materially we will update the date at the top and tell
+account holders by email.</p>
+
+<hr>
+
+<p class="note">Questions about this policy:
+<a href="mailto:privacy@oursabeel.com">privacy@oursabeel.com</a></p>
+
+</body>
+</html>

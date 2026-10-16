@@ -10,6 +10,7 @@ import {
   periodKeyFor,
   periodLabel,
   periodRangeFor,
+  PRIVACY_URL,
   timeOfDayFor,
   type TokenClaims,
   type UserDoc,
@@ -22,7 +23,7 @@ import { useTimesheet, useRejectedSheets, useApprovalQueue } from '../timesheets
 import { setApprover, useApproverChoices, usePendingCount } from '../users';
 import { ActivityPicker } from '../components/ActivityPicker';
 import { SearchablePicker } from '../components/SearchablePicker';
-import { Button, ErrorText, Screen } from '../components/ui';
+import { Button, ErrorText, Screen, TextLink } from '../components/ui';
 import { PushNudge } from '../components/PushNudge';
 import { getTheme, spacing } from '../theme';
 
@@ -227,6 +228,7 @@ export function HomeScreen({
           onPress={() => nav.navigate('NotificationSettings')}
         />
         <Button label="Sign out" kind="secondary" onPress={() => signOut()} />
+        <TextLink label="Privacy policy" url={PRIVACY_URL} />
       </View>
     </Screen>
   );

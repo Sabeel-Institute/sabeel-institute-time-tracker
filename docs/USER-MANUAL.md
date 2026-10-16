@@ -9,8 +9,8 @@ Part 2; **admins** add Part 3. Part 4 is a quick "How do I…?" index you can sk
 any time.
 
 The app works the same on the website
-(https://sabeel-institute-time-tracker.web.app) and the Android app — same
-account, same data, live everywhere.
+(https://sabeel-institute-time-tracker.web.app), the Android app and the iPhone
+app — same account, same data, live everywhere.
 
 ---
 
@@ -41,6 +41,15 @@ Open the app or website and tap **Sign in with Google**. Google's account
 chooser appears — pick your account (or "Use another account" to switch).
 There are no passwords to remember; access is entirely through your Google
 account.
+
+**The very first time, sign in on the website**
+(https://sabeel-institute-time-tracker.web.app) with your `@oursabeel.com`
+account. That is what creates your account. The phone apps only sign in
+accounts that already exist: until you have signed in on the website once, they
+say *"This account isn't set up for the app yet. Contact your administrator."*
+
+The **Privacy policy** link under the sign-in card (and at the bottom of Home)
+says what the app stores and how to ask for your account to be deleted.
 
 ### First time? You'll wait for approval
 
@@ -425,6 +434,10 @@ submission.
 
 **…sign in with a different Google account?**
 Sign out (bottom of Home) → Sign in with Google → the account chooser appears.
+
+**…use the phone app when it says "This account isn't set up for the app yet"?**
+Sign in once on the website (https://sabeel-institute-time-tracker.web.app)
+with the same account; that creates it. Then sign in on the phone.
 
 **…stop the weekly reminder without losing other notifications?**
 Home → Notification settings → switch off **Weekly submit reminder**.

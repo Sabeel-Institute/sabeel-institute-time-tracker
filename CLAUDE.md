@@ -9,8 +9,8 @@ the developer; the nonprofit's staff are the admins/managers in the app.
 **It is in production and the team uses it.** Live at
 `sabeel-institute-time-tracker.web.app` since 2026-07-16; the Android APK is
 installed from a public GitHub Pages download page. The iPhone app is built on
-GitHub's macOS runners for TestFlight (App Store Connect app 6823429437). There
-is no Play Store presence.
+GitHub's macOS runners for TestFlight (App Store Connect app 6823429437); App
+Review is prepared in `docs/STORE-RELEASE.md`. There is no Play Store presence.
 
 Source of truth: `docs/PRODUCT_BRIEF.md` (decisions & data model),
 `docs/PHASE_STATUS.md` (live build status), `docs/DEV-TOOLING.md` (what each
@@ -74,6 +74,13 @@ Do not silently change any of these.
   `onUserCreate` function deletes non-org accounts and rules block non-org
   self-register. The client `hd` hint is UX only. Every new org account lands
   `pending`; **only admins** approve/disable users or change roles.
+- **The phone apps never create an account, and must not learn how** (iOS and
+  Android alike). Both stores require in-app account DELETION only if an app
+  supports account CREATION, and Play also if it merely points at a sign-up
+  elsewhere. So `accountExists` gates `signInWithCredential` on native, accounts
+  are made on the web, and **no screen in the app names the website as somewhere
+  to get an account**: the refusal says "Contact your administrator."
+  `docs/STORE-RELEASE.md` is the decision record.
 - **Honor system** — entries count immediately; managers may edit/correct. (The
   Phase 7 submit/approve workflow layers on top of this; it does not replace the
   principle.)
@@ -133,7 +140,8 @@ Do not silently change any of these.
 - Web: `npx expo start --web` in `app/` (emulator-backed via env flag).
 - Android: `scripts/emulator.sh headless` (AVD `tb_emu`), then `npx expo
   run:android` in `app/`. Firebase emulators from the AVD = `10.0.2.2`. There are
-  NO physical devices.
+  NO physical devices. The dev sign-in row on a phone refuses an address with no
+  account, as production does; create the account with the web dev row first.
 - iOS (on the Mac): the simulator loop in `docs/IOS-BUILD.md` — Metro on its own
   port (another project holds 8081), the app pinned to it with `RCT_jsLocation`,
   emulators at `127.0.0.1`. `npm run check:ios` checks the iOS config;

@@ -27,6 +27,25 @@ export const WEB_CLIENT_ID =
 // the browser has no app to hand a route to, so the route rides in the URL.
 export const WEB_APP_ORIGIN = 'https://sabeel-institute-time-tracker.web.app';
 
+/**
+ * The privacy policy and the support page: static files in `app/public/`,
+ * served by Hosting outside the signed-in app (`firebase.json` rewrites them
+ * ahead of the SPA catch-all), because a store crawler and a reviewer read them
+ * without signing in. Apple wants the policy reachable INSIDE the app too
+ * (5.1.1(i)), so the sign-in screen and Home link to PRIVACY_URL.
+ * `hostingPages.test.ts` holds the paths, the rewrites and the files together.
+ */
+export const PRIVACY_URL = `${WEB_APP_ORIGIN}/privacy`;
+export const SUPPORT_URL = `${WEB_APP_ORIGIN}/support`;
+
+/**
+ * The project id the Firebase emulators run as. The app swaps it in for the
+ * real one when pointed at the emulators, and the functions recognise the
+ * emulator by it: a running project id, unlike an env flag left in a shell,
+ * cannot be true in a deploy.
+ */
+export const EMULATOR_PROJECT_ID = 'demo-sabeel';
+
 /** Clock sessions running longer than this get auto-closed at start + cap. */
 export const SESSION_CAP_HOURS = 12;
 

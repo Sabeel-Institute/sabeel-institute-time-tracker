@@ -4,6 +4,7 @@
 import {
   getRedirectResult,
   GoogleAuthProvider,
+  signInWithCredential,
   signInWithPopup,
   signInWithRedirect,
 } from 'firebase/auth';
@@ -21,6 +22,16 @@ getRedirectResult(auth).catch((e) => captureError(e, { source: 'redirectSignIn' 
 
 /** Web keeps no Google session of its own — Firebase sign-out is enough. */
 export async function googleSignOut(): Promise<void> {}
+
+/**
+ * Exchange a Google ID token for a session. The web is where accounts are made,
+ * so unlike the native sibling this asks nothing first: an unknown address gets
+ * an account, which the onUserCreate trigger provisions as pending. Only the dev
+ * sign-in (devSignIn.ts) reaches this; real sign-in uses the popup below.
+ */
+export async function exchangeGoogleIdToken(idToken: string): Promise<void> {
+  await signInWithCredential(auth, GoogleAuthProvider.credential(idToken));
+}
 
 /**
  * Codes that mean "the person changed their mind", not "sign-in failed".

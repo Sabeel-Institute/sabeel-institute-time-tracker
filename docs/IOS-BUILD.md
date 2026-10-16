@@ -128,16 +128,20 @@ xcrun simctl terminate $U com.sabeelinstitute.timetracker; xcrun simctl launch $
 - **Never `CI=1` on a Metro you develop against.** It puts Metro in CI mode
   ("reloads are disabled"): it serves the first bundle it built forever, and a
   relaunch looks like a change that did nothing.
-- **A new platform file needs a Metro restart.** Adding `Foo.ios.tsx` beside
-  `Foo.tsx` is not seen by a running Metro's resolution; restart it with
-  `--clear`.
 - **`expo run:ios` exits 1 on a build that worked**: its last act raises the
   Simulator window through AppleScript, which an ssh session may not do. Check
   the install (`xcrun simctl get_app_container $U com.sabeelinstitute.timetracker`)
   and launch through `simctl`.
-- **Sign in** with the dev row (emulator only), then promote the account:
-  `node scripts/grant-admin.mjs <email>`. The pending screen turns into Home by
-  itself.
+- **Accounts are made on the web**, on the simulator as in production: the dev
+  row on the phone goes through the same `accountExists` gate as Google sign-in
+  and refuses an address with no account. Create it first with the web dev row
+  (`npx expo start --web` with `EXPO_PUBLIC_USE_EMULATORS=1`), then sign in on
+  the phone and promote it: `node scripts/grant-admin.mjs <email>`. The pending
+  screen turns into Home by itself.
+- **Restart Metro after editing.** On this Mac a running Metro serves stale
+  modules: Fast Refresh and a relaunch both kept old code, and only a restart
+  with `--clear` reliably picked up a change. Check the build stamp or the
+  change itself in the screenshot before believing a result.
 - **Address the simulator by UDID.** Other sessions boot their own simulators
   on this Mac, and `booted` then means more than one.
 

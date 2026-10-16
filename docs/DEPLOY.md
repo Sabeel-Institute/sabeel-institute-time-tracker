@@ -46,6 +46,11 @@ the checks, and skipping it is how versions and stamps drift apart.
 npm run verify                       # lint (incl. version check) + typecheck + knip + unit
 scripts/emulator.sh headless &       # the release VERIFIES on the AVD; it needs one
 
+# 0b. server code the new app calls goes live FIRST (a callable the app has not
+#     got yet fails every use of it): e.g. accountExists, which native sign-in asks
+#     before signing in (docs/STORE-RELEASE.md, "Deploy order")
+firebase deploy --only functions --project dev
+
 # 1. cut it — version is X.Y.Z, no suffix, and must increase (see check-version.mjs)
 npm run release -- 0.26.0 --notes notes.md
 
@@ -86,6 +91,9 @@ release commit. Two reasons it belongs there and not in your hands:
 
 Everything before the push is local, so a failed build or AVD check still
 recovers with `git reset --hard HEAD~1`.
+
+The iPhone build of the release is the iOS workflow started on its tag
+(`docs/IOS-BUILD.md`, "Releasing to TestFlight").
 
 ### After shipping
 - Download page shows the new version **and a fresh timestamp** (Pages lags ~1 min):
