@@ -24,6 +24,7 @@ import {
   grantAdmin,
   launchBrowser,
   serveWebBundle,
+  settle,
   shutdown as cleanup,
   startEmulators,
 } from './lib/e2e-stack.mjs';
@@ -83,6 +84,13 @@ async function expectNoHome(page, who) {
   for (const text of ['Salaam,', 'Clock in', 'Add hours manually', 'My timesheet']) {
     const n = await page.getByText(text, { exact: text !== 'Salaam,' }).count();
     if (n !== 0) throw new Error(`${who} can see "${text}" behind the rules`);
+  }
+}
+
+/** `settle`, saying so when a sign-in needed the app's Try again. */
+async function settled(page, landing) {
+  if (await settle(page, landing)) {
+    console.log('  (this sign-in reached "Still setting up your account" and took Try again)');
   }
 }
 
@@ -194,7 +202,7 @@ async function main() {
   await admin.getByText('Time Tracker', { exact: true }).waitFor();
   await admin.screenshot({ path: join(shots, '0-signin.png'), animations: 'disabled', timeout: 8000 }).catch(() => {});
   await devSignIn(admin, 'admin@oursabeel.com');
-  await admin.getByText('waiting for an administrator', { exact: false }).waitFor();
+  await settled(admin, admin.getByText('waiting for an administrator', { exact: false }));
   await admin.screenshot({ path: join(shots, '1-admin-pending.png'), animations: 'disabled', timeout: 8000 }).catch(() => {});
 
   console.log('▸ grant-admin bootstrap → page must un-gate LIVE (claims refresh) onto the rules…');
@@ -210,7 +218,7 @@ async function main() {
   console.log('▸ a volunteer signs in on their own device → pending gate…');
   const vol = await newPage('volunteer');
   await devSignIn(vol, 'volunteer@oursabeel.com');
-  await vol.getByText('waiting for an administrator', { exact: false }).waitFor();
+  await settled(vol, vol.getByText('waiting for an administrator', { exact: false }));
 
   console.log('▸ admin opens Manage users and sees the volunteer name+email…');
   await admin.getByText('Manage users').click();

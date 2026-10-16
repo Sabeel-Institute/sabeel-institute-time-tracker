@@ -210,6 +210,29 @@ export async function launchBrowser() {
   return browser;
 }
 
+/**
+ * A sign-in, settled: the screen this account should land on, or the app's
+ * own "Still setting up your account", which appears when the profile has not
+ * reached the page in the app's whole wait (session.ts,
+ * PROVISIONING_PATIENCE_MS) and is answered with the app's own Try again (a
+ * page reload on the web). Returns whether it took Try again, for the caller
+ * to COUNT and print, never to hide.
+ *
+ * Why the suites need it: on a freshly started emulator stack the first
+ * sign-in's database connection has delivered nothing at all, the profile made
+ * in a second and never heard, until the page reloaded (2026-10-16; closing
+ * and reopening the connection did not cure it). Waiting longer does not
+ * either, so this is not the ten-second refusal that used to cover it.
+ */
+export async function settle(page, landing) {
+  const slow = page.getByText('Still setting up your account', { exact: false });
+  await landing.or(slow).first().waitFor({ timeout: 75000 });
+  if (!(await slow.isVisible().catch(() => false))) return false;
+  await page.getByText('Try again', { exact: true }).click();
+  await landing.first().waitFor({ timeout: 75000 });
+  return true;
+}
+
 /** The emulator-only sign-in row, which the app offers whenever USE_EMULATORS is set. */
 export async function devSignIn(page, email) {
   await page.getByPlaceholder('email').fill(email);

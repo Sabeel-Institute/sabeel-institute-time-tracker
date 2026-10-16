@@ -92,6 +92,7 @@ import {
   grantAdmin,
   launchBrowser,
   serveWebBundle,
+  settle,
   shutdown,
   startEmulators,
 } from './lib/e2e-stack.mjs';
@@ -136,8 +137,9 @@ process.on('uncaughtException', (e) => {
 });
 
 const results = [];
-/** Sign-ins that lost the provisioning race and were reloaded (see `open`). */
+/** Sign-ins that reached "Still setting up your account" and took Try again (`settle`). */
 let raced = 0;
+
 /**
  * The notification settings screen must always say SOMETHING about this device —
  * exactly one of the four states, never none and never two.
@@ -200,16 +202,21 @@ const WIDTHS = process.env.SWEEP_WIDTHS
   : [320, 390, WIDE_BREAKPOINT, 1024, 1440];
 
 // ---- People -----------------------------------------------------------------
-const ADMIN = { email: 'admin@oursabeel.com', name: 'Admin' };
-const MEMBER = { email: 'volunteer@oursabeel.com', name: 'Fatima Abdul-Rahman' };
+// `landing`: the text of the first screen each account reaches after signing in.
+const ADMIN = { email: 'admin@oursabeel.com', name: 'Admin', landing: 'Salaam,' };
+const MEMBER = { email: 'volunteer@oursabeel.com', name: 'Fatima Abdul-Rahman', landing: 'Salaam,' };
 // A long, real-shaped name and address: the Users card, the approvals row and
 // every picker row are laid out around a person's name, and a short one never
 // tests them.
-const MANAGER = { email: 'programme.coordinator@oursabeel.com', name: 'Abdur-Rahman Oyelaran' };
-const PENDING = { email: 'newcomer@oursabeel.com', name: 'Newcomer' };
+const MANAGER = {
+  email: 'programme.coordinator@oursabeel.com',
+  name: 'Abdur-Rahman Oyelaran',
+  landing: 'Salaam,',
+};
+const PENDING = { email: 'newcomer@oursabeel.com', name: 'Newcomer', landing: 'waiting for an administrator' };
 // Approved, but has not yet accepted the institute's rules: the one screen it
 // sees, at every width, because the tour never taps I agree.
-const UNACCEPTED = { email: 'first.day@oursabeel.com', name: 'Yusuf First-Day' };
+const UNACCEPTED = { email: 'first.day@oursabeel.com', name: 'Yusuf First-Day', landing: 'Before you continue' };
 
 await mkdir(SHOTS, { recursive: true });
 
@@ -236,19 +243,7 @@ async function provision({ email }) {
   await page.goto(baseUrl + '/');
   await page.getByText('Time Tracker', { exact: true }).waitFor({ timeout: 30000 });
   await devSignIn(page, email);
-  // The provisioning race `open` describes, met here at the first sign-in of
-  // a fresh stack. Seen 2026-10-16 under load: onUserCreate made the profile
-  // within two seconds, and the page's profile listener delivered nothing for
-  // forty. The account exists, so "Can't sign in" is the client, not the
-  // server. Reload once, and count it.
-  const gate = page.getByText('waiting for an administrator', { exact: false });
-  const refused = page.getByText('Can’t sign in');
-  await gate.or(refused).waitFor({ timeout: 40000 });
-  if (await refused.isVisible().catch(() => false)) {
-    raced += 1;
-    await page.reload();
-    await gate.waitFor({ timeout: 40000 });
-  }
+  if (await settle(page, page.getByText('waiting for an administrator', { exact: false }))) raced += 1;
   await ctx.close();
   const snap = await db.collection(COLLECTIONS.users).where('email', '==', email).get();
   if (snap.empty) throw new Error(`${email} was never provisioned`);
@@ -897,25 +892,7 @@ async function open(who, width) {
   await page.getByText('Time Tracker', { exact: true }).waitFor({ timeout: 30000 });
   await devSignIn(page, who.email);
   await checkViewport(page, `${width}px`, width);
-
-  /*
-   * THE PROVISIONING RACE, which only bites a loaded machine.
-   *
-   * `session.ts` gives the `onUserCreate` trigger ten seconds and then shows a
-   * TERMINAL "Can't sign in" — correct in production, where it means the account
-   * was rejected. Here the account demonstrably exists (this run created it and
-   * read its uid back), so that screen is the client losing a race under load,
-   * and there is no recovery from it but a reload.
-   *
-   * Reloading once and SAYING SO is the honest handling: a silent retry would
-   * hide the one thing the count is worth knowing for — a run full of these is
-   * telling you the box is overloaded, which is also the first thing to suspect
-   * when the rest of the sweep starts timing out.
-   */
-  if (await page.getByText('Can’t sign in').isVisible().catch(() => false)) {
-    raced += 1;
-    await page.reload();
-  }
+  if (await settle(page, page.getByText(who.landing, { exact: false }))) raced += 1;
   return { ctx, page, errors };
 }
 
@@ -1356,8 +1333,8 @@ console.log(`${SHOTS} — ${WIDTHS.length} widths x ${perWidth} screens`);
 console.log('SWEEP_WIDTHS=320 runs one width, for a tight loop.');
 if (raced) {
   console.log(
-    `${raced} sign-in(s) hit the 10s provisioning timeout and were reloaded — ` +
-      'the machine is loaded; suspect that first if anything else here timed out.',
+    `${raced} sign-in(s) reached "Still setting up your account" and took Try again: ` +
+      'a database connection that delivered nothing (settle, scripts/lib/e2e-stack.mjs).',
   );
 }
 if (failed.length) {
