@@ -21,9 +21,10 @@
  */
 import { useEffect, useState } from 'react';
 import { onAuthStateChanged, signOut as fbSignOut, type User } from 'firebase/auth';
-import { disableNetwork, doc, enableNetwork, onSnapshot, type DocumentSnapshot } from 'firebase/firestore';
+import { doc, onSnapshot, type DocumentSnapshot } from 'firebase/firestore';
 import { COLLECTIONS, type TokenClaims, type UserDoc } from '@sabeel/shared';
 import { lookUpAccount } from './auth/accountLookup';
+import { freshConnection } from './freshConnection';
 import { googleSignOut } from './auth/google';
 import { unregisterPush } from './notify';
 import { auth, db } from './firebase';
@@ -255,16 +256,16 @@ export function useSession(): Session {
 
 /**
  * Try again, from "Still setting up your account": the whole wait over, on a
- * fresh connection to the database, so whatever held the profile back (a
- * stalled listener on a loaded machine has done it) does not carry over.
+ * fresh connection to the database (`freshConnection`: a page reload on the
+ * web, the connection closed and reopened on a phone), so whatever held the
+ * profile back does not carry over.
  */
 export async function retryProvisioning(): Promise<void> {
   const user = auth.currentUser;
   if (!user) return;
   stopWatching();
   emit({ phase: 'provisioning', uid: user.uid });
-  await disableNetwork(db).catch(() => undefined);
-  await enableNetwork(db).catch(() => undefined);
+  await freshConnection();
   if (auth.currentUser !== user) return;
   watchUserDoc(user);
   watchProvisioning(user);
