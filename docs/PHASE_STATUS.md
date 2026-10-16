@@ -52,7 +52,7 @@ phase boundary.
   testing: 0.28.0 (28000) a completed release, its Play-generated APKs signed
   with the app's own key; the earlier 0.27.1 (27001) bundle left unreleased,
   its APKs Google-signed. First TestFlight build (0.28.0, build 1) from the tag: built
-  on GitHub, uploaded at the fourth try (App Store Connect answered 500 or
+  on GitHub, uploaded at the sixth try (App Store Connect answered 500 or
   hung on about one request in five that day; a 23-minute validation also
   hit the job's 30-minute limit, now 90, with altool retried), VALID and in
   internal testing.
