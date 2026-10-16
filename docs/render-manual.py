@@ -26,7 +26,7 @@ cover = f"""
   <img class="cover-logo" src="data:image/png;base64,{logo_b64}" alt="Sabeel Institute">
   <div class="cover-title">Time Tracker</div>
   <div class="cover-sub">User Manual</div>
-  <div class="cover-meta">App version 0.28.0 &nbsp;·&nbsp; July 2026</div>
+  <div class="cover-meta">App version 0.29.0 &nbsp;·&nbsp; July 2026</div>
 </div>
 """
 
