@@ -14,7 +14,7 @@ import {
   type UserDoc,
 } from '@sabeel/shared';
 import { requireActive, roleOf } from './auth';
-import { composeReportEmail } from './reportMail';
+import { composeReportEmail, type ReportEmail } from './reportMail';
 import { sendAsUser, type GoogleEndpoints } from './gmail';
 import { guarded, reportError, sentryDsn } from './sentry';
 
@@ -33,7 +33,7 @@ import { guarded, reportError, sentryDsn } from './sentry';
 
 /** What a send did. A mailer throws when the email did not go out. */
 export type MailOutcome = { status: 'sent'; messageId: string } | { status: 'skipped' };
-export type ReportMailer = (message: string) => Promise<MailOutcome>;
+export type ReportMailer = (email: ReportEmail) => Promise<MailOutcome>;
 
 const HOUR_MS = 60 * 60 * 1000;
 
@@ -100,8 +100,8 @@ export function gmailMailer(
   accessToken: () => Promise<string>,
   endpoints?: GoogleEndpoints,
 ): ReportMailer {
-  return async (message) => {
-    const { messageId } = await sendAsUser(message, {
+  return async (email) => {
+    const { messageId } = await sendAsUser(email.raw, {
       serviceAccount,
       user: REPORT_MAIL.from.address,
       accessToken,
@@ -112,14 +112,12 @@ export function gmailMailer(
 }
 
 /**
- * Under the emulator, send nothing: the record says `skipped` and the message
- * goes to the emulator's log, body decoded, for anyone checking what would
+ * Under the emulator, send nothing: the record says `skipped`, and the subject
+ * and the plain text go to the emulator's log for anyone checking what would
  * have been sent.
  */
-const emulatorMailer: ReportMailer = async (message) => {
-  const [head, body = ''] = message.split('\r\n\r\n');
-  const text = Buffer.from(body.replace(/\r\n/g, ''), 'base64').toString('utf8');
-  console.log(`[emulator] report email not sent:\n${head}\n\n${text}`);
+const emulatorMailer: ReportMailer = async (email) => {
+  console.log(`[emulator] report email not sent: ${email.subject}\n${email.text}`);
   return { status: 'skipped' };
 };
 

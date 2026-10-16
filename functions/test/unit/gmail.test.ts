@@ -83,7 +83,7 @@ describe('sending as the no-reply user', () => {
   it('the report mailer sends as apps-noreply@ and reports what Gmail answered', async () => {
     const google = await fakeGoogle();
     const mailer = gmailMailer(SA, async () => 'adc-token', google.endpoints);
-    await expect(mailer(MESSAGE)).resolves.toEqual({ status: 'sent', messageId: 'msg-123' });
+    await expect(mailer({ raw: MESSAGE, subject: 'z', text: 'Body' })).resolves.toEqual({ status: 'sent', messageId: 'msg-123' });
     const claims = JSON.parse((JSON.parse(google.seen.signJwt[0].body) as { payload: string }).payload) as {
       sub: string;
     };

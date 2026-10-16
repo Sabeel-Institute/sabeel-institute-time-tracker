@@ -10,17 +10,18 @@ import {
 } from '@sabeel/shared';
 
 /**
- * A stored report, as the email the administrators read: an RFC 5322 message
- * in plain text, from the no-reply sender to the reports group, with Reply-To
- * set to the person who reported, so answering them is one Reply.
+ * A stored report, as the email the administrators read: an RFC 5322 message,
+ * multipart/alternative (plain text and plain HTML of the same content), from
+ * the no-reply sender to the reports group, with Reply-To set to the person
+ * who reported, so answering them is one Reply.
  *
  * Pure: no clock, no network. `gmail.ts` sends what this returns, and
  * `reportMail.test.ts` reads it back the way a mail client would.
  *
  * Everything a person can type reaches a header only through `oneLine` (no
- * line break survives, so nothing they write can start a header of its own) and
- * reaches the body only inside base64, so no line of theirs can end the
- * headers early or exceed a mail line's length.
+ * line break survives, so nothing they write can start a header of its own),
+ * reaches the HTML only through `escapeHtml`, and reaches the message only
+ * inside base64, so no line of theirs can end the headers or a part early.
  */
 
 const CRLF = '\r\n';
@@ -94,49 +95,154 @@ function reportSubject(report: Pick<ReportDoc, 'app' | 'displayName'>): string {
 }
 
 /**
- * The body, as plain text: who, when (in the administrators' time zone),
- * which app, then what the person wrote, verbatim.
+ * What the email says, once, for both of its parts: an opening, the facts
+ * (who, when in the administrators' time zone, which app), the person's words
+ * verbatim, and how to answer. The plain and HTML parts are two renderings of
+ * this and nothing else, so they cannot disagree.
  */
-function reportBody(id: string, report: ReportDoc): string {
+interface ReportContent {
+  opening: string;
+  facts: [label: string, value: string][];
+  /** The reply address, when it is one plain address (it is linked in HTML). */
+  replyTo: string | null;
+  text: string;
+  closing: string;
+}
+
+function reportContent(id: string, report: ReportDoc): ReportContent {
   const tz = REPORT_EMAIL_TIME_ZONE;
   const at = report.createdAt;
-  const when = `${dayKeyFor(at, tz)} ${timeOfDayFor(at, tz)} ${tzLabelFor(at, tz)} (${tz})`;
   const version = report.appVersion ? `version ${report.appVersion}` : 'version not given';
   const platform = report.platform ? PLATFORM_NAMES[report.platform] : 'platform not given';
+  return {
+    opening: `${report.displayName} reported a problem in ${report.app}.`,
+    facts: [
+      ['Name', report.displayName],
+      ['Email', report.email || '(none on the account)'],
+      ['Role', report.role],
+      ['User id', report.uid],
+      ['When', `${dayKeyFor(at, tz)} ${timeOfDayFor(at, tz)} ${tzLabelFor(at, tz)} (${tz})`],
+      ['App', `${report.app}, ${version}, ${platform}`],
+    ],
+    replyTo: ADDRESS.test(report.email) ? report.email : null,
+    text: report.text.replace(/\r\n|\r/g, '\n'),
+    closing:
+      `Reply to this email to answer ${report.displayName}. ` +
+      `The report is kept in the app's database as ${COLLECTIONS.reports}/${id}.`,
+  };
+}
+
+/**
+ * Plain text, one line per paragraph: a mail client wraps it to the screen it
+ * is read on, where a line broken at a fixed width breaks twice on a phone.
+ * The person's own line breaks are theirs, and kept.
+ */
+function plainBody(c: ReportContent): string {
   return [
-    `${report.displayName} reported a problem in ${report.app}.`,
+    c.opening,
     '',
-    `Name:     ${report.displayName}`,
-    `Email:    ${report.email || '(none on the account)'}`,
-    `Role:     ${report.role}`,
-    `User id:  ${report.uid}`,
-    `When:     ${when}`,
-    `App:      ${report.app}, ${version}, ${platform}`,
+    ...c.facts.map(([label, value]) => `${label}: ${value}`),
     '',
     'What they wrote:',
     '',
-    report.text,
+    c.text,
     '',
-    `Reply to this email to answer ${report.displayName}. The report is kept in the`,
-    `app's database as ${COLLECTIONS.reports}/${id}.`,
+    c.closing,
     '',
   ].join('\n');
 }
 
-/** The whole message, ready for Gmail's `raw` (base64url of exactly this). */
-export function composeReportEmail(id: string, report: ReportDoc): string {
+const HTML_ESCAPES: Record<string, string> = {
+  '&': '&amp;',
+  '<': '&lt;',
+  '>': '&gt;',
+  '"': '&quot;',
+  "'": '&#39;',
+};
+
+/** Text as HTML text: every character that could start markup or end an attribute, escaped. */
+function escapeHtml(s: string): string {
+  return s.replace(/[&<>"']/g, (ch) => HTML_ESCAPES[ch]);
+}
+
+/**
+ * The same content as plain HTML: paragraphs, the facts as a two-column
+ * table, the person's words escaped with their line breaks as `<br>`. No
+ * images, no styles, no script, and one link only: `mailto:` the reporter.
+ * Nothing the person typed reaches the markup unescaped.
+ */
+function htmlBody(c: ReportContent): string {
+  const row = ([label, value]: [string, string]) => {
+    const cell =
+      label === 'Email' && c.replyTo
+        ? // The address percent-encoded first, so a `?` or `&` in it cannot add
+          // headers (a cc, a body) to the mail a click opens.
+          `<a href="mailto:${escapeHtml(encodeURIComponent(c.replyTo).replace(/%40/g, '@'))}">${escapeHtml(value)}</a>`
+        : escapeHtml(value);
+    return `<tr><th align="left" valign="top">${escapeHtml(label)}</th><td>${cell}</td></tr>`;
+  };
+  return [
+    '<!DOCTYPE html>',
+    '<html>',
+    '<head><meta charset="utf-8"></head>',
+    '<body>',
+    `<p>${escapeHtml(c.opening)}</p>`,
+    '<table cellpadding="4" cellspacing="0">',
+    ...c.facts.map(row),
+    '</table>',
+    '<p><strong>What they wrote:</strong></p>',
+    `<p>${c.text.split('\n').map(escapeHtml).join('<br>\n')}</p>`,
+    `<p>${escapeHtml(c.closing)}</p>`,
+    '</body>',
+    '</html>',
+    '',
+  ].join('\n');
+}
+
+/** One MIME part: UTF-8, base64 in lines of 76, CRLF line ends throughout. */
+function part(contentType: string, body: string): string {
+  const crlf = body.replace(/\r\n|\r|\n/g, CRLF);
+  const encoded = (Buffer.from(crlf, 'utf8').toString('base64').match(/.{1,76}/g) ?? []).join(CRLF);
+  return [`Content-Type: ${contentType}; charset=UTF-8`, 'Content-Transfer-Encoding: base64', '', encoded].join(CRLF);
+}
+
+/** A composed report email: `raw` for Gmail, and its subject and text for a log. */
+export interface ReportEmail {
+  /** The whole RFC 5322 message, ready for Gmail's `raw` (base64url of exactly this). */
+  raw: string;
+  subject: string;
+  text: string;
+}
+
+/**
+ * The whole message: multipart/alternative, the plain text first and the HTML
+ * last (a client shows the last part it can render). The boundary cannot
+ * occur inside a part, which is base64 and so never contains a `-`.
+ */
+export function composeReportEmail(id: string, report: ReportDoc): ReportEmail {
+  const content = reportContent(id, report);
+  const subject = reportSubject(report);
+  const text = plainBody(content);
+  const boundary = `=_report_${id.replace(/[^A-Za-z0-9]/g, '')}`;
   const headers = [
     `From: ${mailbox(REPORT_MAIL.from.name, REPORT_MAIL.from.address)}`,
     `To: ${REPORT_MAIL.to}`,
     // An account always has an address; one that is not plausible gets no
     // Reply-To rather than a header that could carry something else.
-    ...(ADDRESS.test(report.email) ? [`Reply-To: ${mailbox(report.displayName, report.email)}`] : []),
-    `Subject: ${unstructured(reportSubject(report))}`,
+    ...(content.replyTo ? [`Reply-To: ${mailbox(report.displayName, content.replyTo)}`] : []),
+    `Subject: ${unstructured(subject)}`,
     'MIME-Version: 1.0',
-    'Content-Type: text/plain; charset=UTF-8',
-    'Content-Transfer-Encoding: base64',
+    `Content-Type: multipart/alternative; boundary="${boundary}"`,
   ];
-  const body = reportBody(id, report).replace(/\r\n|\r|\n/g, CRLF);
-  const encoded = (Buffer.from(body, 'utf8').toString('base64').match(/.{1,76}/g) ?? []).join(CRLF);
-  return `${headers.join(CRLF)}${CRLF}${CRLF}${encoded}${CRLF}`;
+  const raw = [
+    headers.join(CRLF),
+    '',
+    `--${boundary}`,
+    part('text/plain', text),
+    `--${boundary}`,
+    part('text/html', htmlBody(content)),
+    `--${boundary}--`,
+    '',
+  ].join(CRLF);
+  return { raw, subject, text };
 }

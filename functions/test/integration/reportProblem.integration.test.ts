@@ -74,8 +74,8 @@ function recorder(): { sent: string[]; mailer: ReportMailer } {
   const sent: string[] = [];
   return {
     sent,
-    mailer: async (message) => {
-      sent.push(message);
+    mailer: async (email) => {
+      sent.push(email.raw);
       return { status: 'sent', messageId: `msg-${sent.length}` };
     },
   };
