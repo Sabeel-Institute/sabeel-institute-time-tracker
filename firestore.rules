@@ -9,19 +9,29 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
+    // Signed in with an email and a password rather than Google. One account
+    // may do that: PASSWORD_ACCOUNT_EMAIL in @sabeel/shared, restated in
+    // isSignedIn below (functions/test/unit/signInGate.test.ts holds the two
+    // equal). A password session for any other address is treated as signed
+    // out, and a password session is never a manager or an admin, whatever its
+    // claims say. The callables apply the same two locks (functions/src/auth.ts).
+    function isPasswordSession() {
+      return request.auth.token.get('firebase', {}).get('sign_in_provider', '') == 'password';
+    }
     function isSignedIn() {
-      return request.auth != null;
+      return request.auth != null
+        && (!isPasswordSession() || request.auth.token.get('email', '') == 'app-review@oursabeel.com');
     }
     function isActive() {
       return isSignedIn() && request.auth.token.get('status', '') == 'active';
     }
     function isManager() {
-      return isActive() && request.auth.token.get('role', '') == 'manager';
+      return isActive() && !isPasswordSession() && request.auth.token.get('role', '') == 'manager';
     }
     // Only admins approve users / change roles; they need to read profiles
     // (name, email) to do it, even if they aren't managers themselves.
     function isAdmin() {
-      return isActive() && request.auth.token.get('admin', false) == true;
+      return isActive() && !isPasswordSession() && request.auth.token.get('admin', false) == true;
     }
 
     // ---- Timesheet periods (Sun–Sat weeks clipped to month boundaries) ----

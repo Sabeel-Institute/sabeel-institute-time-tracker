@@ -56,6 +56,11 @@ can ever be signed again: back it up (Faisal's vault holds a copy).
   Android app's config, with an OAuth client for the debug key and one for the
   release key.
 
+## The email-and-password account's password
+`PASSWORD_ACCOUNT_EMAIL` (`app-review@oursabeel.com`) signs in with a long
+generated password. It lives in Faisal's vault and in App Store Connect's App
+Review Information, nowhere else: never in this repo, a chat or a log.
+
 ## iOS build (the Mac and GitHub)
 `app/.env.sentry-build-plugin` (gitignored) holds `SENTRY_ORG`, `SENTRY_PROJECT`,
 `SENTRY_AUTH_TOKEN`, `IOS_TEAM_ID`, `ASC_KEY_ID`, `ASC_ISSUER_ID`, read by

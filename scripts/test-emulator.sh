@@ -17,7 +17,26 @@ fi
 
 bash "$(dirname "$0")/free-emulator-ports.sh"
 
-exec firebase emulators:exec \
+# Pass 1: rules and integration tests, against Firestore and Auth alone. They
+# call the functions' cores directly, and no trigger may run behind them.
+integration=0
+firebase emulators:exec \
   --project demo-sabeel \
   --only firestore,auth \
-  "npm run test:integration -w functions"
+  "npm run test:integration -w functions" || integration=$?
+
+# Pass 2: the auth-layer sign-in gate, which only exists when the Functions
+# emulator runs the blocking functions for the Auth emulator to call
+# (functions/test/gate). The functions emulator loads the BUILT bundle.
+gate=0
+npm run build -w functions >/dev/null
+bash "$(dirname "$0")/free-emulator-ports.sh"
+firebase emulators:exec \
+  --project demo-sabeel \
+  --only firestore,auth,functions \
+  "npm run test:gate -w functions" || gate=$?
+
+if [ "$integration" -ne 0 ] || [ "$gate" -ne 0 ]; then
+  echo "test:emulator failed: integration pass exit $integration, gate pass exit $gate" >&2
+  exit 1
+fi

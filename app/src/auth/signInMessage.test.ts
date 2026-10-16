@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { SIGN_IN_REFUSED } from '@sabeel/shared';
 import { NO_ACCOUNT_MESSAGE, signInMessage } from './signInMessage';
 
 describe('signInMessage', () => {
@@ -27,3 +28,24 @@ describe('signInMessage', () => {
     });
   });
 });
+
+describe('signInMessage for an email and password', () => {
+  it('says the same thing for a wrong password, no account, and an address the server refuses', () => {
+    const texts = [
+      { code: 'auth/invalid-credential' },
+      { code: 'auth/wrong-password' },
+      { code: 'auth/user-not-found' },
+      { code: 'auth/internal-error', message: `Firebase: HTTP Cloud Function returned an error: ${SIGN_IN_REFUSED}: password sign-in` },
+    ].map((e) => signInMessage(e));
+    expect(new Set(texts.map((t) => t.text)).size).toBe(1);
+    expect(texts.every((t) => !t.report)).toBe(true);
+  });
+
+  it('reports any other internal error, in its own words', () => {
+    expect(signInMessage({ code: 'auth/internal-error', message: 'something broke' })).toEqual({
+      text: 'something broke',
+      report: true,
+    });
+  });
+});
+

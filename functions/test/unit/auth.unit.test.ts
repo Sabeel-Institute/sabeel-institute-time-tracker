@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import type { CallableRequest } from 'firebase-functions/v2/https';
+import { PASSWORD_ACCOUNT_EMAIL } from '@sabeel/shared';
 import { requireAuth, requireActive, requireManagerOrAdmin, requireAdmin } from '../../src/auth';
 
 function req(auth: { uid: string; token: Record<string, unknown> } | null): CallableRequest {
@@ -36,3 +37,37 @@ describe('auth guards', () => {
     expect(requireAdmin(req(activeAdmin))).toBe('u3');
   });
 });
+
+/**
+ * The two server locks on the one email-and-password account
+ * (PASSWORD_ACCOUNT_EMAIL), as the callables apply them. The rules apply the
+ * same two (rules.users.test.ts).
+ */
+describe('password sessions', () => {
+  const password = (email: string, claims: Record<string, unknown>) => ({
+    uid: 'p1',
+    token: { ...claims, email, firebase: { sign_in_provider: 'password' } },
+  });
+  const google = (claims: Record<string, unknown>) => ({
+    uid: 'g1',
+    token: { ...claims, email: 'someone@oursabeel.com', firebase: { sign_in_provider: 'google.com' } },
+  });
+
+  it('are a session only for the one allowed address', () => {
+    expect(requireActive(req(password(PASSWORD_ACCOUNT_EMAIL, { status: 'active', role: 'member' })))).toBe('p1');
+    expect(() => requireAuth(req(password('someone-else@oursabeel.com', { status: 'active' })))).toThrow(
+      /Sign in required/,
+    );
+  });
+
+  it('are never a manager or an admin, whatever the claims say', () => {
+    const promoted = password(PASSWORD_ACCOUNT_EMAIL, { status: 'active', role: 'manager', admin: true });
+    expect(() => requireManagerOrAdmin(req(promoted))).toThrow(/Manager or admin/);
+    expect(() => requireAdmin(req(promoted))).toThrow(/Admin required/);
+  });
+
+  it('leave a Google session with the same claims alone', () => {
+    expect(requireAdmin(req(google({ status: 'active', role: 'manager', admin: true })))).toBe('g1');
+  });
+});
+

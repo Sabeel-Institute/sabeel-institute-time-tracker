@@ -40,7 +40,8 @@ That's the whole system. Everything below is detail.
 Open the app or website and tap **Sign in with Google**. Google's account
 chooser appears — pick your account (or "Use another account" to switch).
 There are no passwords to remember; access is entirely through your Google
-account.
+account. (**Sign in with email**, under the Google button, is not for staff
+accounts: always use Google.)
 
 **The very first time, sign in on the website**
 (https://sabeel-institute-time-tracker.web.app) with your `@oursabeel.com`

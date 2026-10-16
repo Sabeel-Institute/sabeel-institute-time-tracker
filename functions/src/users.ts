@@ -91,6 +91,20 @@ export async function applyUserAccess(callerUid: string, input: UserAccessInput)
     admin: input.admin ?? current.admin,
   };
 
+  // An account that signs in only with a password (PASSWORD_ACCOUNT_EMAIL in
+  // @sabeel/shared) is a member and nothing more. The rules and the callables
+  // already ignore a password session's roles; refusing the promotion keeps the
+  // Users screen from showing one it would never get.
+  if (next.role === 'manager' || next.admin === true) {
+    const providers = (await auth.getUser(input.uid)).providerData.map((p) => p.providerId);
+    if (providers.includes('password') && !providers.includes('google.com')) {
+      throw new HttpsError(
+        'failed-precondition',
+        'An account that signs in with an email and password can only be a member.',
+      );
+    }
+  }
+
   await auth.setCustomUserClaims(input.uid, next);
 
   // Epoch ms like every other timestamp in the shared types (see UserDoc).

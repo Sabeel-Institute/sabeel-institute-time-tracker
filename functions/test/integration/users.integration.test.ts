@@ -88,6 +88,48 @@ describe('applyUserAccess (admin approval flow)', () => {
  * pointer that outlives the role would keep routing submissions to someone no
  * longer entitled to decide. Losing eligibility must drop the pointers.
  */
+describe('applyUserAccess — an email-and-password account', () => {
+  // The one such account is made by an administrator with the Admin SDK,
+  // exactly like this (docs/STORE-RELEASE.md, "Review access").
+  async function passwordAccount() {
+    const uid = freshUid('pw');
+    await getAuth().createUser({ uid, email: `${uid}@example.com`, password: 'a-long-generated-password', emailVerified: true });
+    await getFirestore().collection('users').doc(uid).set({
+      displayName: uid,
+      email: `${uid}@example.com`,
+      photoURL: null,
+      status: 'pending',
+      role: 'member',
+      admin: false,
+      activeEntryId: null,
+      createdAt: Date.now(),
+    });
+    return uid;
+  }
+
+  it('is approved as a member, the ordinary way', async () => {
+    const admin = freshUid('admin');
+    await seedUser(admin, { status: 'active', admin: true });
+    const uid = await passwordAccount();
+    await expect(applyUserAccess(admin, { uid, status: 'active' })).resolves.toEqual({
+      status: 'active',
+      role: 'member',
+      admin: false,
+    });
+  });
+
+  it('is never made a manager or an admin', async () => {
+    const admin = freshUid('admin');
+    await seedUser(admin, { status: 'active', admin: true });
+    const uid = await passwordAccount();
+    await expect(applyUserAccess(admin, { uid, role: 'manager' })).rejects.toMatchObject({ code: 'failed-precondition' });
+    await expect(applyUserAccess(admin, { uid, admin: true })).rejects.toMatchObject({ code: 'failed-precondition' });
+    // Nothing was written on the way to the refusal.
+    expect((await getAuth().getUser(uid)).customClaims ?? {}).not.toHaveProperty('role', 'manager');
+    expect((await getFirestore().doc(`users/${uid}`).get()).data()).toMatchObject({ role: 'member', admin: false });
+  });
+});
+
 describe('applyUserAccess — approver pointer cleanup', () => {
   const approverOf = async (uid: string) =>
     (await getFirestore().collection('users').doc(uid).get()).data()?.approverUid;

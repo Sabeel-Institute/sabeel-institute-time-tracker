@@ -60,6 +60,13 @@ phase boundary.
   two row shapes. Proved on the simulator with a real sandbox push whose banner
   tap opened the week it named. Nothing raises the notification prompt by
   itself any more: Home's card and the settings screen ask, from a press.
+  **Review access** (Faisal, 2026-10-15): one email-and-password account,
+  `app-review@oursabeel.com`, an ordinary member made by an admin with Faisal as
+  its approver, behind a neutral "Sign in with email". Held there by the
+  server: blocking functions on Identity Platform refuse every password sign-up
+  and any other address's password sign-in; rules and callables never give a
+  password session a manager or admin role; setUserAccess will not promote a
+  password-only account (`docs/STORE-RELEASE.md` § 7).
 
 - 2026-08-27 — **The layout sweep (`npm run test:screens`).** This repo's
   highest-value missing test, named as such in `CLAUDE.md`, now exists:

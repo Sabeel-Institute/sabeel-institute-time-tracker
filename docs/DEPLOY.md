@@ -92,6 +92,11 @@ release commit. Two reasons it belongs there and not in your hands:
 Everything before the push is local, so a failed build or AVD check still
 recovers with `git reset --hard HEAD~1`.
 
+The sign-in gate (`beforeSignUp`, `beforeSignIn`) registers with Identity
+Platform when the functions deploy. Email/Password stays disabled until it is
+live, so the provider is never open without the gate; the one password account
+is then made with the Admin SDK (`docs/STORE-RELEASE.md` § 7).
+
 After a functions deploy, `npm run check:push` asks FCM and Apple whether they
 accept a message from the project (needs Google credentials for FCM and
 `gcloud` access to the `APNS_KEY` secret).

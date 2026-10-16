@@ -2,8 +2,8 @@
 
 The decisions behind putting the Time Tracker through Apple's App Review (and,
 when it comes, Google Play): no account creation in the phone apps, the privacy
-policy, Sign in with Apple, export compliance, the privacy manifest and the App
-Privacy answers. The iPhone build itself is `docs/IOS-BUILD.md`.
+policy, how a reviewer signs in, Sign in with Apple, export compliance, the
+privacy manifest and the App Privacy answers. The iPhone build itself is `docs/IOS-BUILD.md`.
 
 The shape is shared with the sibling apps: the Kanban
 (`sabeel-institute-kanban/docs/STORE-RELEASE.md`, the original statement of
@@ -134,8 +134,9 @@ this app: Google sign-in is accepted only for the institute's own
 `@oursabeel.com` Google Workspace accounts (enforced by `onUserCreate`, which
 deletes any other), and every account is approved by an administrator before
 it can do anything. Workspace is the institute's account system; Google is
-where it is hosted. Say so in the review notes (§ 7) rather than add Apple
-sign-in reflexively.
+where it is hosted. The one email-and-password account (§ 7) is first-party,
+made by the institute, so it changes nothing here. Say so in the review notes
+(§ 8) rather than add Apple sign-in reflexively.
 
 ### Export compliance
 
@@ -180,28 +181,94 @@ so it is not declared as Photos; and the device push token is a delivery
 address for the app's own notifications, not a tracking identifier, so it is
 not declared as Device ID (the Kanban and LMS answer the same way).
 
-## 7. Review notes
+## 7. Review access: one email-and-password member
 
-The text for App Store Connect's review notes. How a reviewer signs in is
-decided separately and added here with it.
+**The problem.** A reviewer must be able to sign in (2.1). Sign-in is Google
+with the institute's Workspace accounts, and a Workspace account cannot be
+handed to a reviewer: Google's login challenge for a sign-in from an unusual
+place goes to whoever holds the account's phone, and an administrator can lift
+it for ten minutes at most. An App Review session arrives later, from somewhere
+unusual, with nobody to answer.
+
+**Decided by Faisal, 2026-10-15** (relayed by home-lms), in three steps:
+
+- An email door for the reviewer: *"sign in thru email should never be able to
+  be an admin or manager. Just a member. No need for special data for it."*
+- *"That way there's no special code for app reviewer."* The account is made
+  and approved the ordinary way, with no script or seed for it, and its
+  timesheets go to Faisal: *"assign me as the timesheet manager for them."*
+- *"That sign in with password for kanban and timesheet should only accept that
+  one email. The sign in page shouldn't indicate its a special thing for a
+  reviewer."*
+
+**What exists.** The sign-in screen has a plain **Sign in with email** link
+under the Google button: email, password, Sign in. No sign-up, no password
+reset, and nothing that mentions reviewers. Behind it, one account,
+`app-review@oursabeel.com` (`PASSWORD_ACCOUNT_EMAIL` in `@sabeel/shared`), an
+ordinary member, held there by the server rather than the screen:
+
+| Lock | Where | Proved by |
+|---|---|---|
+| Every password **sign-up** through the public API is refused, before an account exists | `beforeSignUp` blocking function (`functions/src/signInGate.ts`); needs Identity Platform, which the project has | `functions/test/gate/signInGate.gate.test.ts`, raw REST `accounts:signUp` against the Auth emulator |
+| A password **sign-in** for any other address is refused | `beforeSignIn` blocking function | the same, with a second password account the Admin SDK made |
+| A password session for any other address is signed out; a password session is never a manager or an admin, whatever its claims | `firestore.rules` (`isSignedIn`, `isManager`, `isAdmin`) and `functions/src/auth.ts` | `rules.passwordSession.test.ts`, `auth.unit.test.ts` |
+| A password-only account cannot be promoted | `setUserAccess` (`functions/src/users.ts`) | `users.integration.test.ts` |
+
+Each denial test was shown red with its lock removed. The account sees its own
+hours and timesheets and nothing else (`rules.passwordSession.test.ts`).
+
+**The address is public, on purpose** (decided 2026-10-15): it sits in this
+repo and in the rules as a literal. Its protection is a long generated password
+plus Firebase's rate limiting, and the account can see nothing but its own
+hours, so a claim-based indirection to hide it would protect nothing.
+
+**Making the account: ordinary admin steps, no code in this repo.**
+
+1. Create it with the Admin SDK (`createUser` with the address, a long
+   generated password and `emailVerified: true`). Not the console's "Add user":
+   that makes an unverified account, which `onUserCreate` deletes as it would
+   any unverified address. The Admin SDK is not seen by the sign-up gate, which
+   is the point of the gate.
+2. `onUserCreate` provisions it pending, like any new account.
+3. Approve it as a **member** (Users screen on the web, or the same writes the
+   screen makes), and set its timesheet approver to Faisal (Users screen,
+   Approver).
+4. The password goes into Faisal's vault and into App Store Connect's review
+   notes, nowhere else.
+
+Order on production: the blocking functions deployed (they register with
+Identity Platform on deploy) **before** Email/Password is enabled, so the
+provider is never open without the gate.
+
+## 8. Review notes
+
+The text for App Store Connect's review notes. The credentials go in App Store
+Connect's sign-in fields, not in this repo.
 
 ```text
+To sign in: on the sign-in screen tap "Sign in with email" and use the
+credentials provided in the App Review Information. That account is an
+ordinary member: it records its own hours (Home > Add hours manually, or
+Clock in) and submits its week for approval (My timesheet > Submit).
+
 This app does not support account creation. Accounts are created by the
 organisation through its web application; the app refuses sign-in for any
 identity that does not already have an account, and no account is created
 from the app under any circumstance. Guideline 5.1.1(v) is therefore not
 engaged.
 
-Sign-in uses the organisation's own Google Workspace accounts
-(@oursabeel.com) only, approved by an administrator: the organisation's
-existing account system, so Guideline 4.8 does not require Sign in with Apple.
+Staff sign in with the organisation's own Google Workspace accounts
+(@oursabeel.com) only, each approved by an administrator: the organisation's
+existing account system, so Guideline 4.8 does not require Sign in with
+Apple. The email sign-in is a first-party account the organisation created;
+there is no third-party login on it.
 
 Account deletion is requested by email; the privacy policy states the
 address, the process and what is retained. The hours and timesheets people
 record are retained as the organisation's business records.
 ```
 
-## 8. What is verified, and what is not
+## 9. What is verified, and what is not
 
 - `accountExists`: five emulator tests, each "no" also counting the auth users
   afterwards (`functions/test/integration/accountExists.integration.test.ts`).

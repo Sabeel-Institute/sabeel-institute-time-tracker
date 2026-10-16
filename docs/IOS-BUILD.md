@@ -171,6 +171,10 @@ Screenshots in `~/Documents/repos/time-tracker-ios-shots/` on the Mac.
 - Sign out; "Sign in with Google" reaches Apple's web-authentication prompt
   (the URL scheme and client id are wired) and Cancel returns quietly.
 - The phone app refuses an address with no account, and creates none.
+- Sign in with email: the email account signs in to an ordinary member's Home,
+  a wrong password shows "That email and password do not match an account."
+  with the keyboard (switched on with `sim-keyboard.m`) dropped so the message
+  is visible, and the email form sits clear of the keyboard.
 - Push: the iOS row through the rules, a real sandbox push from Apple, and the
   foreground banner's tap opening the week it named (see "Push on the
   simulator").

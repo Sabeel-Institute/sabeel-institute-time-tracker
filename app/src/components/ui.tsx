@@ -160,6 +160,19 @@ export function TextLink({ label, url, align = 'left' }: { label: string; url: s
   );
 }
 
+/** The same low-emphasis shape as TextLink, for an action inside the app. */
+export function TextButton({ label, onPress, align = 'left' }: { label: string; onPress: () => void; align?: 'left' | 'center' }) {
+  return (
+    <Pressable
+      onPress={onPress}
+      accessibilityRole="button"
+      style={[styles.textLink, align === 'center' && styles.textLinkCentre]}
+    >
+      <Text style={styles.textLinkText}>{label}</Text>
+    </Pressable>
+  );
+}
+
 export function ErrorText({ error }: { error: string | null }) {
   if (!error) return null;
   return <Text style={styles.error}>{error}</Text>;

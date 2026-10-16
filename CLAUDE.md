@@ -70,10 +70,17 @@ toolchain on a fresh machine under `$HOME` with no root. See
 Do not silently change any of these.
 
 - **General-purpose time tracker** — nothing volunteer-specific in the data model.
-- **Google sign-in only, restricted to `@oursabeel.com`**, server-enforced: the
+- **Google sign-in, restricted to `@oursabeel.com`**, server-enforced: the
   `onUserCreate` function deletes non-org accounts and rules block non-org
   self-register. The client `hd` hint is UX only. Every new org account lands
   `pending`; **only admins** approve/disable users or change roles.
+- **One email-and-password account, and only one**: `PASSWORD_ACCOUNT_EMAIL`,
+  an ordinary member made by an admin, so an App Store reviewer can sign in.
+  The server holds it there (blocking functions refuse every password sign-up
+  and any other address's password sign-in; rules and callables never give a
+  password session a manager or admin role, and treat any other address's as
+  signed out). The sign-in screen says only "Sign in with email": nothing a user
+  sees mentions reviewers. `docs/STORE-RELEASE.md`, "Review access".
 - **The phone apps never create an account, and must not learn how** (iOS and
   Android alike). Both stores require in-app account DELETION only if an app
   supports account CREATION, and Play also if it merely points at a sign-up

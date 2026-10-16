@@ -17,6 +17,36 @@ export const REGION = 'us-central1';
 // hint is trivially bypassed, so the server checks above are the real gate.
 export const ALLOWED_EMAIL_DOMAIN = 'oursabeel.com';
 
+/**
+ * The ONE address that may sign in with an email and a password.
+ *
+ * Everyone else signs in with Google, on the institute's own Workspace accounts.
+ * This account exists so an App Store reviewer, who cannot pass Google's sign-in
+ * checks for a Workspace account, can open the app (docs/STORE-RELEASE.md,
+ * "Review access", decided by Faisal 2026-10-15). It is an ordinary member,
+ * made by an administrator, and the server holds it to that:
+ *
+ *  - blocking functions refuse every password sign-up (an administrator makes
+ *    the account with the Admin SDK, which they do not see) and every password
+ *    sign-in for any other address (functions/src/signInGate.ts);
+ *  - firestore.rules and the callables treat a password session for any other
+ *    address as signed out, and a password session as never a manager or an
+ *    admin; setUserAccess refuses to promote a password-only account.
+ *
+ * In this public repo on purpose (decided 2026-10-15): its protection is a long
+ * generated password and Firebase's rate limiting, and it can see nothing but
+ * its own hours. firestore.rules restates it; signInGate.test.ts holds the two
+ * equal.
+ */
+export const PASSWORD_ACCOUNT_EMAIL = 'app-review@oursabeel.com';
+
+/**
+ * The marker in a sign-in or sign-up the blocking functions refused. It reaches
+ * the client inside `auth/internal-error`'s message, and the sign-in screen
+ * looks for it to tell that refusal from any other internal error.
+ */
+export const SIGN_IN_REFUSED = 'SIGN_IN_REFUSED';
+
 // The *Web* OAuth client id (NOT the Android one) — required by native Google
 // Sign-In to mint an idToken Firebase accepts. This is the client_type 3 entry
 // from app/google-services.json (auto-created when Google sign-in was enabled).

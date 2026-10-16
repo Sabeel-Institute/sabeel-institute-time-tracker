@@ -1,11 +1,13 @@
 import { useState } from 'react';
-import { Image, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Image, Keyboard, StyleSheet, Text, TextInput, View } from 'react-native';
+import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
 import { PRIVACY_URL } from '@sabeel/shared';
 import { signInWithGoogle, REAL_GOOGLE_AVAILABLE } from '../auth/google';
 import { devSignInAsGoogle } from '../auth/devSignIn';
+import { signInWithEmail } from '../auth/email';
 import { signInMessage } from '../auth/signInMessage';
 import { USE_EMULATORS } from '../env';
-import { Button, ErrorText, TextLink } from '../components/ui';
+import { Button, ErrorText, TextButton, TextLink } from '../components/ui';
 import { captureError } from '../sentry';
 import { getTheme, spacing } from '../theme';
 import { BUILD_INFO } from '../build-info';
@@ -24,6 +26,11 @@ export function SignInScreen() {
   // Dev sign-in must use an org-domain address — the same domain gate that
   // production enforces (auth trigger + rules) applies against the emulator too.
   const [devEmail, setDevEmail] = useState('volunteer@oursabeel.com');
+  // Email and password: a plain alternative to Google, closed until asked for.
+  // There is no sign-up and no password reset behind it (see auth/email.ts).
+  const [emailOpen, setEmailOpen] = useState(false);
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
 
   // Cancellations never get here — both auth seams swallow them. What does is
   // either an answer (the phone app's refusal of an identity with no account)
@@ -43,6 +50,18 @@ export function SignInScreen() {
     }
   };
 
+  const emailSignIn = async () => {
+    // Down first: on a phone the error lands under the button, which the
+    // keyboard would otherwise still be covering.
+    Keyboard.dismiss();
+    setError(null);
+    try {
+      await signInWithEmail(email, password);
+    } catch (e) {
+      fail(e, 'signInWithEmail');
+    }
+  };
+
   const dev = async () => {
     setError(null);
     try {
@@ -56,8 +75,15 @@ export function SignInScreen() {
     }
   };
 
+  // Keyboard-aware, because the card sits mid-screen and a phone's keyboard
+  // would otherwise rise over the password field and the button under it.
   return (
-    <View style={styles.container}>
+    <KeyboardAwareScrollView
+      style={styles.screen}
+      contentContainerStyle={styles.container}
+      keyboardShouldPersistTaps="handled"
+      bottomOffset={spacing(6)}
+    >
       <Image
         source={logo}
         style={styles.logo}
@@ -68,6 +94,41 @@ export function SignInScreen() {
         <Text style={styles.title}>Time Tracker</Text>
         {(REAL_GOOGLE_AVAILABLE || !USE_EMULATORS) && (
           <Button label="Sign in with Google" onPress={google} block />
+        )}
+        {emailOpen ? (
+          <>
+            <TextInput
+              value={email}
+              onChangeText={setEmail}
+              autoCapitalize="none"
+              autoComplete="email"
+              textContentType="username"
+              inputMode="email"
+              style={styles.input}
+              placeholder="Email"
+              placeholderTextColor={t.text.muted}
+            />
+            <TextInput
+              value={password}
+              onChangeText={setPassword}
+              secureTextEntry
+              autoComplete="current-password"
+              textContentType="password"
+              style={styles.input}
+              placeholder="Password"
+              placeholderTextColor={t.text.muted}
+              onSubmitEditing={() => void emailSignIn()}
+            />
+            <Button
+              label="Sign in"
+              kind="secondary"
+              onPress={emailSignIn}
+              disabled={!email.trim() || !password}
+              block
+            />
+          </>
+        ) : (
+          <TextButton label="Sign in with email" onPress={() => setEmailOpen(true)} align="center" />
         )}
         {USE_EMULATORS && (
           <>
@@ -94,14 +155,14 @@ export function SignInScreen() {
       <Text style={styles.build}>
         v{BUILD_INFO.version} · {BUILD_INFO.commit}
       </Text>
-    </View>
+    </KeyboardAwareScrollView>
   );
 }
 
 const styles = StyleSheet.create({
+  screen: { flex: 1, backgroundColor: t.bg.canvas },
   container: {
-    flex: 1,
-    backgroundColor: t.bg.canvas,
+    flexGrow: 1,
     alignItems: 'center',
     justifyContent: 'center',
     padding: spacing(6),
@@ -133,5 +194,6 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     padding: spacing(3),
     fontSize: 15,
+    color: t.text.primary,
   },
 });
