@@ -210,8 +210,8 @@ A release on internal testing reaches the email lists ticked on the app's
 **Internal testing → Testers** page: the "Sabeel staff" list. Email lists belong
 to the Play Console developer account, not to one app, so the same list serves
 the other Sabeel apps and a change to it reaches all of them. To add a person,
-add their Google account to the list. They join once through the join link on
-that same Testers page, signed in to Play with the Google account on the list,
+add their Google account to the list. They join once through the join link
+(`https://play.google.com/apps/internaltest/4701451587936876375`, on that same Testers page and on the download page), signed in to Play with the Google account on the list,
 then install the app from Play; every later release reaches them as an update.
 A phone with a download-page APK older than 0.28.0 uninstalls it first
 ("Signing", below).
