@@ -1,5 +1,8 @@
 # Sabeel Institute Time Tracker
 
+Automatic platform builds and manual release controls are documented in
+[GitHub Actions](docs/GITHUB-ACTIONS.md).
+
 Hours tracking for a small nonprofit: an Android app, an iPhone app and a website
 built from **one Expo codebase**, on Firebase (Auth, Firestore, Cloud Functions,
 Hosting).

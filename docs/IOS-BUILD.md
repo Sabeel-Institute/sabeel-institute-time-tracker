@@ -250,7 +250,7 @@ the Mac's.
 ## Builds on GitHub
 
 `.github/workflows/ios.yml` builds the app on GitHub's macOS runners, which are
-free for a public repo. It runs only when started:
+free for a public repo. Builds run automatically on main pushes. To build manually or upload to TestFlight:
 
 ```bash
 gh workflow run ios.yml -R Sabeel-Institute/sabeel-institute-time-tracker                                   # build an .ipa

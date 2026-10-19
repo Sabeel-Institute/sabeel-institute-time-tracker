@@ -40,3 +40,4 @@ app/dist-web/
 e2e-shots/
 app/android/sentry.properties
 build-artifacts
+gha-creds-*.json

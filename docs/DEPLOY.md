@@ -1,5 +1,8 @@
 # Deploy guide
 
+Automatic platform builds and manual release controls are documented in
+[GitHub Actions](GITHUB-ACTIONS.md).
+
 How the web app, the Cloud Functions and the Android app ship, from Linux. The
 iPhone build and TestFlight are `docs/IOS-BUILD.md`; the store decisions (App
 Store, Google Play) are `docs/STORE-RELEASE.md`; every key and gitignored file
