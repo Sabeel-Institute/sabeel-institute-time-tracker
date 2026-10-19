@@ -15,7 +15,7 @@
     "serve": "npm run build && firebase emulators:start --only functions"
   },
   "dependencies": {
-    "@sentry/node": "^10.64.0",
+    "@sentry/node": "^11.8.0",
     "firebase-admin": "^13.10.0",
     "firebase-functions": "^7.4.0",
     "google-auth-library": "^10.9.1"
@@ -24,6 +24,6 @@
     "@firebase/rules-unit-testing": "^5.0.1",
     "esbuild": "^0.28.2",
     "firebase": "^12.15.0",
-    "vitest": "^4.1.10"
+    "vitest": "^4.1.11"
   }
 }
