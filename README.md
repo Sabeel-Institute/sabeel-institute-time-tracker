@@ -39,6 +39,6 @@ See `CLAUDE.md` for working rules and `docs/PRODUCT_BRIEF.md` for the full desig
 
 ## Releasing
 
-`docs/DEPLOY.md` (web, functions, Android: GitHub release, download page, Google
+`docs/DEPLOY.md` (web, functions, Android: GitHub release and Google
 Play internal testing), `docs/IOS-BUILD.md` (iPhone: TestFlight),
 `docs/STORE-RELEASE.md` (App Store and Play decisions), `docs/SECRETS.md`.

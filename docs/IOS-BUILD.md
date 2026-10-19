@@ -253,8 +253,8 @@ the Mac's.
 free for a public repo. It runs only when started:
 
 ```bash
-gh workflow run ios.yml -R faisal-shah/sabeel-institute-time-tracker                                   # build an .ipa
-gh workflow run ios.yml -R faisal-shah/sabeel-institute-time-tracker --ref v0.28.0 -f testflight=true  # build a release, upload it
+gh workflow run ios.yml -R Sabeel-Institute/sabeel-institute-time-tracker                                   # build an .ipa
+gh workflow run ios.yml -R Sabeel-Institute/sabeel-institute-time-tracker --ref v0.28.0 -f testflight=true  # build a release, upload it
 ```
 
 ```mermaid
@@ -307,7 +307,7 @@ by itself.
 **Renewal, before 16 October 2027**, when the distribution certificate and the
 three apps' App Store profiles expire. One certificate signs three apps, so its
 secrets `IOS_DIST_P12`, `IOS_DIST_P12_PASSWORD` and `IOS_PROFILE` live in three
-repos: this one, `Sabeel-Institute/lms` and `faisal-shah/sabeel-institute-kanban`,
+repos: this one, `Sabeel-Institute/lms` and `Sabeel-Institute/sabeel-institute-kanban`,
 each with its own profile ("Sabeel Time Tracker App Store CI", "Sabeel LMS App
 Store CI", "Sabeel Kanban App Store CI"). The key, certificate, `.p12`, its
 password and the three profiles are in `~/.config/sabeel-lms/ios-distribution/`
@@ -332,7 +332,7 @@ on the Linux build machine, copied in the vault at
 2. Get Faisal's go-ahead: an upload is a release.
 3. Start the workflow on that tag with `testflight=true` (the command under
    "Builds on GitHub"), and follow it with
-   `gh run watch -R faisal-shah/sabeel-institute-time-tracker`.
+   `gh run watch -R Sabeel-Institute/sabeel-institute-time-tracker`.
 4. Apple processes the upload before anyone can install it, typically minutes
    to an hour; App Store Connect, TestFlight lists the build when it is done.
 5. The internal group **"Sabeel Time Tracker Internal"** gets every build

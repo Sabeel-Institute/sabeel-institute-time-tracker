@@ -22,7 +22,7 @@ Firebase or the emulators belong there; what we built in response belongs here.
 | `npm run test:screens` | every screen at five widths, asserted — the LAYOUT sweep (in CI) |
 | `npm run knip` | dead-code audit |
 | `npm run emulators:free` | kill whatever is squatting on emulator ports |
-| `npm run release -- <version> --notes FILE` | cut a release: GitHub release, download page, Play internal testing (`docs/DEPLOY.md`) |
+| `npm run release -- <version> --notes FILE` | cut a release: GitHub release and Play internal testing (`docs/DEPLOY.md`) |
 | `npm run publish:play -- --check` / `-- --internal` | the Play gates alone / rerun the Play upload alone |
 | `npm run check:web-push` | the exported web bundle carries the VAPID key (`docs/DEPLOY.md`) |
 | `npm run check:push` | FCM and Apple accept a message from the project |
@@ -480,13 +480,13 @@ report every port free. Check by hand there: `lsof -nP -iTCP:<port>
 One command, because a hand-run release lets the version and the build stamps
 drift apart. It bumps the version in `app/app.json` (the only copy) and the
 manual's label, re-renders the manual PDF, builds both APKs and the Play bundle,
-verifies on the AVD, pushes, publishes the GitHub release and the download page,
+verifies on the AVD, pushes, publishes the GitHub release,
 and last puts the bundle on Play internal testing (`scripts/publish-play.mjs`).
 
 Guards worth keeping:
 
-- **Every channel ships the one verified build**: the GitHub release and the
-  download page (APKs), Play internal testing (the bundle). Never attach an APK
+- **Every channel ships the one verified build**: the GitHub release
+  (APKs), Play internal testing (the bundle). Never attach an APK
   to chat.
 - **Both variants, every time.** arm64-only crashes on an x86_64 emulator with
   "Unexpected CPU variant" — which is what verification runs on.
@@ -510,42 +510,13 @@ Guards worth keeping:
 `--dry-run` stops after the bump (before the commit); `--verify-only` re-runs the
 AVD check against already-built APKs.
 
-### A release is not finished until the download page points at it
+### Android distribution
 
-The team installs the APK from a public GitHub Pages site, whose link never
-changes and which says which version it serves:
+Testers install through Play internal testing:
+https://play.google.com/apps/internaltest/4701451587936876375
 
-**https://faisal-shah.github.io/sabeel-time-tracker/** — served from the
-`faisal-shah.github.io` repo, branch **`master`** (not main). It links the web
-app, the Android APK and USER-MANUAL.pdf. `publish-apk.sh` needs that repo
-cloned at `../faisal-shah.github.io` (or `TT_PAGES_DIR`): without the clone it
-uploads the APK and leaves the page's version and date as they were.
-
-**The APK is a GitHub Release ASSET, never a committed blob.** It uploads to the
-pages repo's fixed rolling tag
-`timetracker-latest`, so the download URL is permanent:
-`…/releases/download/timetracker-latest/sabeel-time-tracker-arm64-v8a.apk`.
-Only the version and publish-time stamp on the page are committed. `release.mjs`
-runs `scripts/publish-apk.sh` for this automatically; it can also be run by hand.
-
-Why an asset, not a commit: git keeps every committed version of a ~35 MB APK
-forever, and dropping them takes a force-push of a repo the Kanban publisher
-shares. An asset leaves no blob in history, nothing to drop, no force-push.
-
-The rules:
-
-- **Take the APK from the tested build, not a stale tree.** `release.mjs` passes
-  the arm64 APK it just built and verified on the AVD, in the same run — so it is
-  the artifact that was tested, not whatever `outputs/` happens to hold later.
-- **The asset filename stays unversioned** (`sabeel-time-tracker-arm64-v8a.apk`);
-  the page carries the version. `--clobber` re-uploads it to the same URL.
-  Re-versioning would break every bookmark and message pointing at the link.
-- **Never `git add` a binary to any repo.** `*.apk` is gitignored in the pages
-  repo as the backstop, and `publish-apk.sh` asserts the pages history holds
-  **zero** `.apk` blobs — the release fails if one ever reappears.
-
-Pages lags a push by ~1 minute, so verify with a cache-buster before concluding
-something broke. Only arm64 is published (covers phones from ~2016 on).
+`release.mjs` attaches APKs and the manual to the versioned Institute GitHub
+release. It does not publish to a personal site or Pages repository.
 
 ## Working with the Firebase emulators generally
 

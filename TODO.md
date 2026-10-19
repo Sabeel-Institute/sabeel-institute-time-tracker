@@ -7,6 +7,8 @@ you complete them.
 
 - [x] **Create the Firebase project** — done: `sabeel-institute-time-tracker`.
   `.firebaserc` updated.
+- [x] **Institute ownership:** `oursabeel.com` Cloud organization,
+  `faisal.shah@oursabeel.com` as Owner, Institute billing. See `docs/DEPLOY.md`.
 - [x] **Enable Google as the only sign-in provider** — done.
 - [x] **Register the Web app** — done; real config integrated into
   `app/src/firebase-config.ts`.
@@ -125,8 +127,7 @@ Testers page. `npm run release` publishes every release there
   signing, "Change key", "Export and upload a key from Java keystore".
 - [x] **Testers:** the "Sabeel staff" email list (account-wide, shared with the
   other Sabeel apps) is ticked on Internal testing → Testers (2026-10-16).
-- [ ] **Send staff the join link** (Play sends no email): `https://play.google.com/apps/internaltest/4701451587936876375`, also on
-  the download page.
+- [ ] **Send staff the join link** (Play sends no email): `https://play.google.com/apps/internaltest/4701451587936876375`.
 
 ## The stores: TestFlight, App Review, Play production
 

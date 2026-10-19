@@ -31,8 +31,7 @@ export default tseslint.config(
       // reports a dead parameter if nothing after it is used, so whether the
       // rule sees one is decided by its POSITION in the signature — the same
       // dead argument was caught in one harness and invisible in a sibling for
-      // that reason alone. Measured at zero violations once `publishDownloadPage`
-      // lost its unused `v` (2026-08-28).
+      // that reason alone.
       '@typescript-eslint/no-unused-vars': [
         'error',
         { args: 'all', argsIgnorePattern: '^_', varsIgnorePattern: '^_' },

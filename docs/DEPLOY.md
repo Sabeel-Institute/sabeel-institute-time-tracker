@@ -9,12 +9,26 @@ Production is the Firebase project `sabeel-institute-time-tracker`. It is the
 only alias in `.firebaserc`, named `dev`, and there is no default, so every
 `firebase` command here says `--project dev`.
 
-## Before your first release
+The Firebase project belongs to Sabeel Institute's `oursabeel.com` Cloud
+organization (`833557915874`), with `faisal.shah@oursabeel.com` as Owner
+and Institute billing. Authenticate Firebase CLI, gcloud and Application Default
+Credentials separately as the Institute account.
+
+Domain-restricted IAM sharing applies. Existing public callable endpoints are
+reachable; new public invoker bindings may require an approved policy exception.
+OAuth consent is External and published.
+
+Repository: `Sabeel-Institute/sabeel-institute-time-tracker`. Local clone:
+`/home/faisal/repos/Sabeel-Institute/sabeel-institute-time-tracker`. Secrets are backed up
+in `~/.config/secrets-vault/`, with live paths in `sources.tsv`. Copy and
+verify secrets when setting up a clone; deleting originals requires express
+approval.
+
+## Access and local configuration
 
 **Access.**
-- GitHub: write access to `faisal-shah/sabeel-institute-time-tracker` (push,
-  releases, Actions) and `faisal-shah/faisal-shah.github.io` (the download page
-  and its rolling APK asset); `gh auth login`.
+- GitHub: write access to `Sabeel-Institute/sabeel-institute-time-tracker` (push,
+  releases and Actions); `gh auth login`.
 - Firebase / Google Cloud: deploy rights on `sabeel-institute-time-tracker`
   (`firebase login`); `gcloud` with Application Default Credentials for
   `grant-admin.mjs` and `check:push`.
@@ -23,14 +37,8 @@ only alias in `.firebaserc`, named `dev`, and there is no default, so every
 - App Store Connect: a user on the app, for TestFlight testers
   (`docs/IOS-BUILD.md`).
 
-**Clones.**
-- This repo.
-- `faisal-shah/faisal-shah.github.io`, branch `master`, at
-  `../faisal-shah.github.io` (or `TT_PAGES_DIR` pointing at it). Without it
-  `publish-apk.sh` still uploads the APK but leaves the page's version and date
-  as they were, and says only "Published".
-- `faisal-shah/agent-skills` at `../agent-skills`, for the toolchain bootstrap
-  (`docs/DEV-TOOLING.md`, "Setting up a machine").
+**Clone.**
+- `/home/faisal/repos/Sabeel-Institute/sabeel-institute-time-tracker`.
 
 **Files outside git.** Each has a copy in the vault, `~/.config/secrets-vault/`
 (`docs/SECRETS.md`).
@@ -144,97 +152,36 @@ npm run check:web-push
 #    …plus `functions` / `firestore:rules` / `firestore:indexes` if they changed.
 ```
 
-`npm run release` bumps `app/app.json` (the only place the version lives),
-re-renders the manual PDF, builds both APK variants and the Play bundle,
-**installs the universal APK on the AVD and refuses to publish unless it is a
-production bundle** (the check that matters is the ABSENCE of the dev sign-in
-row), pushes the branch, creates the GitHub release, calls
-`scripts/publish-apk.sh`, and last puts the bundle on Google Play's internal
-testing track with `scripts/publish-play.mjs`.
+`npm run release` updates the version, renders the manual, builds APKs and
+the AAB, verifies the production APK on the AVD, pushes the release commit,
+creates the versioned Institute GitHub release, and publishes to Play internal
+testing. No personal website or Pages credentials are required.
 
-`publish-play.mjs` (`npm run publish:play -- --check`, or `-- --internal` to
-rerun the upload alone) refuses a debug-signed bundle, one that does not carry
-HEAD's commit or app.json's version, and an upload whose versionCode Play reads
-differently. It puts the build up as a draft release no tester sees, waits for
-the APKs Play generates from it, and completes the release only if they are
-signed with the app's own release key. Play Console gives every new app a
-Google-generated signing key the moment it is created; this app's is its own
-key (App integrity, App signing, "Change key", "Export and upload a key from
-Java keystore", with Google's PEPK tool), so a Play install and an APK from the
-download page update each other. APKs Play generated before a key change stay
-signed with the old key, which is what the check catches. Play keeps an app's
-first release a draft if the API may not complete it; the script says so, and
-one "Start rollout" in Play Console sends it. The publishing key is in
-`docs/SECRETS.md`.
+The tag targets the verified build commit. Deploy backend changes before their
+clients; web hosting and iOS use that same release commit.
+`--dry-run` still changes version files and renders the manual.
 
-`publish-apk.sh` updates the public download page
-(https://faisal-shah.github.io/sabeel-time-tracker/):
-
-- uploads the arm64 APK as an asset on the **fixed rolling tag**
-  `timetracker-latest`, so the download URL never changes;
-- rewrites the version **and a published date/time** on the page. The rolling
-  URL means the page is the only place a reader can tell whether what they are
-  downloading is current, so it carries `published <date>, <time> <TZ>` in local
-  time next to the version. Both are stamped by the script — never edit them by
-  hand, and if you restructure that page keep the `Current build: <strong>v…`
-  and `<time datetime="…">` anchors or the script aborts (by design).
-
-**`npm run release` pushes the branch itself**, between the AVD check and the
-GitHub release, and refuses to tag if `origin/main` does not then match the
-release commit. Two reasons it belongs there and not in your hands:
-
-- `gh release create` builds the tag server-side, so it can only point at a
-  commit the remote already has. Left to a later manual push, it tags the
-  commit *before* the release, and nothing disagrees except `git rev-parse`.
-- Deploying hosting before the push would stamp the web build with a commit that
-  is not on `main`, and the sign-in footer would disagree with the APK. Both
-  surfaces must read `v<version> · <same hash>`.
-
-Everything before the push is local, so a failed build or AVD check still
-recovers with `git reset --hard HEAD~1`.
-
-The sign-in gate (`beforeSignUp`, `beforeSignIn`) registers with Identity
-Platform when the functions deploy, and Email/Password is enabled behind it.
-The one password account is made with the Admin SDK (`docs/STORE-RELEASE.md`).
-
-After a functions deploy, `npm run check:push` asks FCM and Apple whether they
-accept a message from the project (needs Google credentials for FCM and
-`gcloud` access to the `APNS_KEY` secret).
-
-The iPhone build of the release is the iOS workflow started on its tag, with
-Faisal's go-ahead (`docs/IOS-BUILD.md`, "Releasing to TestFlight").
+`npm run publish:play -- --check` checks the bundle and Play access;
+`-- --internal` publishes it, checking version, commit and signing, including
+Play's generated APK certificates. Signing files are in `docs/SECRETS.md`.
 
 ### Play testers
 
-A release on internal testing reaches the email lists ticked on the app's
-**Internal testing → Testers** page: the "Sabeel staff" list. Email lists belong
-to the Play Console developer account, not to one app, so the same list serves
-the other Sabeel apps and a change to it reaches all of them. To add a person,
-add their Google account to the list. They join once through the join link
-(`https://play.google.com/apps/internaltest/4701451587936876375`, on that same Testers page and on the download page), signed in to Play with the Google account on the list,
-then install the app from Play; every later release reaches them as an update.
-A phone with a download-page APK older than 0.28.0 uninstalls it first
-("Signing", below).
+Add testers to the account-wide "Sabeel staff" email list and select it under
+Internal testing → Testers for this app. Send them the opt-in link:
+https://play.google.com/apps/internaltest/4701451587936876375
+They must use the Google account on the list; later releases arrive as updates.
 
 ### After shipping
-- Download page shows the new version **and a fresh timestamp** (Pages lags ~1 min):
-  `curl -s "https://faisal-shah.github.io/sabeel-time-tracker/?cb=$RANDOM" -H 'Cache-Control: no-cache' | grep -A1 'Current build'`
-- Both surfaces agree: the web bundle's `BUILD_INFO` matches the APK's.
-- `publish-play.mjs` ended with "is on the internal testing track", and Play
-  Console, Internal testing shows the release.
-- The iOS workflow on the tag, then TestFlight (`docs/IOS-BUILD.md`).
-- Record the deploy in `docs/PHASE_STATUS.md` (deploy log).
 
-Signing: release builds (the APKs and the Play bundle) sign with the app's own
-key, `~/keystores/sabeel-time-tracker-release.jks`, named by
-`~/.config/sabeel-time-tracker/keystore.properties` (`app/android/app/build.gradle`
-refuses to package a release without it). Google Play signs with the same key,
-uploaded as its app signing key, so a Play install and an APK from the download
-page update each other. APKs older than 0.28.0 are signed with the public debug
-key: a phone that has one uninstalls it once before installing a release-signed
-build, from the download page or Play (Android refuses an update signed by
-another key); nothing is lost, all data is in Firestore. Both keys' SHA-1s are
-on the Firebase Android app, so Google sign-in works on either.
+- Verify the live web and installed Android version/commit stamps.
+- Check the intended release on Play internal testing.
+- Run the iOS workflow on the release tag and check TestFlight when uploading.
+- Record release notes in `docs/PHASE_STATUS.md`.
+
+Android signing uses `~/keystores/sabeel-time-tracker-release.jks`, configured
+through `~/.config/sabeel-time-tracker/keystore.properties`. Play signs
+installed APKs with that same certificate.
 
 ## Troubleshooting
 

@@ -2,7 +2,7 @@
 /**
  * Cut an Android release: bump the version in app/app.json, re-render the
  * manual, build both APK variants and the Play bundle, verify the build on the
- * AVD, push, publish to GitHub and the download page, then to Play's internal
+ * AVD, push, publish to GitHub, then to Play's internal
  * testing. The web deploy and the iPhone build follow (docs/DEPLOY.md).
  *
  *   node scripts/release.mjs 0.29.0 --notes notes.md
@@ -11,8 +11,8 @@
  *
  * Encodes the rules this project keeps re-learning by hand:
  *
- *  - **Every channel ships the one verified build**: the GitHub release and
- *    the download page (APKs), Play internal testing (the bundle). Never
+ *  - **Every channel ships the one verified build**: the GitHub release
+ *    (APKs), Play internal testing (the bundle). Never
  *    attach an APK to chat.
  *  - **Both variants, every time.** arm64 for real phones (~36MB); universal
  *    because arm64-only crashes on an x86_64 emulator with "Unexpected CPU
@@ -211,26 +211,6 @@ function publish(v, built, notesFile) {
   sh(`gh release create v${v} --title "v${v}" --notes-file ${notesPath} ${assets}`);
 }
 
-/**
- * The public download page (GitHub Pages) is where the team installs the APK:
- * one link that never changes, and the page says which version it serves.
- *
- * The APK is a **Release asset**, never a committed blob: it uploads to the
- * pages repo's fixed rolling tag `timetracker-latest` (permanent URL) and only
- * the version LABEL on the page is committed. `scripts/publish-apk.sh` does all
- * of it and asserts the pages repo holds zero .apk blobs. (Per-release APK
- * commits once bloated that history and had to be rewritten out — see CLAUDE.md.)
- */
-function publishDownloadPage(apkPath) {
-  console.log('▸ publishing the public download page (Release asset, not a commit)');
-  sh(`bash ${join(root, 'scripts/publish-apk.sh')} ${apkPath}`);
-  console.log(
-    `  verify (Pages lags ~1 min):\n` +
-      `    curl -s "https://faisal-shah.github.io/sabeel-time-tracker/?cb=$RANDOM" \\\n` +
-      `      -H 'Cache-Control: no-cache' | grep -o 'v[0-9][^<]*'`,
-  );
-}
-
 // ---------------------------------------------------------------------------
 if (VERIFY_ONLY) {
   const v = currentVersion();
@@ -320,9 +300,6 @@ verifyOnAvd(version, built.universal);
 pushReleaseCommit(version);
 publish(version, built, notesFile);
 console.log(`\n✔ v${version} released, committed and pushed. Now: firebase deploy --only hosting --project dev.`);
-// Push the just-built, just-verified arm64 APK to the public download page as a
-// Release asset (never a commit). Same artifact, same run — provenance is tight.
-publishDownloadPage(built.arm64);
 // Last, because it is the one step that reaches every tester's phone by
 // itself. If it fails, the rest of the release stands; rerun it alone with
 // `npm run publish:play -- --internal`.

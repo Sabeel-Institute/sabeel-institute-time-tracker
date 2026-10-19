@@ -5,10 +5,10 @@
 //
 // One source of truth: app/app.json → expo.version. Gradle derives versionName
 // and versionCode from it (app/android/app/build.gradle), the manual and the
-// download page quote it, and gen-build-info.mjs stamps it into the app.
+// release notes quote it, and gen-build-info.mjs stamps it into the app.
 //
 // Enforced from `npm run lint` (so CI cannot miss it), from `web:export` (a
-// web-only deploy never touches Gradle), and from publish-apk.sh + release.mjs
+// web-only deploy never touches Gradle), and from publish-play.mjs + release.mjs
 // — the last gates before a tag and a public download exist.
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';

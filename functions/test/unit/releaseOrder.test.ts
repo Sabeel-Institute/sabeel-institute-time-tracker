@@ -36,7 +36,7 @@ const stripped = (): string =>
 
 function callOrder(): string[] {
   const src = stripped();
-  const names = ['buildApks', 'verifyOnAvd', 'pushReleaseCommit', 'publish', 'publishDownloadPage'];
+  const names = ['buildApks', 'verifyOnAvd', 'pushReleaseCommit', 'publish'];
   // Call sites only — a bare `name(` that is not `function name(`.
   return [...src.matchAll(/(?<!function\s)\b([a-zA-Z]+)\s*\(/g)]
     .map((m) => m[1])
@@ -44,6 +44,10 @@ function callOrder(): string[] {
 }
 
 describe('the release driver', () => {
+  it('does not publish to a personal Pages repository', () => {
+    expect(stripped()).not.toMatch(/publishDownloadPage|publish-apk\.sh|github\.io/);
+  });
+
   it('pushes after the build and the AVD check, and before the tag', () => {
     const order = callOrder();
     const at = (n: string) => order.indexOf(n);

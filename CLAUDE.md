@@ -8,7 +8,7 @@ the developer; the nonprofit's staff are the admins/managers in the app.
 
 **It is in production and the team uses it.** Live at
 `sabeel-institute-time-tracker.web.app` since 2026-07-16. Android: the APK from
-a public GitHub Pages download page, and Google Play internal testing for
+Google Play internal testing for
 invited staff. iPhone: TestFlight for invited staff, built on GitHub's macOS
 runners (App Store Connect app 6823429437). Destination: the App Store,
 unlisted, and Google Play production. Where it stands and the store answers:
@@ -131,7 +131,7 @@ Do not silently change any of these.
 - **The version is three integers and lives only in `app/app.json` →
   `expo.version`.** Gradle derives `versionName` and `versionCode` from it — never
   add a second copy. `scripts/check-version.mjs` enforces store legality from
-  lint/CI, `web:export`, `publish-apk.sh` and the release. A published version is
+  lint/CI, `web:export`, `publish-play.mjs` and the release. A published version is
   spent forever — never reuse one. The rule and the traps behind it are in the
   skill ("The version number is a store contract"). `expo.ios.buildNumber` stays
   `"1"`: every version goes to TestFlight once, from its own tag.
@@ -169,7 +169,7 @@ Do not silently change any of these.
 - Releases: `npm run release -- <X.Y.Z> --notes FILE` — bumps the version, rebuilds
   the manual PDF, builds both APK variants and the Play bundle, verifies the
   production bundle on the AVD, pushes, publishes the GitHub release and the
-  download page, then Play internal testing. **Never hand-bump versions.** The
+  Play internal testing. **Never hand-bump versions.** The
   web deploy follows it (`docs/DEPLOY.md`); the iPhone build of that release is
   the iOS workflow run on its tag (`docs/IOS-BUILD.md`, "Releasing to
   TestFlight").
@@ -304,10 +304,6 @@ committed by design — rules are enforced server-side. Client DSNs go in gitign
   (`app/src/liveQuery.ts`) — never hand-roll `onSnapshot` state (lint-enforced;
   see `docs/POSTMORTEM-2026-07-16-stale-week.md`). Async UI must be e2e-tested at
   least once under **injected latency**, not just localhost speed.
-- **Publishing the APK: a Release asset, NEVER committed.** The public download is
-  a GitHub Release asset on the pages repo (`faisal-shah.github.io`), fixed rolling
-  tag `timetracker-latest` — the URL never changes. `scripts/publish-apk.sh`
-  uploads the asset, stamps the version and the publish time on the page, and
-  asserts the pages repo holds ZERO `.apk` blobs. **Never `git add` a binary to
-  any repo** — committing per-release APKs bloated the pages history and had to
-  be rewritten out, twice. `*.apk` is gitignored there as the backstop.
+- **Android distribution:** Play internal testing. `release.mjs` attaches APKs
+  and the manual to the versioned Institute app release. Never commit APKs or
+  publish to a personal Pages repository.
