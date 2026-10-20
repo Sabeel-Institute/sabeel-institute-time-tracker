@@ -118,3 +118,7 @@ not require a Vitest major upgrade.
 Server-side Sentry explicitly retains restrictive data collection on v11.
 Unit tests cover the initialization policy, disabled reporting, exception flushing,
 and scheduled-job check-ins.
+
+Metro retains hierarchical dependency lookup so each package resolves its own
+compatible dependency version. Browser startup failures capture JavaScript errors
+and a screenshot; emulator runs explicitly disable external Sentry reporting.

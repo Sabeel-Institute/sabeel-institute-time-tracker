@@ -76,7 +76,7 @@ jobs:
       - name: Install Firebase CLI
         run: npm install --global firebase-tools@^15
       - name: Emulator secret placeholders
-        run: printf 'APNS_KEY=unused-in-emulator\n' > functions/.secret.local
+        run: printf 'APNS_KEY=unused-in-emulator\nSENTRY_DSN=disabled\n' > functions/.secret.local
       - name: Emulator integration tests
         run: npm run test:emulator
 
@@ -102,7 +102,7 @@ jobs:
       - name: Install Firebase CLI
         run: npm install --global firebase-tools@^15
       - name: Emulator secret placeholders
-        run: printf 'APNS_KEY=unused-in-emulator\n' > functions/.secret.local
+        run: printf 'APNS_KEY=unused-in-emulator\nSENTRY_DSN=disabled\n' > functions/.secret.local
       - name: Install Chromium
         run: npx playwright install --with-deps chromium
       - name: Screens sweep
