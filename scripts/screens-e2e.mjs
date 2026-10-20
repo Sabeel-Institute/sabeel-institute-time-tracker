@@ -240,11 +240,20 @@ const db = getFirestore();
 async function provision({ email }) {
   const ctx = await browser.newContext({ viewport: { width: 1280, height: 900 } });
   const page = await ctx.newPage();
-  await page.goto(baseUrl + '/');
-  await page.getByText('Time Tracker', { exact: true }).waitFor({ timeout: 30000 });
-  await devSignIn(page, email);
-  if (await settle(page, page.getByText('waiting for an administrator', { exact: false }))) raced += 1;
-  await ctx.close();
+  const pageErrors = [];
+  page.on('pageerror', (error) => pageErrors.push(error.stack ?? error.message));
+  try {
+    await page.goto(baseUrl + '/');
+    await page.getByText('Time Tracker', { exact: true }).waitFor({ timeout: 30000 });
+    await devSignIn(page, email);
+    if (await settle(page, page.getByText('waiting for an administrator', { exact: false }))) raced += 1;
+  } catch (error) {
+    console.error('Provisioning page errors:', pageErrors);
+    await page.screenshot({ path: join(SHOTS, 'provision-failure.png'), fullPage: true }).catch(() => {});
+    throw error;
+  } finally {
+    await ctx.close();
+  }
   const snap = await db.collection(COLLECTIONS.users).where('email', '==', email).get();
   if (snap.empty) throw new Error(`${email} was never provisioned`);
   return snap.docs[0].id;

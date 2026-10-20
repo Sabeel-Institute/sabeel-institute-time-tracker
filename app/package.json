@@ -15,8 +15,8 @@
     "@react-native-async-storage/async-storage": "2.2.0",
     "@react-native-community/datetimepicker": "9.1.0",
     "@react-native-google-signin/google-signin": "^16.1.2",
-    "@react-navigation/native": "^7.3.8",
-    "@react-navigation/native-stack": "^7.17.10",
+    "@react-navigation/native": "^7.5.1",
+    "@react-navigation/native-stack": "^7.21.0",
     "@sabeel/shared": "*",
     "@sentry/react": "^10.66.0",
     "@sentry/react-native": "~7.11.0",
@@ -32,12 +32,12 @@
     "react-native-keyboard-controller": "1.21.9",
     "react-native-safe-area-context": "~5.7.0",
     "react-native-screens": "4.25.2",
-    "react-native-web": "^0.21.2",
+    "react-native-web": "^0.21.4",
     "react-native-worklets": "0.10.0"
   },
   "devDependencies": {
     "@types/react": "~19.2.2",
     "typescript": "~6.0.3",
-    "vitest": "^4.1.10"
+    "vitest": "^4.1.11"
   }
 }
