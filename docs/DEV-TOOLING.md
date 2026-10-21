@@ -209,6 +209,25 @@ system Chrome was the only thing keeping a browser suite off a CI runner.
 **and checked**; `SWEEP_WIDTHS=320 npm run test:screens` runs one width for a
 tight loop.
 
+**Review a sweep in its report.** The sweep writes its screenshots and every
+check (`results.json`) to `e2e-shots/screens/`, emptied at the start of each run;
+`scripts/screens-report.mjs` turns them into one page: every screen at every
+width side by side, the failed checks beside the screenshot they are about,
+and what changed against a baseline sweep as before / after / difference. A
+filter narrows it to a screen or a width, or to what failed or changed.
+`manifest.json` beside the page holds the same data for an agent.
+
+```bash
+node scripts/screens-report.mjs e2e-shots/screens --baseline-from-main   # → e2e-shots/screens-report/index.html
+node scripts/screens-report.mjs e2e-shots/screens --baseline <dir of screenshots>
+```
+
+`--baseline-from-main` compares with the report of the latest successful CI
+run on main (it needs `gh`). CI builds the report on every sweep, pass or
+fail, and keeps it for 30 days as the run's `screens-report` artifact; the run
+page's summary lists the failed checks and the changed screens and gives the
+command that downloads the page: `gh run download <run id> -n screens-report`.
+
 It exists because this repo had no multi-width coverage at all: `web-e2e.mjs`
 proves the flows but looks at one 420x860 viewport, so every layout decision on
 the other side of the 700px breakpoint shipped unphotographed. It found a real

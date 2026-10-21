@@ -65,7 +65,8 @@
  * `onUserCreate` is the sole provisioner and a hand-written user doc would be a
  * shape production never produces.
  */
-import { mkdir, readFile } from 'node:fs/promises';
+import { writeFileSync } from 'node:fs';
+import { mkdir, readFile, rm } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import { initializeApp } from 'firebase-admin/app';
 import { getAuth } from 'firebase-admin/auth';
@@ -171,7 +172,7 @@ async function checkDeviceState(page, tag) {
 }
 
 function check(name, ok, detail = '') {
-  results.push({ name, ok });
+  results.push({ name, ok, ...(ok ? {} : { detail }) });
   // Detail describes the FAILURE, so it is printed only when there is one —
   // appending it to a passing line reads as the opposite of what happened.
   console.log(`  ${ok ? 'ok  ' : 'FAIL'} ${name}${!ok && detail ? ` — ${detail}` : ''}`);
@@ -218,7 +219,11 @@ const PENDING = { email: 'newcomer@oursabeel.com', name: 'Newcomer', landing: 'w
 // sees, at every width, because the tour never taps I agree.
 const UNACCEPTED = { email: 'first.day@oursabeel.com', name: 'Yusuf First-Day', landing: 'Before you continue' };
 
+// A clean folder, so the report (scripts/screens-report.mjs) shows this run's
+// screens and no other's, and the checks beside them however the run ends.
+await rm(SHOTS, { recursive: true, force: true });
 await mkdir(SHOTS, { recursive: true });
+process.on('exit', () => writeFileSync(join(SHOTS, 'results.json'), JSON.stringify(results, null, 1)));
 
 console.log('▸ building functions and web bundle (emulator mode)…');
 buildWebBundle();
