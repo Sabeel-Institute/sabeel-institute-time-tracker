@@ -166,10 +166,13 @@ Do not silently change any of these.
   emulators at `127.0.0.1`. `npm run check:ios` checks the iOS config;
   `scripts/build-ios.sh` builds an `.ipa`; `.github/workflows/ios.yml` builds on
   GitHub and, with `testflight=true` on a release tag, uploads.
-- Releases: `npm run release -- <X.Y.Z> --notes FILE` — bumps the version, rebuilds
-  the manual PDF, builds both APK variants and the Play bundle, verifies the
-  production bundle on the AVD, pushes, publishes the GitHub release and the
-  Play internal testing. **Never hand-bump versions.** The
+- Releases, in two steps because main takes changes only by pull request:
+  `npm run release -- <X.Y.Z> --notes FILE` bumps the version, rebuilds the
+  manual PDF and opens the release pull request; after Faisal merges it,
+  `npm run release -- --ship --notes FILE` on main builds both APK variants and
+  the Play bundle, verifies the production bundle on the AVD, publishes the
+  GitHub release tagged on that commit and the Play internal testing. **Never
+  hand-bump versions.** The
   web deploy follows it (`docs/DEPLOY.md`); the iPhone build of that release is
   the iOS workflow run on its tag (`docs/IOS-BUILD.md`, "Releasing to
   TestFlight").

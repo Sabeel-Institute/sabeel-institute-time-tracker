@@ -5,15 +5,16 @@ import { resolve } from 'node:path';
 /**
  * The release tags the commit it actually built.
  *
- * `gh release create` makes the tag SERVER-SIDE, so it can only point at a
- * commit the remote already has. With the push left to a human afterwards — as
- * the runbook used to say — it silently tagged the remote branch head instead,
- * which is the commit BEFORE the release. v0.26.0 and v0.27.0 both shipped that
- * way. Nothing disagreed: the release page, both APK assets, the manual and the
- * public download page were all correct, and the only witness was
- * `git rev-parse v0.26.0`.
+ * `gh release create` makes the tag SERVER-SIDE. Given no target, it tags the
+ * remote branch head, whatever that is; with the push left to a human
+ * afterwards that was the commit BEFORE the release, and v0.26.0 and v0.27.0
+ * both shipped that way. Nothing disagreed: the release page, both APK assets,
+ * the manual and the public download page were all correct, and the only
+ * witness was `git rev-parse v0.26.0`.
  *
- * So the push moved into the script, and this pins where. It is an ordering
+ * Main now takes changes only by pull request, so the version bump reaches
+ * GitHub through one, and `--ship` builds main's head after the merge. These
+ * pin the order that keeps the tag on the built commit. It is an ordering
  * assertion because ordering is the whole bug — every one of these calls being
  * present, in the wrong sequence, is exactly what shipped twice.
  *
@@ -36,7 +37,7 @@ const stripped = (): string =>
 
 function callOrder(): string[] {
   const src = stripped();
-  const names = ['buildApks', 'verifyOnAvd', 'pushReleaseCommit', 'publish'];
+  const names = ['requireMergedHead', 'buildApks', 'verifyOnAvd', 'publish'];
   // Call sites only — a bare `name(` that is not `function name(`.
   return [...src.matchAll(/(?<!function\s)\b([a-zA-Z]+)\s*\(/g)]
     .map((m) => m[1])
@@ -48,17 +49,16 @@ describe('the release driver', () => {
     expect(stripped()).not.toMatch(/publishDownloadPage|publish-apk\.sh|github\.io/);
   });
 
-  it('pushes after the build and the AVD check, and before the tag', () => {
+  it('checks the merged head, then builds and verifies, before the tag', () => {
     const order = callOrder();
     const at = (n: string) => order.indexOf(n);
 
-    // Build and verify first: everything before the push is local, so a failure
-    // there still recovers with `git reset --hard HEAD~1` instead of a force-push.
-    expect(at('buildApks')).toBeLessThan(at('pushReleaseCommit'));
-    expect(at('verifyOnAvd')).toBeLessThan(at('pushReleaseCommit'));
-
-    // The one that shipped wrong twice.
-    expect(at('pushReleaseCommit')).toBeLessThan(at('publish'));
+    // Nothing is built from a commit GitHub does not hold.
+    expect(at('requireMergedHead')).toBeGreaterThanOrEqual(0);
+    expect(at('requireMergedHead')).toBeLessThan(at('buildApks'));
+    // A build that fails the AVD check never gets a tag.
+    expect(at('buildApks')).toBeLessThan(at('publish'));
+    expect(at('verifyOnAvd')).toBeLessThan(at('publish'));
   });
 
   /**
@@ -66,16 +66,25 @@ describe('the release driver', () => {
    * A second tag-creating call added elsewhere would sidestep the ordering
    * above entirely while every assertion here stayed green.
    */
-  it('creates the tag in exactly one place', () => {
+  it('creates the tag in exactly one place, on the built commit', () => {
     // Stripped, like callOrder: the comments explain `gh release create` twice,
     // and counting those made the first draft of this fail for the wrong reason.
-    expect(stripped().match(/gh release create/g)?.length).toBe(1);
+    const creates = stripped().match(/gh release create[^`]*/g) ?? [];
+    expect(creates).toHaveLength(1);
+    expect(creates[0]).toMatch(/--target \$\{sha\}/);
   });
 
-  /** The guard that catches a push which landed on a different sha. */
-  it('compares the pushed head against the release commit', () => {
+  /** The guard that refuses a head GitHub does not hold. */
+  it('compares main against origin before building', () => {
     const src = stripped();
-    expect(src).toMatch(/git ls-remote origin refs\/heads\//);
-    expect(src).toMatch(/refusing to tag/);
+    expect(src).toMatch(/git ls-remote origin refs\/heads\/main/);
+    expect(src).toMatch(/refusing to ship/);
+  });
+
+  /** main takes changes only by pull request; the only push is the release branch. */
+  it('pushes nothing but the release branch', () => {
+    const pushes = stripped().match(/git push[^`]*/g) ?? [];
+    expect(pushes).toEqual(['git push -u origin ${branch}']);
+    expect(stripped()).toMatch(/const branch = `release\/v\$\{version\}`/);
   });
 });

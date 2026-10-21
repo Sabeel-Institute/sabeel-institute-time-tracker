@@ -3,9 +3,9 @@
 // into `prepare`, `web:export`, and the APK release) so the commit is the one
 // actually shipped. (Ported from the sibling kanban app.)
 //
-// The release (scripts/release.mjs) COMMITS the version bump before invoking this,
-// so both the APK build and the later `firebase deploy` web build stamp the same
-// release commit — the sign-in footer then matches on every surface.
+// The release (scripts/release.mjs --ship) runs this on main's merged release
+// commit, so both the APK build and the later `firebase deploy` web build stamp
+// the same commit — the sign-in footer then matches on every surface.
 import { readFileSync, writeFileSync } from 'node:fs';
 import { execSync } from 'node:child_process';
 import { resolve, dirname } from 'node:path';
