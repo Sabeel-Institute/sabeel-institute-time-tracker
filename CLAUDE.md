@@ -157,6 +157,9 @@ Do not silently change any of these.
   include it). Its false positives in this stack are documented in
   `docs/DEV-TOOLING.md` — check there before deleting anything.
 - Web: `npx expo start --web` in `app/` (emulator-backed via env flag).
+- Native flows: `bash scripts/native-e2e.sh` — the Maestro flows in `maestro/`
+  on the emulator against the debug build, the same command the Native workflow
+  runs on main pushes and release tags. `docs/DEV-TOOLING.md`.
 - Android: `scripts/emulator.sh headless` (AVD `tb_emu`), then `npx expo
   run:android` in `app/`. Firebase emulators from the AVD = `10.0.2.2`. There are
   NO physical devices. The dev sign-in row on a phone refuses an address with no
@@ -178,7 +181,8 @@ Do not silently change any of these.
   TestFlight").
 - CI (GitHub Actions): lint + typecheck + knip + unit + emulator tests + the
   layout sweep on every push. Keep it green, and **check the actual run** —
-  don't assume. No deploys from CI. `functions/test/unit/ci-coverage.test.ts`
+  don't assume. Nothing deploys on its own: Deploy Web, Deploy Functions and
+  Publish Android run only when started by hand. `functions/test/unit/ci-coverage.test.ts`
   fails if a browser suite on disk stops being run by CI.
 - **If a suite fails, first ask whether it fails on stashed changes too.** A
   clean-HEAD repro means the cause is environmental — usually a leftover emulator
