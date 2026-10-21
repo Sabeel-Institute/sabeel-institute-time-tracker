@@ -1,0 +1,80 @@
+# A day's work on Android: sign-in, the institute's rules, an activity made,
+# clocked in and out, and the manager's screens. The account comes from
+# scripts/seed-native.mjs; run by scripts/native-e2e.sh.
+appId: com.sabeelinstitute.timetracker
+name: Rules, clock in and out, and the manager screens
+---
+- launchApp:
+    clearState: true
+- extendedWaitUntil:
+    visible: "Dev \\(emulator\\) sign-in"
+    timeout: 180000
+- assertVisible: "volunteer@oursabeel.com"
+- tapOn: "Dev: sign in"
+
+# The rules come first, and I agree lets the account in.
+- extendedWaitUntil:
+    visible: "Before you continue"
+    timeout: 60000
+- assertVisible: ".*never abuse another member.*"
+- takeScreenshot: 01-rules
+- tapOn: "I agree"
+- extendedWaitUntil:
+    visible: "Salaam, .*"
+    timeout: 30000
+- runFlow:
+    when:
+      visible: "Not now"
+    commands:
+      - tapOn: "Not now"
+
+# An activity to work on.
+- scrollUntilVisible:
+    element: "Activities"
+- tapOn: "Activities"
+- tapOn: "New activity name"
+- inputText: "Teaching"
+- hideKeyboard
+- tapOn: "Add"
+- assertVisible: "Archive"
+- tapOn: "Navigate up"
+
+# Clock in on it, and out again.
+- scrollUntilVisible:
+    element: "Pick an activity"
+    direction: UP
+- tapOn: "Pick an activity"
+- tapOn: "Teaching"
+- tapOn: "Clock in"
+- extendedWaitUntil:
+    visible: "CLOCKED IN"
+    timeout: 15000
+- takeScreenshot: 02-clocked-in
+- tapOn: "Clock out"
+- extendedWaitUntil:
+    visible: "Clock in"
+    timeout: 15000
+- assertNotVisible: "CLOCKED IN"
+
+# The manager's screens open, each with something only it shows.
+- scrollUntilVisible:
+    element: "My timesheet"
+- tapOn: "My timesheet"
+- assertVisible: ".*– .*"
+- takeScreenshot: 03-timesheet
+- tapOn: "Navigate up"
+- scrollUntilVisible:
+    element: "Reports"
+- tapOn: "Reports"
+- assertVisible: "Period"
+- tapOn: "Navigate up"
+- scrollUntilVisible:
+    element: "Approvals"
+- tapOn: "Approvals"
+- assertVisible: "Assigned to me"
+- tapOn: "Navigate up"
+- scrollUntilVisible:
+    element: "Manage users"
+- tapOn: "Manage users"
+- assertVisible: "volunteer@oursabeel.com"
+- takeScreenshot: 04-users

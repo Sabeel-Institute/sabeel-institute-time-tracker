@@ -376,6 +376,38 @@ outside that block. Previously this repo and its two siblings all pinned
 one repo SIGTERMed the other's Firestore (`exited with code: 143`) — or, worse,
 silently cost it a write. See **"Emulator ports are this checkout's own"** below.
 
+## `scripts/native-e2e.sh` — Maestro flows on the Android emulator
+
+`bash scripts/native-e2e.sh` runs the Maestro flows in `maestro/` against the
+debug build: it builds and installs the APK, starts the emulators, makes the
+account the flows sign in as (`scripts/seed-native.mjs`), serves the JavaScript
+from Metro on 8081 with `EXPO_PUBLIC_USE_EMULATORS=1`, and runs every flow, or
+the one you name (`bash scripts/native-e2e.sh maestro/timesheet.yaml`). It needs
+one booted emulator (`scripts/emulator.sh headless`) and installs the pinned
+Maestro itself (`scripts/install-maestro.sh`). Screenshots, Maestro's JUnit
+report and the emulator, Metro and device logs land in `e2e-shots/native/`. It
+refuses a held 8081, since that port is shared with the sibling apps.
+
+- **The account is the dev row's own address.** The dev sign-in row on a phone
+  is filled with `volunteer@oursabeel.com` and refuses an address with no
+  account, so `seed-native.mjs` makes that account the way the row would (an
+  unsigned Google token, which the Auth emulator accepts), waits for
+  `onUserCreate`'s profile, and makes it an admin. It has not accepted the
+  rules, so the flow meets that screen. A flow never edits the field: Maestro's
+  `eraseText` deletes back from wherever the tap put the cursor.
+- **`maestro/timesheet.yaml`**: the rules and I agree, an activity made, clocked
+  in and out, then My timesheet, Reports, Approvals and Users, each checked by
+  text only that screen shows.
+- **A debug build's warning toast takes taps.** "Open debugger to view
+  warnings" sits over the tab bar whenever the app logs a warning, so the
+  runner starts Metro with `EXPO_PUBLIC_E2E=1` and `app/index.ts` then tells
+  LogBox to ignore warnings; they still reach `logs/metro.log`.
+
+The **Native** workflow runs the same command on GitHub's emulator
+(`scripts/ci-avd.sh`) on every main push, every release tag, every pull request
+that changes the flows or their scripts, and by hand, and keeps
+`e2e-shots/native/` as the `native-<sha>` artifact.
+
 ## Emulator ports are this checkout's own
 
 **This repo owns 61000–61008.** The sibling projects own 61100+ and 61200+.
