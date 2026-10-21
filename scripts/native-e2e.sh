@@ -92,7 +92,7 @@ bash scripts/free-emulator-ports.sh
   if [ -n "${ST_JDK21_HOME:-}" ]; then export JAVA_HOME="$ST_JDK21_HOME"
   elif [ -d "$HOME/opt/jdk-21" ]; then export JAVA_HOME="$HOME/opt/jdk-21"; fi
   [ -z "${JAVA_HOME:-}" ] || export PATH="$JAVA_HOME/bin:$PATH"
-  exec firebase emulators:start --project demo-sabeel --only auth,firestore,functions
+  NO_COLOR=1 exec firebase emulators:start --project demo-sabeel --only auth,firestore,functions
 ) >"$LOGS/emulators.log" 2>&1 &
 FB_PID=$!
 wait_for http://127.0.0.1:61000/ firestore 60
