@@ -21,7 +21,9 @@
   Green checks validate compilation and tested behavior, not every possible
   runtime behavior or a dependency vendor's privacy defaults.
 - **CI** runs lint, type checks, unit tests, Firebase-emulator integration tests
-  and browser regressions on main pushes and pull requests. New PR pushes cancel
+  and both browser suites (`npm run test:e2e`, the product lifecycle, and
+  `npm run test:screens`, the multi-width sweep, in parallel) on main pushes
+  and pull requests. New PR pushes cancel
   superseded CI runs. No production deployment credentials are used.
 - **Android**, **Web** and **iOS** build automatically on main pushes and can
   also be started manually. They do not run on untrusted pull requests.
