@@ -144,10 +144,15 @@ scripts/emulator.sh headless &       # the release VERIFIES on the AVD; it needs
 #     reports index serves reportProblem's five-an-hour count.
 firebase deploy --only firestore:rules,firestore:indexes,functions --project dev
 
-# 1. cut it — version is X.Y.Z, no suffix, and must increase (see check-version.mjs)
-npm run release -- 0.29.0 --notes notes.md
+# 1. open the release pull request — version is X.Y.Z, no suffix, and must
+#    increase (see check-version.mjs); Faisal merges it once its checks pass
+npm run release -- 0.29.1 --notes notes.md
 
-# 2. deploy the web from the commit the release just pushed; the predeploy
+# 2. ship the merged commit from main: build, AVD check, tag, Play internal
+git switch main && git pull --ff-only
+npm run release -- --ship --notes notes.md
+
+# 3. deploy the web from the commit the release tagged; the predeploy
 #    exports again from the same commit and env, so check before and after
 npm run web:export -w @sabeel/app && npm run check:web-push
 firebase deploy --only hosting --project dev
@@ -155,14 +160,18 @@ npm run check:web-push
 #    …plus `functions` / `firestore:rules` / `firestore:indexes` if they changed.
 ```
 
-`npm run release` updates the version, renders the manual, builds APKs and
-the AAB, verifies the production APK on the AVD, pushes the release commit,
-creates the versioned Institute GitHub release, and publishes to Play internal
-testing. No personal website or Pages credentials are required.
+`npm run release -- X.Y.Z` updates the version and renders the manual on a
+`release/vX.Y.Z` branch from origin/main, commits it and opens the pull
+request. `--ship`, on main after the merge, refuses unless main matches
+origin/main, then builds APKs and the AAB, verifies the production APK on the
+AVD, creates the versioned Institute GitHub release with its tag on that
+commit, and publishes to Play internal testing. No personal website or Pages
+credentials are required.
 
 The tag targets the verified build commit. Deploy backend changes before their
 clients; web hosting and iOS use that same release commit.
-`--dry-run` still changes version files and renders the manual.
+`--dry-run` changes the version files and renders the manual in place, with no
+branch or commit.
 
 `npm run publish:play -- --check` checks the bundle and Play access;
 `-- --internal` publishes it, checking version, commit and signing, including

@@ -22,7 +22,7 @@ Firebase or the emulators belong there; what we built in response belongs here.
 | `npm run test:screens` | every screen at five widths, asserted — the LAYOUT sweep (in CI) |
 | `npm run knip` | dead-code audit |
 | `npm run emulators:free` | kill whatever is squatting on emulator ports |
-| `npm run release -- <version> --notes FILE` | cut a release: GitHub release and Play internal testing (`docs/DEPLOY.md`) |
+| `npm run release -- <version> --notes FILE` | open a release pull request; `-- --ship --notes FILE` after the merge publishes the GitHub release and Play internal testing (`docs/DEPLOY.md`) |
 | `npm run publish:play -- --check` / `-- --internal` | the Play gates alone / rerun the Play upload alone |
 | `npm run check:web-push` | the exported web bundle carries the VAPID key (`docs/DEPLOY.md`) |
 | `npm run check:push` | FCM and Apple accept a message from the project |
@@ -477,11 +477,15 @@ report every port free. Check by hand there: `lsof -nP -iTCP:<port>
 
 ## `scripts/release.mjs`
 
-One command, because a hand-run release lets the version and the build stamps
-drift apart. It bumps the version in `app/app.json` (the only copy) and the
-manual's label, re-renders the manual PDF, builds both APKs and the Play bundle,
-verifies on the AVD, pushes, publishes the GitHub release,
-and last puts the bundle on Play internal testing (`scripts/publish-play.mjs`).
+One script, because a hand-run release lets the version and the build stamps
+drift apart. It runs in two steps, because main takes changes only by pull
+request. `npm run release -- X.Y.Z --notes FILE` bumps the version in
+`app/app.json` (the only copy) and the manual's label, re-renders the manual
+PDF, commits that on `release/vX.Y.Z` from origin/main and opens the pull
+request. After the merge, `npm run release -- --ship --notes FILE` on main
+builds both APKs and the Play bundle, verifies on the AVD, publishes the GitHub
+release, and last puts the bundle on Play internal testing
+(`scripts/publish-play.mjs`).
 
 Guards worth keeping:
 
@@ -496,19 +500,19 @@ Guards worth keeping:
   if that row is present.
 - **`versionCode` must increase**, or installs silently refuse to upgrade.
 - Refuses to run on a dirty tree, so a release is reproducible from a commit.
-- **Commits the version bump ITSELF (`v<version>`), before building**, then stamps
-  `app/src/build-info.ts` from that release commit. The APK bundles it and the
-  later `firebase deploy --only hosting` regenerates it from the SAME commit — so
-  the sign-in footer (`v<version> · <hash>`) is identical on the APK and the web.
-  Building before the commit would stamp two different commits.
-- **Pushes the branch itself**, after the AVD check and before `gh release
-  create`, and refuses to tag unless `origin` then holds the release commit
-  (`docs/DEPLOY.md`). A failure before the push recovers with `git reset --hard
-  HEAD~1`; after it, fix forward. Finish with `firebase deploy --only hosting
-  --project dev`.
+- **Builds only main's merged head.** `--ship` refuses unless the checkout is a
+  clean main identical to origin/main, then stamps `app/src/build-info.ts` from
+  that commit. The APK bundles it and the later `firebase deploy --only hosting`
+  regenerates it from the SAME commit — so the sign-in footer
+  (`v<version> · <hash>`) is identical on the APK and the web.
+- **Tags the built commit by name**: `gh release create --target <sha>`. Without
+  a target the tag lands on whatever the remote branch head is, which is how
+  v0.26.0 and v0.27.0 tagged their predecessors. A failure before the tag
+  leaves nothing published; rerun `--ship`. Finish with `firebase deploy --only
+  hosting --project dev`.
 
-`--dry-run` stops after the bump (before the commit); `--verify-only` re-runs the
-AVD check against already-built APKs.
+`--dry-run` bumps the version and renders the manual in place, with no branch or
+commit; `--verify-only` re-runs the AVD check against already-built APKs.
 
 ### Android distribution
 

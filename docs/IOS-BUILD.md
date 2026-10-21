@@ -327,8 +327,9 @@ on the Linux build machine, copied in the vault at
 
 ## Releasing to TestFlight
 
-1. Cut the release as usual (`npm run release -- X.Y.Z --notes FILE`, from
-   Linux). It tags `vX.Y.Z` on the commit Android and the web ship.
+1. Cut the release as usual (`npm run release -- X.Y.Z --notes FILE`, then
+   `--ship` after the merge, from Linux). It tags `vX.Y.Z` on the commit
+   Android and the web ship.
 2. Get Faisal's go-ahead: an upload is a release.
 3. Start the workflow on that tag with `testflight=true` (the command under
    "Builds on GitHub"), and follow it with
