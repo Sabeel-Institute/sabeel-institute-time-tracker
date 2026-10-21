@@ -149,7 +149,7 @@ Do not silently change any of these.
   asserts they agree and that the kill list reaches no further. Never widen
   `free-emulator-ports.sh` past this block. Details in `docs/DEV-TOOLING.md`.
 - Browser e2e: `npm run test:e2e` — the full product LIFECYCLE against the
-  emulators, at a 420x860 viewport.
+  emulators, at a 420x860 viewport. In CI, beside the sweep.
 - Layout sweep: `npm run test:screens` — every screen, five accounts, five widths
   straddling the breakpoint, **asserted**. In CI. `SWEEP_WIDTHS=320` runs one
   width for a tight loop. See `docs/DEV-TOOLING.md`.

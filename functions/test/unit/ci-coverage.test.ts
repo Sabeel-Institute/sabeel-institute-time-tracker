@@ -24,17 +24,10 @@ const REPO = resolve(import.meta.dirname, '../../..');
 
 /**
  * Suites CI does not run, with the reason. Everything else must have a step.
- *
- * `web-e2e.mjs` drives the entire product lifecycle — sign-up, approval, clock
- * in/out, submit, reject, resubmit, approve, report, CSV — and needs its own
- * emulator run and its own web export on top of the sweep's. Nothing *blocks* it
- * from CI any more (it moved onto Playwright's bundled Chromium with the rest of
- * `scripts/lib/e2e-stack.mjs`, so it no longer needs a system browser); keeping
- * it out is a wall-clock decision. It is run by hand instead — before pushing,
- * and after any rules change (`docs/PRODUCTION-REVIEW.md`). If it ever gets a CI
- * step, the test below fails and this entry must be deleted.
+ * Empty: both suites run in the browser job's matrix, each with its own
+ * emulator run, in parallel.
  */
-const LOCAL_ONLY = new Set(['web-e2e.mjs']);
+const LOCAL_ONLY = new Set<string>();
 
 const suitesOnDisk = () =>
   readdirSync(resolve(REPO, 'scripts')).filter((f) => f.endsWith('-e2e.mjs'));
@@ -48,11 +41,13 @@ const ci = () => readFileSync(resolve(REPO, '.github/workflows/ci.yml'), 'utf8')
  * outright left this test green, which is precisely the hole it exists to close.
  * A step is a command, not a mention of one.
  */
-const ciCommands = () =>
-  ci()
+const ciCommands = () => {
+  const workflow = ci()
     .split('\n')
     .filter((l) => !/^\s*#/.test(l))
     .join('\n');
+  return `${workflow}\n${matrixCommands(workflow)}`;
+};
 
 describe('CI browser-suite coverage', () => {
   it('runs every scripts/*-e2e.mjs suite', () => {
@@ -93,6 +88,21 @@ describe('CI browser-suite coverage', () => {
     expect(ciCommands()).toMatch(/playwright install[^\n]*chromium/);
   });
 });
+
+/**
+ * The npm scripts the browser job's matrix runs (`suite: [test:screens, …]`,
+ * each handed to `npm run "$SUITE"`), as the commands they amount to.
+ */
+function matrixCommands(workflow: string): string {
+  if (!workflow.includes('npm run "$SUITE"')) return '';
+  const list = workflow.match(/^\s*suite:\s*\[([^\]]*)\]/m)?.[1] ?? '';
+  return list
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean)
+    .map((s) => `npm run ${s}`)
+    .join('\n');
+}
 
 /**
  * A suite may be wired into CI by its path or by the npm script that wraps it —
