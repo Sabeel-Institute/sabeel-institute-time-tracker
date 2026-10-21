@@ -57,6 +57,19 @@ phase boundary.
   hit the job's 30-minute limit, now 90, with altool retried), VALID and in
   internal testing.
 
+- 2026-10-21 — **Dependency and security maintenance.** Functions (all 16)
+  deployed from `08228dd`: an unauthenticated `reportTotals` answered
+  UNAUTHENTICATED and `probeQueries` read OK on all 13 lines. `npm run
+  release` now opens a pull request for the version bump and `--ship` builds
+  the merged commit, since main takes no direct pushes. **v0.29.1** released
+  with it, tag `v0.29.1` at `ba63147`: GitHub release; Play internal testing
+  0.29.1 (29001); TestFlight 0.29.1 build 1 from the tag; hosting from the
+  Web workflow's artifact through Deploy Web. Before the release, a debug
+  build against the emulators on the AVD: sign-in, the new rules wording and
+  I agree, an activity added, clock in and out, My timesheet, Reports,
+  Approvals and Users. The release APK booted five times in a row with no
+  crash, no dev sign-in row and `v0.29.1 · ba63147`.
+
 ## Decision log
 
 - 2026-10-16 — **A slow account set-up is waited for, not refused; the report
