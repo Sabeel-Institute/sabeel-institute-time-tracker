@@ -496,8 +496,11 @@ Guards worth keeping:
   "Unexpected CPU variant" — which is what verification runs on.
 - **The production check is the ABSENCE of the dev sign-in row.** An
   emulator-mode bundle looks identical otherwise, and Metro will serve a cached
-  bundle built under different `EXPO_PUBLIC_*` env. The script fails the release
-  if that row is present.
+  bundle built under different `EXPO_PUBLIC_*` env. The AVD step is
+  `npm run check:release` on the universal APK, the check the Android workflow
+  runs on every bundle: three cold starts, each failing the release if that row
+  is present, the label is not `v<version> · <commit>`, or the device log shows
+  a crash.
 - **`versionCode` must increase**, or installs silently refuse to upgrade.
 - Refuses to run on a dirty tree, so a release is reproducible from a commit.
 - **Builds only main's merged head.** `--ship` refuses unless the checkout is a
