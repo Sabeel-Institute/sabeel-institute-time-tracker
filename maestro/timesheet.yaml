@@ -1,7 +1,7 @@
 # A day's work on Android: sign-in, the institute's rules, an activity made,
 # clocked in and out, and the manager's screens. The account comes from
 # scripts/seed-native.mjs; run by scripts/native-e2e.sh.
-appId: com.sabeelinstitute.timetracker
+appId: ${APP_ID}
 name: Rules, clock in and out, and the manager screens
 ---
 - launchApp:
@@ -37,7 +37,7 @@ name: Rules, clock in and out, and the manager screens
 - hideKeyboard
 - tapOn: "Add"
 - assertVisible: "Archive"
-- tapOn: "Navigate up"
+- runFlow: common/back.yaml
 
 # Clock in on it, and out again.
 - scrollUntilVisible:
@@ -62,17 +62,17 @@ name: Rules, clock in and out, and the manager screens
 - tapOn: "My timesheet"
 - assertVisible: ".*– .*"
 - takeScreenshot: 03-timesheet
-- tapOn: "Navigate up"
+- runFlow: common/back.yaml
 - scrollUntilVisible:
     element: "Reports"
 - tapOn: "Reports"
 - assertVisible: "Period"
-- tapOn: "Navigate up"
+- runFlow: common/back.yaml
 - scrollUntilVisible:
     element: "Approvals"
 - tapOn: "Approvals"
 - assertVisible: "Assigned to me"
-- tapOn: "Navigate up"
+- runFlow: common/back.yaml
 - scrollUntilVisible:
     element: "Manage users"
 - tapOn: "Manage users"

@@ -6,22 +6,26 @@ cd "$(dirname "$0")/.."
 # Yoga's layout, the native date and activity pickers, the keyboard — on a real
 # Android build. CI runs exactly this.
 #
-#   bash scripts/native-e2e.sh                         # every flow
+#   bash scripts/native-e2e.sh                         # every flow, Android
 #   bash scripts/native-e2e.sh maestro/timesheet.yaml  # one flow
+#   bash scripts/native-e2e.sh --ios [flow]            # the iOS simulator (macOS)
 #
-# Needs one booted emulator (scripts/emulator.sh headless here, ci-avd.sh in
-# CI) and Maestro (scripts/install-maestro.sh). Builds and installs the debug
-# APK, starts the emulators, makes the account the flows sign in as
+# Android needs one booted emulator (scripts/emulator.sh headless here,
+# ci-avd.sh in CI); iOS builds for and boots a simulator itself
+# (scripts/ios-sim-build.sh). Both need Maestro (scripts/install-maestro.sh).
+# Each flow is told the installed app's id as APP_ID. Builds and installs the
+# debug app, starts the emulators, makes the account the flows sign in as
 # (scripts/seed-native.mjs), then serves the JavaScript from Metro on 8081 with
 # EXPO_PUBLIC_USE_EMULATORS=1 and runs the flows. Screenshots and Maestro's
 # report land in e2e-shots/native/. It stops what it started; a held 8081 is
 # refused, since Metro's port is shared with the sibling apps.
 
+PLATFORM=android
+if [ "${1:-}" = --ios ]; then PLATFORM=ios; shift; fi
 FLOWS="${1:-maestro}"
 OUT="$PWD/e2e-shots/native"
 LOGS="$OUT/logs"
 METRO_PORT=8081
-APP_ID=com.sabeelinstitute.timetracker
 
 pids_on_port() { ss -lptn "sport = :$1" 2>/dev/null | grep -oP 'pid=\K[0-9]+' | sort -u || true; }
 # shellcheck disable=SC2329 # used by cleanup, the EXIT trap
@@ -41,10 +45,15 @@ stop_tree() { # stop_tree <pid>: TERM the pid and everything under it, then KILL
   kill -9 $pids 2>/dev/null || true
 }
 
-devices=$(adb devices | sed -n 's/\tdevice$//p')
-if [ "$(printf '%s\n' "$devices" | grep -c .)" -ne 1 ]; then
-  echo "native-e2e.sh: needs exactly one booted Android device; found: ${devices:-none}" >&2
-  exit 1
+if [ "$PLATFORM" = android ]; then
+  APP_ID=com.sabeelinstitute.timetracker
+  devices=$(adb devices | sed -n 's/\tdevice$//p')
+  if [ "$(printf '%s\n' "$devices" | grep -c .)" -ne 1 ]; then
+    echo "native-e2e.sh: needs exactly one booted Android device; found: ${devices:-none}" >&2
+    exit 1
+  fi
+else
+  APP_ID=$(node -p "require('./app/app.json').expo.ios.bundleIdentifier")
 fi
 command -v maestro >/dev/null || PATH="$(bash scripts/install-maestro.sh):$PATH"
 for holder in $(pids_on_port "$METRO_PORT"); do
@@ -56,11 +65,17 @@ mkdir -p "$LOGS"
 
 npm run build
 node scripts/gen-build-info.mjs
-echo "Building the debug APK…"
-( cd app/android && ./gradlew assembleDebug -PreactNativeArchitectures=x86_64 --quiet )
-apk=$(find app/android/app/build/outputs/apk/debug -name '*.apk' | grep -E 'x86_64|app-debug' | head -1)
-adb install -r "$apk" >/dev/null 2>&1 || { adb uninstall "$APP_ID" >/dev/null 2>&1 || true; adb install "$apk" >/dev/null; }
-echo "Installed $apk"
+if [ "$PLATFORM" = android ]; then
+  echo "Building the debug APK…"
+  ( cd app/android && ./gradlew assembleDebug -PreactNativeArchitectures=x86_64 --quiet )
+  apk=$(find app/android/app/build/outputs/apk/debug -name '*.apk' | grep -E 'x86_64|app-debug' | head -1)
+  adb install -r "$apk" >/dev/null 2>&1 || { adb uninstall "$APP_ID" >/dev/null 2>&1 || true; adb install "$apk" >/dev/null; }
+  echo "Installed $apk"
+else
+  echo "Building the debug app for the iOS simulator…"
+  DEVICE=$(bash scripts/ios-sim-build.sh "$OUT/ios-build")
+  echo "Installed $APP_ID on simulator $DEVICE"
+fi
 
 # shellcheck disable=SC2329 # invoked by the EXIT trap
 cleanup() {
@@ -114,13 +129,18 @@ wait_for "http://127.0.0.1:${METRO_PORT}/status" Metro 60
 # virtual path; /index.bundle is a 404.
 echo "Bundling for Android…"
 curl -sf -o /dev/null --max-time 600 \
-  "http://127.0.0.1:${METRO_PORT}/.expo/.virtual-metro-entry.bundle?platform=android&dev=true&minify=false" \
+  "http://127.0.0.1:${METRO_PORT}/.expo/.virtual-metro-entry.bundle?platform=${PLATFORM}&dev=true&minify=false" \
   || { echo "native-e2e.sh: Metro could not bundle the app; see $LOGS/metro.log" >&2; exit 1; }
 
-maestro test "$FLOWS" --format junit --output "$OUT/report.xml" --test-output-dir "$OUT" &
+maestro ${DEVICE:+--device "$DEVICE"} test "$FLOWS" -e APP_ID="$APP_ID" \
+  --format junit --output "$OUT/report.xml" --test-output-dir "$OUT" &
 MAESTRO_PID=$!
 rc=0
 wait "$MAESTRO_PID" || rc=$?
 MAESTRO_PID=
-adb logcat -d >"$LOGS/logcat.txt" 2>&1 || true
+if [ "$PLATFORM" = android ]; then
+  adb logcat -d >"$LOGS/logcat.txt" 2>&1 || true
+else
+  xcrun simctl spawn "$DEVICE" log show --last 30m --style compact 2>/dev/null | tail -n 20000 >"$LOGS/device.txt" || true
+fi
 exit "$rc"
