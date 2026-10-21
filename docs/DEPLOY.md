@@ -103,6 +103,17 @@ Done for production; this is the order for a new project.
 # Rules + indexes + functions + hosting (web). Predeploy builds the web bundle.
 firebase deploy --only firestore:rules,firestore:indexes,functions,hosting --project dev
 ```
+Functions deploy from GitHub too, and that is the usual way: **Deploy
+Functions** (`functions-deploy.yml`, `docs/GITHUB-ACTIONS.md`) deploys main
+after CI has passed on it, refuses a deploy that would delete a live function,
+and afterwards checks every callable, `probeQueries` and the error logs. It
+needs no local Google login. The same guards run here:
+```sh
+export FIREBASE_PROJECT_ID=sabeel-institute-time-tracker PROBE_TOKEN=…   # functions/.env
+node scripts/ci-functions.mjs require-ci && node scripts/ci-functions.mjs plan
+firebase deploy --only functions --project dev
+node scripts/ci-functions.mjs verify --since <the time the deploy started, ISO>
+```
 - Hosting serves `app/dist-web`, which the hosting predeploy in `firebase.json`
   rebuilds (`npm run web:export -w @sabeel/app`) on every hosting deploy.
 - **Web push needs `EXPO_PUBLIC_FCM_VAPID_KEY` in `app/.env.local`.** The key
