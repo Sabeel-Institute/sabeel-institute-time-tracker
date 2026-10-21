@@ -168,50 +168,17 @@ function buildAab() {
   sh('./gradlew bundleRelease -q', join(root, 'app/android'));
 }
 
-/** Boot the universal APK on the AVD and prove it is a PRODUCTION bundle. */
+/**
+ * Boot the universal APK on the AVD and prove it is the PRODUCTION build of
+ * this commit: scripts/check-release.mjs, the check the Android workflow runs
+ * on every bundle it builds. Three cold starts must each reach the sign-in
+ * screen and stay up, read `v<version> · <commit>`, show no dev sign-in row
+ * (an emulator-mode bundle looks identical otherwise) and leave no crash in
+ * the device log. It boots the AVD itself when none is attached.
+ */
 function verifyOnAvd(v, apk) {
-  console.log('▸ verifying on the AVD (production-mode check)…');
-  const devices = shOut('adb devices').split('\n').slice(1).filter((l) => l.includes('device'));
-  if (devices.length === 0) {
-    console.log('  no device — starting headless emulator');
-    execSync(`nohup ${join(root, 'scripts/emulator.sh')} headless >/dev/null 2>&1 &`, {
-      cwd: root,
-      env: process.env,
-    });
-    sh('adb wait-for-device');
-    execSync(
-      'timeout 240 bash -c \'until [ "$(adb shell getprop sys.boot_completed 2>/dev/null | tr -d "\\r")" = "1" ]; do sleep 3; done\'',
-      { stdio: 'inherit' },
-    );
-  }
-  sh(`adb install -r ${apk}`);
-  const pkg = 'com.sabeelinstitute.timetracker';
-  sh(`adb shell monkey -p ${pkg} 1`);
-  execSync('sleep 12');
-
-  const reportedVersion = shOut(
-    `adb shell dumpsys package ${pkg} | grep versionName | head -1`,
-  ).split('=')[1];
-  if (reportedVersion !== v) {
-    throw new Error(`installed versionName ${reportedVersion} != ${v} (stale build?)`);
-  }
-  if (!shOut(`adb shell pidof ${pkg} || true`)) {
-    throw new Error('app is not running after launch — it crashed on boot');
-  }
-
-  // The decisive production check: an emulator-mode bundle renders a dev
-  // sign-in row. Its ABSENCE is what proves the right bundle shipped.
-  execSync('adb shell uiautomator dump /sdcard/ui.xml >/dev/null 2>&1 || true');
-  const ui = shOut('adb shell cat /sdcard/ui.xml 2>/dev/null || true');
-  if (/Dev: sign in/i.test(ui)) {
-    throw new Error('DEV SIGN-IN ROW PRESENT — this is an emulator-mode bundle, do not publish');
-  }
-  if (ui && !/Sign in with Google/i.test(ui)) {
-    console.warn('  (warning: could not confirm the sign-in screen; check the screenshot)');
-  }
-  mkdirSync(OUT_DIR, { recursive: true });
-  sh(`adb exec-out screencap -p > ${join(OUT_DIR, `verify-${v}.png`)}`);
-  console.log(`  ✔ ${v} boots, production bundle confirmed`);
+  console.log(`▸ verifying ${v} on the AVD (production-mode check)…`);
+  sh(`node ${join(root, 'scripts/check-release.mjs')} ${apk} --launches 3 --out ${join(OUT_DIR, `release-check-${v}`)}`);
 }
 
 /**
