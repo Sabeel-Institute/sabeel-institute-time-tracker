@@ -398,10 +398,10 @@ refuses a held 8081, since that port is shared with the sibling apps.
 - **`maestro/timesheet.yaml`**: the rules and I agree, an activity made, clocked
   in and out, then My timesheet, Reports, Approvals and Users, each checked by
   text only that screen shows.
-- **A debug build's warning toast takes taps.** "Open debugger to view warnings"
-  sits over the bottom of the screen whenever the app logs a warning;
-  `maestro/common/dismiss-dev-warnings.yaml` closes it. Shared steps live in
-  `maestro/common/`, which Maestro does not run as flows of their own.
+- **A debug build's warning toast takes taps.** "Open debugger to view
+  warnings" sits over the tab bar whenever the app logs a warning, so the
+  runner starts Metro with `EXPO_PUBLIC_E2E=1` and `app/index.ts` then tells
+  LogBox to ignore warnings; they still reach `logs/metro.log`.
 
 The **Native** workflow runs the same command on GitHub's emulator
 (`scripts/ci-avd.sh`) on every main push, every release tag, every pull request

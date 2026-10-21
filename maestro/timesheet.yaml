@@ -27,7 +27,6 @@ name: Rules, clock in and out, and the manager screens
       visible: "Not now"
     commands:
       - tapOn: "Not now"
-- runFlow: common/dismiss-dev-warnings.yaml
 
 # An activity to work on.
 - scrollUntilVisible:
