@@ -299,6 +299,11 @@ pin exactly.
 | `IOS_BUILD_ENV` | `app/.env.sentry-build-plugin`, its `NAME=value` lines only |
 | `APP_ENV_LOCAL` | `app/.env.local`, its `NAME=value` lines only |
 
+They are secrets of the `release-build` environment, which only main and `v*`
+tags may enter (`docs/GITHUB-ACTIONS.md`, Credentials and trust). Set one with
+`gh secret set NAME --env release-build -R Sabeel-Institute/sabeel-institute-time-tracker < file`
+(`base64 -w0 file |` for the binary ones); every source is in the vault.
+
 Keep comment lines out of the multi-line secrets: GitHub masks a secret line by
 line, so a line of `#` turns every `#` in the log into `***`. The workflow also
 masks each value on its own, since a line mask does not cover a value printed
