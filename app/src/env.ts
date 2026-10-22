@@ -21,9 +21,9 @@ export const EMULATOR_HOST = Platform.OS === 'android' ? '10.0.2.2' : '127.0.0.1
  * var falls back to the old shared port and silently connects to a sibling
  * repo's emulator. A literal cannot do that.
  *
- * Three other files state these same numbers (`firebase.json`,
- * `scripts/lib/ports.mjs`, `scripts/free-emulator-ports.sh`) and
- * `functions/test/unit/emulator-ports.test.ts` asserts all four agree.
+ * They are this app's block in ci-tools (`emulators.base` in ci-tools.json),
+ * which scripts read through `sabeel-ci ports`; this file and `firebase.json`
+ * cannot, and `sabeel-ci check-app` holds both in step with it.
  */
 export const EMULATOR_PORTS = {
   auth: 61002,

@@ -101,7 +101,7 @@
       "port": 61006
     },
     "eventarc": {
-      "port": 61007
+      "port": 61009
     },
     "tasks": {
       "port": 61008

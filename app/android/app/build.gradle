@@ -22,10 +22,11 @@ def projectRoot = rootDir.getAbsoluteFile().getParentFile().getAbsolutePath()
  * is not greater than the installed one — so that release simply never goes out.
  * Widening the multipliers later is safe; narrowing them never is.
  *
- * These checks are duplicated in scripts/check-version.mjs on purpose: that one
- * must catch a web-only release that never runs Gradle, and this one must fail
- * even when nobody ran the script — which is exactly the case where a hole here
- * matters. The regex below must stay CHARACTER-IDENTICAL to the one there.
+ * These checks are duplicated in `sabeel-ci check-version` (ci-tools'
+ * lib/version.mjs) on purpose: that one must catch a web-only release that
+ * never runs Gradle, and this one must fail even when nobody ran the check —
+ * which is exactly the case where a hole here matters. The regex below must
+ * stay CHARACTER-IDENTICAL to the one there.
  *
  * It rejects leading zeros, which the naive /^\d+\.\d+\.\d+$/ accepts:
  * `2026.07.01` is three dot-separated integers, but 07 and 7 are the same
@@ -37,7 +38,7 @@ if (!expoVersion.matches(/^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/)) {
     throw new GradleException(
         "app.json version '${expoVersion}' must be exactly three integers (X.Y.Z) " +
         "with no leading zeros — no pre-release suffix, no fourth component, no " +
-        "date-style components. See scripts/check-version.mjs.")
+        "date-style components. See `sabeel-ci check-version`.")
 }
 def (vMajor, vMinor, vPatch) = expoVersion.tokenize('.').collect { it.toInteger() }
 if (vMinor > 999 || vPatch > 999 || vMajor > 2147) {
@@ -145,13 +146,14 @@ android {
      * debug keystore is public (committed here, shipped with every Android
      * SDK), and Google Play refuses a bundle signed with it. The key lives
      * outside the repo, named by `~/.config/sabeel-time-tracker/keystore.properties`
-     * (or wherever SABEEL_TT_KEYSTORE_PROPERTIES points); docs/SECRETS.md says
-     * what it is and how it is backed up. Without that file the release signing
-     * config stays empty and Gradle refuses to package a release: fail closed,
-     * never fall back to the debug key. Debug builds are unaffected.
+     * (or wherever SABEEL_KEYSTORE_PROPERTIES points, as CI's `sabeel-ci
+     * ci-platform` sets it); docs/SECRETS.md says what it is and how it is
+     * backed up. Without that file the release signing config stays empty and
+     * Gradle refuses to package a release: fail closed, never fall back to the
+     * debug key. Debug builds are unaffected.
      */
     def releaseKeyProps = new Properties()
-    def releaseKeyFile = file(System.getenv('SABEEL_TT_KEYSTORE_PROPERTIES')
+    def releaseKeyFile = file(System.getenv('SABEEL_KEYSTORE_PROPERTIES')
         ?: "${System.getProperty('user.home')}/.config/sabeel-time-tracker/keystore.properties")
     if (releaseKeyFile.exists()) {
         releaseKeyFile.withInputStream { releaseKeyProps.load(it) }
@@ -170,6 +172,32 @@ android {
                 keyAlias releaseKeyProps['keyAlias']
                 keyPassword releaseKeyProps['keyPassword']
             }
+        }
+    }
+    /**
+     * Per-ABI APKs beside the universal one, for the GitHub release.
+     *
+     * A universal APK bundles native libraries (Hermes, RN core, the Google
+     * Play-services shims) for EVERY architecture, so a phone downloads copies
+     * it can never run. The arm64 build every modern phone uses is about a
+     * third of the size. `universalApk true` keeps the everything-included
+     * artifact, which is the one `sabeel-ci release --ship` cold-starts on the
+     * x86_64 emulator. Mirrors the sibling LMS and kanban apps.
+     *
+     * Google Play takes an app bundle (`bundleRelease`), one artifact carrying
+     * every ABI from which Play makes per-device splits itself, so the splits
+     * turn themselves off for bundle tasks: with both on, the bundle fails with
+     * "Multiple shrunk-resources files found". `-PabiSplits=` overrides either
+     * way.
+     */
+    def isBundleBuild = gradle.startParameter.taskNames.any { it.toLowerCase().contains('bundle') }
+    def abiSplits = (findProperty('abiSplits') ?: (!isBundleBuild).toString()).toBoolean()
+    splits {
+        abi {
+            enable abiSplits
+            reset()
+            include 'armeabi-v7a', 'arm64-v8a', 'x86_64'
+            universalApk true
         }
     }
     buildTypes {

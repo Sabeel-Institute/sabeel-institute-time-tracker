@@ -3,15 +3,16 @@
 // Solves the chicken-and-egg of the very first admin; later grants go through
 // the in-app Users screen (setUserAccess).
 //
-// Against the emulators (default):
-//   (host:port come from scripts/lib/ports.mjs — this checkout's own block) \
-//     node scripts/grant-admin.mjs you@example.com
+// Against the emulators (default; the project and ports are ci-tools.json's,
+// read through ci-tools):
+//   node scripts/grant-admin.mjs you@example.com
 // Against production (needs gcloud ADC or GOOGLE_APPLICATION_CREDENTIALS):
 //   GCLOUD_PROJECT=<real-project-id> node scripts/grant-admin.mjs you@example.com
 import { initializeApp } from 'firebase-admin/app';
 import { getAuth } from 'firebase-admin/auth';
 import { getFirestore } from 'firebase-admin/firestore';
-import { EMULATOR_PORTS } from './lib/ports.mjs';
+import { config } from '@sabeel-institute/ci-tools/lib/config.mjs';
+import { ports } from '@sabeel-institute/ci-tools/lib/ports.mjs';
 
 const email = process.argv[2];
 if (!email) {
@@ -19,10 +20,12 @@ if (!email) {
   process.exit(1);
 }
 
-const projectId = process.env.GCLOUD_PROJECT ?? 'demo-sabeel';
-if (projectId === 'demo-sabeel' && !process.env.FIRESTORE_EMULATOR_HOST) {
-  process.env.FIRESTORE_EMULATOR_HOST = `127.0.0.1:${EMULATOR_PORTS.firestore}`;
-  process.env.FIREBASE_AUTH_EMULATOR_HOST = `127.0.0.1:${EMULATOR_PORTS.auth}`;
+const settings = config(new URL('..', import.meta.url).pathname);
+const projectId = process.env.GCLOUD_PROJECT ?? settings.emulators.project;
+if (projectId === settings.emulators.project && !process.env.FIRESTORE_EMULATOR_HOST) {
+  const { firestore, auth } = ports(settings);
+  process.env.FIRESTORE_EMULATOR_HOST = `127.0.0.1:${firestore}`;
+  process.env.FIREBASE_AUTH_EMULATOR_HOST = `127.0.0.1:${auth}`;
 }
 
 initializeApp({ projectId });

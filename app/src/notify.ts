@@ -205,7 +205,7 @@ export async function registerPush(uid: string, prompt = false): Promise<boolean
     // FCM has no emulator, so an Android token minted here could never be
     // delivered to and would make local runs non-deterministic. An iPhone's is
     // different: the simulator's token is real and Apple's sandbox delivers to
-    // it (scripts/send-test-push.mjs --apple), so an emulator build registers it
+    // it (`npx sabeel-ci send-test-push --apple`), so an emulator build registers it
     // and the rules see the row; the emulated functions themselves send nothing
     // (functions/src/messaging.ts). BELOW the channel setup and the prompt, and
     // that placement is the point: with this on the first line an

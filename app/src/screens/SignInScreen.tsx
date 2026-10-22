@@ -140,7 +140,9 @@ export function SignInScreen() {
         )}
         {USE_EMULATORS && (
           <>
-            <Text style={styles.devLabel}>Dev (emulator) sign-in</Text>
+            <Text style={styles.devLabel} testID="dev-sign-in">
+              Dev sign-in (emulator only)
+            </Text>
             <TextInput
               value={devEmail}
               onChangeText={setDevEmail}
@@ -159,7 +161,7 @@ export function SignInScreen() {
       <TextLink label="Privacy policy" url={PRIVACY_URL} align="center" />
       {/* Which build is running — so "what version are you on?" is answerable
           from the screen everyone sees. Stamped at build time by
-          scripts/gen-build-info.mjs. */}
+          `sabeel-ci build-info`. */}
       <Text style={styles.build}>
         v{BUILD_INFO.version} · {BUILD_INFO.commit}
       </Text>
