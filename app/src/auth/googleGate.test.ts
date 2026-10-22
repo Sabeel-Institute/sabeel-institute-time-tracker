@@ -93,6 +93,23 @@ describe('the native Google door', () => {
     expect(signInWithCredential).not.toHaveBeenCalled();
   });
 
+  it('clears the remembered Google account when the server cannot answer, so a retry opens the chooser', async () => {
+    accountExists.mockRejectedValue(Object.assign(new Error('internal'), { code: 'functions/internal' }));
+
+    await expect(signInWithGoogle()).rejects.toMatchObject({ code: 'functions/internal' });
+
+    expect(googleSdkSignOut).toHaveBeenCalledTimes(1);
+  });
+
+  it('clears it too when the exchange itself fails', async () => {
+    accountExists.mockResolvedValue({ data: { exists: true } });
+    signInWithCredential.mockRejectedValue(Object.assign(new Error('network'), { code: 'auth/network-request-failed' }));
+
+    await expect(signInWithGoogle()).rejects.toMatchObject({ code: 'auth/network-request-failed' });
+
+    expect(googleSdkSignOut).toHaveBeenCalledTimes(1);
+  });
+
   it('gates the dev sign-in the same way (exchangeGoogleIdToken)', async () => {
     accountExists.mockResolvedValue({ data: { exists: false } });
 

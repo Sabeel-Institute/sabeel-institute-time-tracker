@@ -97,8 +97,12 @@ export async function signInWithGoogle(): Promise<void> {
       await exchangeGoogleIdToken(idToken);
     } catch (e) {
       // Google still remembers the chosen account, and signIn() would silently
-      // reuse it, so somebody who picked the wrong one could never switch.
-      if (e instanceof NoAccountError) await googleSignOut().catch(() => undefined);
+      // reuse it. After any failed exchange the next tap must open the chooser
+      // again: somebody who picked the wrong account could otherwise never
+      // switch, and somebody whose sign-in the server could not answer would
+      // retry into the same failure with no chooser to show the tap did
+      // anything (2026-10-22, when every function stopped starting).
+      await googleSignOut().catch(() => undefined);
       throw e;
     }
   } catch (e) {
