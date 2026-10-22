@@ -16,11 +16,11 @@ name: Rules, clock in and out, and the manager screens
 - extendedWaitUntil:
     visible: "Before you continue"
     timeout: 60000
-- assertVisible: ".*never abuse another member.*"
+- assertVisible: "[\\s\\S]*never abuse another member[\\s\\S]*"
 - takeScreenshot: 01-rules
 - tapOn: "I agree"
 - extendedWaitUntil:
-    visible: "Salaam, .*"
+    visible: "Salaam, [\\s\\S]*"
     timeout: 30000
 - runFlow:
     when:
@@ -41,10 +41,10 @@ name: Rules, clock in and out, and the manager screens
 
 # Clock in on it, and out again.
 - scrollUntilVisible:
-    element: "Pick an activity"
+    element: "Pick an activity[\\s\\S]*"
     direction: UP
-- tapOn: "Pick an activity"
-- tapOn: "Teaching.*"
+- tapOn: "Pick an activity[\\s\\S]*"
+- tapOn: "Teaching[\\s\\S]*"
 - tapOn: "Clock in"
 - extendedWaitUntil:
     visible: "CLOCKED IN"
@@ -60,7 +60,7 @@ name: Rules, clock in and out, and the manager screens
 - scrollUntilVisible:
     element: "My timesheet"
 - tapOn: "My timesheet"
-- assertVisible: ".*– .*"
+- assertVisible: "[\\s\\S]*– [\\s\\S]*"
 - takeScreenshot: 03-timesheet
 - runFlow: common/back.yaml
 - scrollUntilVisible:
@@ -76,5 +76,5 @@ name: Rules, clock in and out, and the manager screens
 - scrollUntilVisible:
     element: "Manage users"
 - tapOn: "Manage users"
-- assertVisible: ".*volunteer@oursabeel.com.*"
+- assertVisible: "[\\s\\S]*volunteer@oursabeel.com[\\s\\S]*"
 - takeScreenshot: 04-users
