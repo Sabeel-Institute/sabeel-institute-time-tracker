@@ -555,19 +555,31 @@ async function main() {
   if ((await reminderState()) !== true) throw new Error('reminder pref should default ON');
   await lastOnScreen(vol.locator('[role="switch"]')).click();
   /*
-   * WAIT FOR THE WRITE TO LAND BEFORE NAVIGATING.
+   * WAIT FOR THE SERVER TO HOLD THE WRITE BEFORE NAVIGATING.
    *
    * The toggle fires `updateDoc` and returns; navigating immediately can tear
    * the page down with the write still unsent, and the reload below then reads
    * back the pref unchanged — which looks exactly like "the pref did not
-   * persist", i.e. like the bug this check exists to catch. The switch is
-   * driven by the profile listener, not by local state, so it reading OFF is
-   * proof the write round-tripped through Firestore.
+   * persist", i.e. like the bug this check exists to catch. The switch reading
+   * OFF proves nothing here: the profile listener delivers the page's own
+   * write at once, before the server has it, and on a slow CI runner the
+   * reload overtook it. So the stored document is read until it says OFF.
    */
   await vol.waitForFunction(() => {
     const sws = document.querySelectorAll('[role="switch"]');
     return sws.length > 0 && sws[sws.length - 1].checked === false;
   }, undefined, { timeout: 15000 });
+  const reminderStored = async () => {
+    const res = await fetch(
+      `http://${EMULATOR_HOSTS.firestore}/v1/projects/${PROJECT}/databases/(default)/documents/users/${volUid}`,
+      { headers: { Authorization: 'Bearer owner' } },
+    );
+    return (await res.json()).fields?.notifPrefs?.mapValue?.fields?.reminder?.booleanValue;
+  };
+  for (let waited = 0; (await reminderStored()) !== false; waited += 250) {
+    if (waited >= 15000) throw new Error('the reminder switch went OFF but the server never stored it');
+    await vol.waitForTimeout(250);
+  }
   // Reload → the pref must come back OFF from Firestore, not local state.
   await vol.goto(baseUrl + '/');
   await vol.getByText('Salaam,', { exact: false }).waitFor({ timeout: 45000 });
