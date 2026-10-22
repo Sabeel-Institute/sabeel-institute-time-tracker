@@ -3,6 +3,7 @@ import { initializeApp, getApps } from 'firebase-admin/app';
 import { getAuth } from 'firebase-admin/auth';
 import { getFirestore } from 'firebase-admin/firestore';
 import { applyProvision } from '../../src/authTrigger';
+import { EMULATOR_PROJECT_ID } from '@sabeel/shared';
 
 // Runs under `firebase emulators:exec` (firestore + auth). We invoke the trigger's
 // extracted core directly — the same pattern as users.integration.test.ts driving
@@ -10,7 +11,7 @@ import { applyProvision } from '../../src/authTrigger';
 // the real trigger on sign-in is covered by scripts/web-e2e.mjs.
 
 beforeAll(() => {
-  if (getApps().length === 0) initializeApp({ projectId: 'demo-sabeel' });
+  if (getApps().length === 0) initializeApp({ projectId: EMULATOR_PROJECT_ID });
 });
 
 function freshUid(prefix: string): string {

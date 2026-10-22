@@ -326,12 +326,15 @@ committed by design — rules are enforced server-side. Client DSNs go in gitign
 - All repo artifacts (docs, plans, protocols) live in this repo.
 - **User-visible changes ship with their documentation in the same batch as the
   code** — update `docs/USER-MANUAL.md`, regenerate the affected
-  `docs/manual/img/` screenshots and the PDF via `docs/render-manual.py`, and
-  update PRODUCT_BRIEF/PHASE_STATUS. Never let the manual lag a release.
+  `docs/manual/img/` screenshots and the PDF via `npx sabeel-ci render-manual`
+  (needs `uv` and `google-chrome`), and update PRODUCT_BRIEF/PHASE_STATUS.
+  Never let the manual lag a release.
 - **Live Firestore reads in `app/src` go through `useLiveQuery`/`useLiveDoc`**
   (`app/src/liveQuery.ts`) — never hand-roll `onSnapshot` state (lint-enforced;
-  see `docs/POSTMORTEM-2026-07-16-stale-week.md`). Async UI must be e2e-tested at
-  least once under **injected latency**, not just localhost speed.
+  see `docs/POSTMORTEM-2026-07-16-stale-week.md`). Both take `make` then `deps`
+  first, the shape `react-hooks/exhaustive-deps` checks, so a subscription
+  input missing from `deps` fails lint. Async UI must be e2e-tested at least
+  once under **injected latency**, not just localhost speed.
 - **Android distribution:** Play internal testing. `sabeel-ci release --ship`
   attaches APKs and the manual to the versioned Institute app release. Never
   commit APKs or publish to a personal Pages repository.

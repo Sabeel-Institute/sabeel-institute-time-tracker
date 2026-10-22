@@ -6,10 +6,10 @@ import { PRIVACY_URL, SUPPORT_URL, WEB_APP_ORIGIN } from '@sabeel/shared';
 /**
  * The pages a store reviewer reads, and the ways they break silently.
  *
- * `**` sends every path to the SPA, so a `/privacy` rewrite listed after it,
- * or one pointing at a file nobody wrote, answers 200 with the app shell: a
- * reviewer finds no policy and nothing here looks broken. And the app's link
- * has to agree with the rewrite.
+ * The catch-all (`!/_expo/**`) sends every other path to the SPA, so a
+ * `/privacy` rewrite listed after it, or one pointing at a file nobody wrote,
+ * answers 200 with the app shell: a reviewer finds no policy and nothing here
+ * looks broken. And the app's link has to agree with the rewrite.
  *
  * Plus the one rule the support page exists to keep out of the app: it tells a
  * newcomer to sign in on the website first, which the app itself may not say

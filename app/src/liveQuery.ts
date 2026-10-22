@@ -55,14 +55,29 @@ export function useListenerError(): string | null {
 }
 // ---------------------------------------------------------------------------
 
-/** Live query results. `make`/`map` are called fresh per (re)subscription;
- *  a null query means "not subscribed" (e.g. role-gated queries) → `empty`. */
+/** How a live hook names, maps and empties what it subscribes to. */
+interface LiveOptions<S, T> {
+  /** Names the listener in the error banner and in Sentry. */
+  label: string;
+  map: (snap: S) => T;
+  /** The value while loading, on error, and when `make` returns null. */
+  empty: T;
+}
+
+/**
+ * Live query results. `make`/`map` are called fresh per (re)subscription;
+ * a null query means "not subscribed" (e.g. role-gated queries) → `empty`.
+ *
+ * ARGUMENT ORDER IS LOAD-BEARING. `make` first and `deps` second is the only
+ * shape `react-hooks/exhaustive-deps` can read (eslint.config.mjs), and that
+ * rule is what mechanically proves every live screen resubscribes when its
+ * inputs change. Everything else is options so these two stay where the rule
+ * looks: move them and the check goes quiet without failing.
+ */
 export function useLiveQuery<T>(
-  label: string,
   make: () => Query | null,
-  map: (snap: QuerySnapshot) => T,
-  empty: T,
   deps: readonly unknown[],
+  { label, map, empty }: LiveOptions<QuerySnapshot, T>,
 ): T {
   const [value, setValue] = useState<T>(empty);
   useEffect(() => {
@@ -81,18 +96,21 @@ export function useLiveQuery<T>(
       },
     );
     // deps are the caller's subscription inputs; make/map/empty are per-render
-    // closures over exactly those inputs.
+    // closures over exactly those inputs. This hook's contract IS a
+    // caller-supplied dep list, so the rule cannot check it here; obeying it
+    // would add make/map/empty, rebuilt every render, and re-open the listener
+    // on every render of every live screen. Callers get no exemption: the rule
+    // holds their `deps` to everything their `make` reads.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, deps);
   return value;
 }
 
-/** Live single document. `empty` is the value while loading / on error / missing-ref. */
+/** Live single document; argument order as useLiveQuery's, for the same rule. */
 export function useLiveDoc<T>(
-  label: string,
   make: () => DocumentReference | null,
-  map: (snap: DocumentSnapshot) => T,
-  empty: T,
   deps: readonly unknown[],
+  { label, map, empty }: LiveOptions<DocumentSnapshot, T>,
 ): T {
   const [value, setValue] = useState<T>(empty);
   useEffect(() => {
@@ -110,6 +128,8 @@ export function useLiveDoc<T>(
         reportListenerError(label, e);
       },
     );
+    // As in useLiveQuery: the caller's deps, which the rule checks at the call.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, deps);
   return value;
 }

@@ -7,6 +7,7 @@ import {
   type RulesTestEnvironment,
 } from '@firebase/rules-unit-testing';
 import { addDoc, collection, deleteDoc, doc, getDocs, setDoc, updateDoc } from 'firebase/firestore';
+import { EMULATOR_PROJECT_ID } from '@sabeel/shared';
 
 let testEnv: RulesTestEnvironment;
 
@@ -28,7 +29,7 @@ beforeAll(async () => {
   if (!host) throw new Error('FIRESTORE_EMULATOR_HOST is unset — run via npm run test:emulator');
   const fs = host.split(':');
   testEnv = await initializeTestEnvironment({
-    projectId: 'demo-sabeel',
+    projectId: EMULATOR_PROJECT_ID,
     firestore: {
       host: fs[0],
       port: Number(fs[1]),

@@ -33,12 +33,7 @@ vi.mock('./sentry', () => ({ captureError: vi.fn() }));
 
 import { getToken, isSupported } from 'firebase/messaging';
 import { setDoc } from 'firebase/firestore';
-
-// Read at module scope by notify.web.ts, so it has to be in place before the
-// import below — hence the dynamic import rather than a static one.
-process.env.EXPO_PUBLIC_FCM_VAPID_KEY = 'test-vapid-public-key';
-const { canOpenPushSettings, enablePush, openPushSettings, registerPush, pushPromptState } =
-  await import('./notify.web');
+import { canOpenPushSettings, enablePush, openPushSettings, registerPush, pushPromptState } from './notify.web';
 
 const asMock = (fn: unknown) => fn as ReturnType<typeof vi.fn>;
 

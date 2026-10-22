@@ -60,13 +60,11 @@ Android push works out of the box. The website needed a Web Push certificate,
 and it has one.
 
 - [x] Web Push certificate generated (Firebase console → **Project settings** →
-  **Cloud Messaging** → *Web configuration* → **Web Push certificates**) and
-  living in `app/.env.local` as `EXPO_PUBLIC_FCM_VAPID_KEY`.
-- [ ] **Confirm a web push actually arrives, after the next deploy.** The key
-  reaches the bundle from the environment that runs `expo export`, so run
-  `npm run check:web-push` between the export and the deploy — a keyless build
-  makes every device report that it cannot receive notifications, and nothing
-  else looks wrong.
+  **Cloud Messaging** → *Web configuration* → **Web Push certificates**); its
+  public key is committed as `VAPID_PUBLIC_KEY` in `app/src/firebase-config.ts`.
+- [ ] **Confirm a web push actually arrives, after the next deploy.**
+- [ ] **Drop `EXPO_PUBLIC_FCM_VAPID_KEY`** from `app/.env.local`, its vault copy
+  and the `APP_ENV_LOCAL` secret: nothing reads it.
 
   On the site: a browser that has never been asked shows **Enable
   notifications**, on Home and on Notification settings. That is expected, not a
@@ -99,8 +97,19 @@ redeploys:
   events flowing with user ids.
 - [x] Native @sentry/react-native wired 2026-07-17 (v1.0.0-beta.11) — Android
   crashes/ANRs/errors report with user ids.
-- [x] **Readable release stack traces** — `app/android/sentry.properties` in
-  place; source-map upload verified 2026-07-18 (`4c6750a`).
+- [ ] **The Sentry setup every Sabeel app shares** (ci-tools README, "Sentry"),
+  now that this app reads `EXPO_PUBLIC_SENTRY_DSN_NATIVE` and
+  `EXPO_PUBLIC_SENTRY_DSN_WEB`:
+  - drop the old `EXPO_PUBLIC_SENTRY_DSN` line from `app/.env.local`, its vault
+    copy and `APP_ENV_LOCAL`;
+  - drop the `SENTRY_ORG` and `SENTRY_PROJECT` lines from
+    `app/.env.sentry-build-plugin` and its vault copy (`ci-tools.json`'s
+    `sentry` names them), on this machine and the Mac;
+  - delete `app/android/sentry.properties` and its vault entry: the Android
+    build takes the token from `app/.env.sentry-build-plugin`;
+  - delete the `IOS_BUILD_ENV` secret: the workflows read `BUILD_ENV`;
+  - after the next release, check one Android and one web crash read as
+    source in Sentry.
 
 ## First admin (after first deploy)
 

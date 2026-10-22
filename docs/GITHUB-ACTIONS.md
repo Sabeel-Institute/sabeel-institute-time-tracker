@@ -55,7 +55,9 @@ differs from its template.
   download (`sabeel-ci ci-android-sdk`); Gradle would fetch them once and fail
   the build on a truncated file.
 - Android uploads a signed AAB and build record; Web uploads checksummed static
-  files and a build record; iOS uploads its signed IPA and build record.
+  files, their source maps beside them, and a build record; iOS uploads its
+  signed IPA and build record. Each release build refuses to start without its
+  Sentry DSN, and the native ones without the Sentry token (`docs/SECRETS.md`).
 - Android then checks that AAB on an emulator it boots on the runner
   (`device-check`, `sabeel-ci ci-avd`): `sabeel-ci check-release` installs a
   universal APK made from the bundle and cold-starts it five times. Each start
@@ -67,8 +69,9 @@ differs from its template.
   successful one.
   Artifacts are retained for 14 days. The AAB uses the existing release/upload
   key and is ready for a separately authorized Play upload.
-- Build records identify the source commit and workflow run. Web artifacts
-  contain neither source maps nor environment files.
+- Build records identify the source commit and workflow run. The site in a Web
+  artifact contains neither source maps nor environment files; the maps sit
+  beside it, for Deploy Web to upload.
 
 ## Who changes main
 
@@ -88,7 +91,11 @@ differs from its template.
   ID. CI must have passed on that exact commit. The workflow verifies artifact
   provenance and checksums and uses short-lived Google credentials.
 - The default `deploy=false` checks Hosting access without publishing. Select
-  `deploy=true` to publish the selected artifact to live Firebase Hosting.
+  `deploy=true` to publish the selected artifact to live Firebase Hosting:
+  its `sourcemaps` job, in `release-build` after the owner check, first
+  verifies the artifact's source maps against the build record and uploads
+  them to Sentry (`ci-tools.json`'s `sentry` names the project) with the
+  token from `BUILD_ENV`; the site is published only once they are in.
   No rebuilding occurs during deployment; functions, rules, indexes and data
   are not deployed. Older successful artifacts can be selected for rollback
   while they remain available.
@@ -129,12 +136,14 @@ TestFlight upload) first checks that the organization owner started it and,
 when it is re-run, re-ran it: the organization variables `RELEASE_OWNER_ID`
 and `RELEASE_OWNER_LOGIN`, which only organization admins can change.
 
-The `release-build` environment holds `APP_ENV_LOCAL`, the existing iOS
-signing secrets (`IOS_DIST_P12`, `IOS_DIST_P12_PASSWORD`, `IOS_PROFILE`,
-`IOS_BUILD_ENV`, `ASC_KEY_P8`), `ANDROID_KEYSTORE` and
-`ANDROID_KEYSTORE_PROPERTIES`. It admits main and `v*` tags only, and only the
-jobs that build a release enter it (Android, Web, iOS and its TestFlight
-upload), so a workflow on any other branch reads none of them; repository
+The `release-build` environment holds `APP_ENV_LOCAL`, `BUILD_ENV` (the
+build machine's `app/.env.sentry-build-plugin`: the Sentry token, the App
+Store Connect key ids and the Apple team), the iOS signing secrets
+(`IOS_DIST_P12`, `IOS_DIST_P12_PASSWORD`, `IOS_PROFILE`, `ASC_KEY_P8`),
+`ANDROID_KEYSTORE` and `ANDROID_KEYSTORE_PROPERTIES`. It admits main and `v*`
+tags only, and only the jobs that build a release enter it (Android, Web, iOS
+and its TestFlight upload, and Deploy Web's source-map upload), so a workflow
+on any other branch reads none of them; repository
 secrets would reach a workflow on any branch a collaborator pushes.
 `sabeel-ci check-app` fails if a job reads one outside that environment, or a
 release job does not check its owner first. Set one again from the vault with

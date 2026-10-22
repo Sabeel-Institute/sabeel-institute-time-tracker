@@ -121,11 +121,13 @@ export async function createManualEntry(input: {
 /** Live view of a single entry (the running one, usually). */
 export function useEntry(entryId: string | null): TimeEntry | null {
   return useLiveDoc(
-    'useEntry',
     () => (entryId ? doc(db, COLLECTIONS.timeEntries, entryId) : null),
-    (snap) => (snap.exists() ? { id: snap.id, ...(snap.data() as TimeEntryDoc) } : null),
-    null,
     [entryId],
+    {
+      label: 'useEntry',
+      map: (snap) => (snap.exists() ? { id: snap.id, ...(snap.data() as TimeEntryDoc) } : null),
+      empty: null,
+    },
   );
 }
 
@@ -136,7 +138,6 @@ export function useEntriesRange(
   toKey: string,
 ): TimeEntry[] {
   return useLiveQuery(
-    'useEntriesRange',
     () =>
       query(
         collection(db, COLLECTIONS.timeEntries),
@@ -144,13 +145,16 @@ export function useEntriesRange(
         where('dayKey', '>=', fromKey),
         where('dayKey', '<=', toKey),
       ),
-    (snap) => {
-      const list = snap.docs.map((d) => ({ id: d.id, ...(d.data() as TimeEntryDoc) }));
-      list.sort((a, b) => b.dayKey.localeCompare(a.dayKey) || b.start - a.start);
-      return list;
-    },
-    [],
     [uid, fromKey, toKey],
+    {
+      label: 'useEntriesRange',
+      map: (snap) => {
+        const list = snap.docs.map((d) => ({ id: d.id, ...(d.data() as TimeEntryDoc) }));
+        list.sort((a, b) => b.dayKey.localeCompare(a.dayKey) || b.start - a.start);
+        return list;
+      },
+      empty: [],
+    },
   );
 }
 
@@ -247,7 +251,6 @@ export async function copyPeriodEntries(
  */
 export function useEntryPeriods(uid: string, fromKey: string, toKey: string): Set<string> {
   return useLiveQuery(
-    'useEntryPeriods',
     () =>
       query(
         collection(db, COLLECTIONS.timeEntries),
@@ -255,30 +258,35 @@ export function useEntryPeriods(uid: string, fromKey: string, toKey: string): Se
         where('dayKey', '>=', fromKey),
         where('dayKey', '<=', toKey),
       ),
-    (snap) => new Set(snap.docs.map((d) => (d.data() as TimeEntryDoc).periodKey)),
-    new Set<string>(),
     [uid, fromKey, toKey],
+    {
+      label: 'useEntryPeriods',
+      map: (snap) => new Set(snap.docs.map((d) => (d.data() as TimeEntryDoc).periodKey)),
+      empty: new Set<string>(),
+    },
   );
 }
 
 /** Live closed-minutes total for one of my local days (running session excluded). */
 export function useDayMinutes(uid: string, dayKey: string): number {
   return useLiveQuery(
-    'useDayMinutes',
     () =>
       query(
         collection(db, COLLECTIONS.timeEntries),
         where('uid', '==', uid),
         where('dayKey', '==', dayKey),
       ),
-    (snap) => {
-      let total = 0;
-      snap.forEach((d) => {
-        total += (d.data() as TimeEntryDoc).durationMinutes ?? 0;
-      });
-      return total;
-    },
-    0,
     [uid, dayKey],
+    {
+      label: 'useDayMinutes',
+      map: (snap) => {
+        let total = 0;
+        snap.forEach((d) => {
+          total += (d.data() as TimeEntryDoc).durationMinutes ?? 0;
+        });
+        return total;
+      },
+      empty: 0,
+    },
   );
 }

@@ -1,9 +1,8 @@
 #!/usr/bin/env node
-// The account the native flows sign in as (`sabeel-ci native-e2e`, which runs
-// this as ci-tools.json's native.seed once the emulators are up): an admin
-// who has NOT accepted the institute's rules, so the flows meet that screen.
-// It is the address the dev sign-in row is filled with, so a flow signs in
-// with one tap and never edits that field.
+// The account the native flows sign in as (`sabeel-ci native-e2e` runs this
+// once the emulators are up): an admin who has NOT accepted the institute's
+// rules, so the flows meet that screen. It is the address the dev sign-in row
+// is filled with, so a flow signs in with one tap and never edits that field.
 //
 // Made the way the app's dev sign-in row makes one — the Auth emulator accepts
 // an unsigned Google id token, the same payload `devSignInAsGoogle` sends — so
@@ -12,14 +11,14 @@
 // Then the first-admin bootstrap, as an operator would run it.
 import { execFileSync } from 'node:child_process';
 import { config } from '@sabeel-institute/ci-tools/lib/config.mjs';
-import { ports } from '@sabeel-institute/ci-tools/lib/ports.mjs';
+import { emulatorProject, ports } from '@sabeel-institute/ci-tools/lib/ports.mjs';
 
 const NATIVE_ADMIN = 'volunteer@oursabeel.com';
 
 const settings = config(new URL('..', import.meta.url).pathname);
 const { auth: authPort, firestore: firestorePort } = ports(settings);
 const auth = `http://127.0.0.1:${authPort}`;
-const firestore = `http://127.0.0.1:${firestorePort}/v1/projects/${settings.emulators.project}/databases/(default)/documents`;
+const firestore = `http://127.0.0.1:${firestorePort}/v1/projects/${emulatorProject(settings)}/databases/(default)/documents`;
 const sub = `dev-${NATIVE_ADMIN.toLowerCase().replace(/[^a-z0-9]/g, '-')}`;
 const idToken = JSON.stringify({ sub, email: NATIVE_ADMIN, email_verified: true, name: 'Native Admin' });
 

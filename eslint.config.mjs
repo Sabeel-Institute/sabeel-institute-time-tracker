@@ -1,6 +1,7 @@
 import js from '@eslint/js';
 import tseslint from 'typescript-eslint';
 import globals from 'globals';
+import reactHooks from 'eslint-plugin-react-hooks';
 
 export default tseslint.config(
   {
@@ -50,13 +51,12 @@ export default tseslint.config(
     // Every color must come from a semantic theme token (src/theme), so a
     // hardcoded hex/rgb/hsl literal is a bug — it bypasses the Option-1 palette
     // and could not be re-themed in one place (the whole point of the token
-    // layer). Exemptions: src/theme/** is the palette itself; printStatement.web.ts
-    // is a PRINT stylesheet (paper is always light — literal brand hexes by
-    // design, kept in sync with the palette by hand).
+    // layer). The only exemption is src/theme/** itself, which IS the palette;
+    // the printed statement's stylesheet interpolates the tokens too.
     // app/** not app/src/**: App.tsx lives at app root and hardcoded the header
     // tint before this rule existed.
     files: ['app/**/*.{ts,tsx}'],
-    ignores: ['app/src/theme/**', 'app/src/printStatement.web.ts'],
+    ignores: ['app/src/theme/**'],
     rules: {
       'no-restricted-syntax': [
         'error',
@@ -86,6 +86,33 @@ export default tseslint.config(
         ...globals.node,
         ...globals.browser,
       },
+    },
+  },
+  {
+    // A hook that closes over a value missing from its dependency array keeps
+    // serving the value from the render that created it — the stale-week bug
+    // (docs/POSTMORTEM-2026-07-16-stale-week.md) one layer down, and nothing in
+    // TypeScript can see it: a live row and a stale one are the same type.
+    // exhaustive-deps is the only mechanical check for it, so it is an ERROR,
+    // not the preset's warning: a warning does not fail CI.
+    //
+    // Deliberately NOT the plugin's `recommended` preset. v7 bundles the React
+    // Compiler rule family (refs, set-state-in-effect, purity, immutability…),
+    // which this app is not built for: its set-state-in-effect rule flags the
+    // resets that exist precisely to CLEAR stale state (liveQuery's reset on
+    // input change). Adopt that family, if ever, as one deliberate migration
+    // with React Compiler, not as a side effect of installing a linter.
+    files: ['app/**/*.{ts,tsx}'],
+    plugins: { 'react-hooks': reactHooks },
+    rules: {
+      'react-hooks/rules-of-hooks': 'error',
+      // The app's subscription primitives, and so the most valuable thing to
+      // check: every live screen's freshness depends on `deps` listing what
+      // `make` reads. The rule finds the callback at argument 0 and the deps at
+      // argument 1 only, which is why both hooks take them in that order; in
+      // any other shape it checks nothing and says so only as "dependencies
+      // are unknown".
+      'react-hooks/exhaustive-deps': ['error', { additionalHooks: '(useLiveQuery|useLiveDoc)' }],
     },
   },
   {

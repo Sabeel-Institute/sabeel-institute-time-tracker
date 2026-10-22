@@ -1,11 +1,11 @@
 // Native side of the Sentry seam (web sibling: sentry.web.ts). The DSN comes
-// from gitignored app/.env.local (EXPO_PUBLIC_SENTRY_DSN), inlined at bundle
-// time; without it everything here is a no-op. Release JS stacks are minified
-// (no source-map upload — that needs a SENTRY_AUTH_TOKEN build step), but
-// events, messages, tags, and user ids all arrive.
+// from gitignored app/.env.local (EXPO_PUBLIC_SENTRY_DSN_NATIVE, Android and
+// iOS), inlined at bundle time; without it everything here is a no-op. Release
+// builds upload their source maps (app/android/app/build.gradle's sentry.gradle,
+// Xcode's Sentry phase), so their stacks read as source.
 import * as Sentry from '@sentry/react-native';
 
-const dsn = process.env.EXPO_PUBLIC_SENTRY_DSN;
+const dsn = process.env.EXPO_PUBLIC_SENTRY_DSN_NATIVE;
 
 export function initSentry(): void {
   if (!dsn) return;

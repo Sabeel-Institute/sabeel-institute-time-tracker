@@ -12,7 +12,7 @@ import { initializeApp } from 'firebase-admin/app';
 import { getAuth } from 'firebase-admin/auth';
 import { getFirestore } from 'firebase-admin/firestore';
 import { config } from '@sabeel-institute/ci-tools/lib/config.mjs';
-import { ports } from '@sabeel-institute/ci-tools/lib/ports.mjs';
+import { emulatorProject, ports } from '@sabeel-institute/ci-tools/lib/ports.mjs';
 
 const email = process.argv[2];
 if (!email) {
@@ -21,8 +21,8 @@ if (!email) {
 }
 
 const settings = config(new URL('..', import.meta.url).pathname);
-const projectId = process.env.GCLOUD_PROJECT ?? settings.emulators.project;
-if (projectId === settings.emulators.project && !process.env.FIRESTORE_EMULATOR_HOST) {
+const projectId = process.env.GCLOUD_PROJECT ?? emulatorProject(settings);
+if (projectId === emulatorProject(settings) && !process.env.FIRESTORE_EMULATOR_HOST) {
   const { firestore, auth } = ports(settings);
   process.env.FIRESTORE_EMULATOR_HOST = `127.0.0.1:${firestore}`;
   process.env.FIREBASE_AUTH_EMULATOR_HOST = `127.0.0.1:${auth}`;

@@ -15,7 +15,7 @@ import { createReadStream, createWriteStream, existsSync } from 'node:fs';
 import { extname, join } from 'node:path';
 import { chromium } from 'playwright';
 import { config } from '@sabeel-institute/ci-tools/lib/config.mjs';
-import { ports } from '@sabeel-institute/ci-tools/lib/ports.mjs';
+import { emulatorProject, ports } from '@sabeel-institute/ci-tools/lib/ports.mjs';
 
 export const ROOT = new URL('../..', import.meta.url).pathname;
 // The ports and the demo project are this app's, from ci-tools.json through
@@ -23,7 +23,7 @@ export const ROOT = new URL('../..', import.meta.url).pathname;
 // ports are this checkout's own").
 const SETTINGS = config(ROOT);
 const PORTS = ports(SETTINGS);
-export const PROJECT = SETTINGS.emulators.project;
+export const PROJECT = emulatorProject(SETTINGS);
 const HOST = '127.0.0.1';
 export const EMULATOR_HOSTS = {
   auth: `${HOST}:${PORTS.auth}`,

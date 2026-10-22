@@ -124,19 +124,9 @@ it('is a real id, not an undefined import', () => {
 });
 
 /**
- * The manifest's default channel, which is the ONE place the id is restated.
- *
- * A manifest cannot import a TS constant, so `android:value` is a literal. That
- * makes this the only check in the project that can catch the two halves
- * genuinely DISAGREEING — the client and server tests both import
- * PUSH_CHANNEL_ID, so a wrong-but-consistent id sails past them; here a typo in
- * the XML fails against the real constant.
- *
- * What it is for at runtime: FCM posts a message naming no channel to
- * `fcm_fallback_notification_channel`, which Android labels "Miscellaneous" and
- * which then sits in the app's settings forever. This makes that degrade to our
- * channel instead. It also keeps the fallback from being recreated after
- * registerPush deletes it — see RETIRED_CHANNEL_IDS.
+ * The manifest's notification icons. Its default channel, the one place the
+ * channel id is restated as a literal, is held to PUSH_CHANNEL_ID by
+ * `sabeel-ci check-app`.
  */
 describe('the manifest', () => {
   const MANIFEST = resolve(
@@ -144,13 +134,6 @@ describe('the manifest', () => {
     '../../../app/android/app/src/main/AndroidManifest.xml',
   );
   const manifest = () => readFileSync(MANIFEST, 'utf8');
-
-  it('names the shared channel as FCM\'s default', () => {
-    const m = manifest().match(
-      /com\.google\.firebase\.messaging\.default_notification_channel_id"\s+android:value="([^"]+)"/,
-    );
-    expect(m?.[1]).toBe(PUSH_CHANNEL_ID);
-  });
 
   /**
    * Both icon pairs, because two different things draw a notification here and

@@ -1,5 +1,5 @@
 {
   "projects": {
-    "dev": "sabeel-institute-time-tracker"
+    "default": "sabeel-institute-time-tracker"
   }
 }

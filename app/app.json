@@ -82,6 +82,10 @@
       "package": "com.sabeelinstitute.timetracker",
       "predictiveBackGestureEnabled": false,
       "googleServicesFile": "./google-services.json",
+      "blockedPermissions": [
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.WRITE_EXTERNAL_STORAGE"
+      ],
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#F6EBDD"

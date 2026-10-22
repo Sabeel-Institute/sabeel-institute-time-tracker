@@ -33,10 +33,17 @@ app/.env.sentry-build-plugin
 # Screenshots and logs of the browser and device suites
 shots/
 
+# Signing keys and service-account keys: never in a public repository. The
+# debug keystore is public by design (every Android SDK ships the same one).
+*.jks
+*.keystore
+!app/android/app/debug.keystore
+*service-account*.json
+*firebase-adminsdk*.json
+app/android/keystore.properties
+
 # Logs & misc
 *.log
 .DS_Store
-app/android/sentry.properties
 build-artifacts
 gha-creds-*.json
-app/android/keystore.properties

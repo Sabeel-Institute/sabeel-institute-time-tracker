@@ -59,10 +59,10 @@ One app-specific nuance: on the raspberry running-timer card, gold is left
 dark plum, true gold reads fine and the deepened cut would read *worse*.
 
 **2. There is no dark mode — single light theme (decided 2026-07-21).**
-`app.json` pins `userInterfaceStyle: "light"`. `useTheme()` returns one theme. If
+`app.json` pins `userInterfaceStyle: "light"`. `getTheme()` returns one theme. If
 the brand ever wants dark, a `dark` variant goes into `app/src/theme/palette.ts`
-and `useTheme()` is the one place that would select it; no screen would change,
-because screens only read role tokens.
+and `app/src/theme/index.ts` is the one place that would select it; no screen
+would change, because screens only read role tokens.
 
 ## Tokens this app adds beyond the kanban set
 
@@ -142,12 +142,9 @@ adb exec-out screencap -p > drawer.png
 
 - `app/src/theme/palette.ts` is the **only** file allowed to contain color
   literals. An ESLint rule (`no-restricted-syntax`) rejects hex/rgb/hsl anywhere
-  else under `app/src`.
-- **One exemption:** `app/src/printStatement.web.ts` is a print stylesheet —
-  paper is always light, so it carries literal Option-1 hexes by design. Keep
-  them in sync with this palette by hand when the brand changes.
+  else under `app/`, the printed statement's stylesheet included: it
+  interpolates the theme tokens (`app/src/printStatement.web.ts`).
 - Screens consume **semantic tokens** from `app/src/theme/index.ts`
   (`bg.canvas`, `text.primary`, `accent.base`, …), never brand names — so a
-  brand refresh is a one-file change. Module-scope `StyleSheet.create` uses
-  `getTheme()`; components may use the `useTheme()` hook. Both return the same
-  static single-light theme.
+  brand refresh is a one-file change. Screens read them through `getTheme()`,
+  the one static light theme, at module scope (`StyleSheet.create`).

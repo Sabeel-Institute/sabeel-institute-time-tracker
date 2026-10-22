@@ -106,7 +106,7 @@ export const SUPPORT_URL = `${WEB_APP_ORIGIN}/support`;
  * emulator by it: a running project id, unlike an env flag left in a shell,
  * cannot be true in a deploy.
  */
-export const EMULATOR_PROJECT_ID = 'demo-sabeel';
+export const EMULATOR_PROJECT_ID = 'demo-sabeel-time-tracker';
 
 /** Clock sessions running longer than this get auto-closed at start + cap. */
 export const SESSION_CAP_HOURS = 12;

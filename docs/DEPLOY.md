@@ -8,9 +8,9 @@ iPhone build and TestFlight are `docs/IOS-BUILD.md`; the store decisions (App
 Store, Google Play) are `docs/STORE-RELEASE.md`; every key and gitignored file
 is in `docs/SECRETS.md`.
 
-Production is the Firebase project `sabeel-institute-time-tracker`. It is the
-only alias in `.firebaserc`, named `dev`, and there is no default, so every
-`firebase` command here says `--project dev`.
+Production is the Firebase project `sabeel-institute-time-tracker`, the
+`default` alias in `.firebaserc`, so the `firebase` commands here name no
+project.
 
 The Firebase project belongs to Sabeel Institute's `oursabeel.com` Cloud
 organization (`833557915874`), with `faisal.shah@oursabeel.com` as Owner
@@ -50,16 +50,16 @@ approval.
 |---|---|
 | `~/keystores/sabeel-time-tracker-release.jks`, `~/.config/sabeel-time-tracker/keystore.properties` | Gradle refuses to package a release |
 | `~/keys/sabeel-play-publisher.json` (or `PLAY_KEY`) | `sabeel-ci publish-play` stops; the rest of the release stands |
-| `app/.env.local` (`EXPO_PUBLIC_SENTRY_DSN`, `EXPO_PUBLIC_FCM_VAPID_KEY`) | the APK and the web ship with crash reporting and web push off |
-| `app/android/sentry.properties` | the APK's stack traces in Sentry stay minified |
+| `app/.env.local` (`EXPO_PUBLIC_SENTRY_DSN_NATIVE`, `EXPO_PUBLIC_SENTRY_DSN_WEB`) | the Play bundle and the iPhone build refuse to build, since each would ship with crash reporting off; a hand-run web export ships with it off |
+| `app/.env.sentry-build-plugin` (`SENTRY_AUTH_TOKEN`) | the Play bundle and the iPhone build refuse to build, since their crashes would reach Sentry as minified frames |
 | `functions/.env` (`PROBE_TOKEN`) | a functions deploy leaves `probeQueries` refusing every call |
 
 **Tools.** Node 22.18 or later, JDK 17 as the default `java` (Gradle, and
 `jarsigner` and `keytool` for `sabeel-ci publish-play`), JDK 21 for the
 emulators, the Android SDK and the `tb_emu` AVD: the bootstrap installs them.
 Also `firebase` (firebase-tools 15), `gh`, `unzip`, and for the manual PDF that
-`npx sabeel-ci release` re-renders (`docs/render-manual.py`): `google-chrome`
-and Python's `markdown` (`python3-markdown`).
+`npx sabeel-ci release` re-renders (`npx sabeel-ci render-manual`): `uv` and
+`google-chrome`.
 
 ## One-time, per Firebase project
 Done for production; this is the order for a new project.
@@ -101,7 +101,7 @@ Done for production; this is the order for a new project.
 ## Deploy
 ```sh
 # Rules + indexes + functions + hosting (web). Predeploy builds the web bundle.
-firebase deploy --only firestore:rules,firestore:indexes,functions,hosting --project dev
+firebase deploy --only firestore:rules,firestore:indexes,functions,hosting
 ```
 Functions deploy from GitHub too, and that is the usual way: **Deploy
 Functions** (`functions-deploy.yml`, `docs/GITHUB-ACTIONS.md`) deploys main
@@ -111,21 +111,19 @@ needs no local Google login. The same guards run here:
 ```sh
 export FIREBASE_PROJECT_ID=sabeel-institute-time-tracker PROBE_TOKEN=…   # functions/.env
 npx sabeel-ci ci-functions require-ci && npx sabeel-ci ci-functions plan
-firebase deploy --only functions --project dev
+firebase deploy --only functions
 npx sabeel-ci ci-functions verify --since <the time the deploy started, ISO>
 ```
 - Hosting serves `app/dist-web`, which the hosting predeploy in `firebase.json`
   rebuilds (`npm run web:export -w @sabeel/app`) on every hosting deploy.
-- **Web push needs `EXPO_PUBLIC_FCM_VAPID_KEY` in `app/.env.local`.** The key
-  reaches the bundle from the environment that runs the export. Miss it and
-  nothing fails: the client is inert by design, so the build succeeds, the site
-  deploys, and every device quietly reports that it cannot receive
-  notifications. `npm run check:web-push` reads `app/dist-web` and refuses when
-  the key is absent or the wrong shape. Because the deploy exports again and
-  uploads that export, the order is: `npm run web:export -w @sabeel/app && npm
-  run check:web-push` (this environment yields a keyed bundle), the deploy, then
-  `npm run check:web-push` again (`dist-web` now holds exactly what was
-  uploaded).
+- **Web push's public key is committed** (`VAPID_PUBLIC_KEY` in
+  `app/src/firebase-config.ts`; the browser needs it to subscribe, so it is
+  public by design). `npm run check:web-push` reads `app/dist-web` and refuses
+  an export without it or without the permission path; the Web build runs the
+  same check on every build.
+- A hand-run hosting deploy publishes no source maps: Deploy Web
+  (`docs/GITHUB-ACTIONS.md`) is the path that uploads the web build's maps to
+  Sentry before it publishes the site.
 - Indexes: the composite indexes in `firestore.indexes.json` deploy with the above;
   first queries will error until they finish building (a few minutes).
 
@@ -157,7 +155,7 @@ npm run verify                       # lint (incl. version check) + typecheck + 
 #     rules screen (docs/STORE-RELEASE.md). Rules and indexes with them: the
 #     reports index serves reportProblem's five-an-hour count. Functions can
 #     also go through Deploy Functions (docs/GITHUB-ACTIONS.md).
-firebase deploy --only firestore:rules,firestore:indexes,functions --project dev
+firebase deploy --only firestore:rules,firestore:indexes,functions
 
 # 1. the deploy-log entry, heading first, kept outside the checkout (--ship
 #    refuses an untracked file):
@@ -229,8 +227,8 @@ bounced at the Run layer before the code ran (symptom: Reports total stuck on
 `…`, CSV export silently empty). Fix: delete the affected callables and let a
 deploy recreate them through the *create* path, which always applies the binding:
 ```sh
-firebase functions:delete setUserAccess exportCsv reportTotals --region us-central1 --force --project dev
-firebase deploy --only functions --project dev
+firebase functions:delete setUserAccess exportCsv reportTotals --region us-central1 --force
+firebase deploy --only functions
 ```
 Verify: an unauthenticated `curl -X POST .../reportTotals -d '{"data":{}}'` should
 return a Firebase JSON `{"error":{... "UNAUTHENTICATED"}}` (code ran), NOT a plain
@@ -241,7 +239,7 @@ while using the Eventarc Service Agent".** Seen on 2026-07-17 deploying
 `notifyNewUser`/`notifyTimesheet`: the deploy auto-enables Eventarc, but the
 service agent's permissions take a few minutes to propagate. Not a config
 error — wait 2–5 minutes and redeploy just the failed functions
-(`firebase deploy --only functions:<name>,functions:<name> --project dev`).
+(`firebase deploy --only functions:<name>,functions:<name>`).
 
 **e2e: "internal" from a callable / "blocked by CORS policy" in the browser.**
 The functions emulator accepts connections on its port *before* it registers any
@@ -282,22 +280,22 @@ tier**, but at this data size (~200 KB) they bill as fractions of a cent.
 **Delete protection is ENABLED**, so the database itself cannot be deleted until
 someone deliberately turns it off:
 ```sh
-firebase firestore:databases:update "(default)" --delete-protection DISABLED --project dev
+firebase firestore:databases:update "(default)" --delete-protection DISABLED
 ```
 Expect that step to be needed if you ever legitimately tear the database down —
 it is a speed bump by design, not a bug.
 
 Inspect:
 ```sh
-firebase firestore:databases:get "(default)" --project dev    # PITR state
-firebase firestore:backups:schedules:list --project dev       # schedule + retention
-firebase firestore:backups:list --project dev                 # actual backups taken
+firebase firestore:databases:get "(default)"   # PITR state
+firebase firestore:backups:schedules:list      # schedule + retention
+firebase firestore:backups:list                # actual backups taken
 ```
 
 Restore (both are *new database* operations — they never overwrite in place, so
 you restore then repoint, rather than clobbering live data):
 ```sh
-firebase firestore:databases:restore --project dev \
+firebase firestore:databases:restore \
   --database <new-db-id> --backup <backup-name>
 ```
 For PITR, restore/export using a `--snapshot-time` within the last 7 days. See

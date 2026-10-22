@@ -2,12 +2,13 @@ import { describe, it, beforeAll, beforeEach, expect } from 'vitest';
 import { initializeApp, getApps } from 'firebase-admin/app';
 import { getFirestore } from 'firebase-admin/firestore';
 import { closeStaleSessions } from '../../src/sessions';
+import { EMULATOR_PROJECT_ID } from '@sabeel/shared';
 
 const HOUR = 60 * 60 * 1000;
 const NOW = Date.UTC(2026, 6, 15, 20, 0);
 
 beforeAll(() => {
-  if (getApps().length === 0) initializeApp({ projectId: 'demo-sabeel' });
+  if (getApps().length === 0) initializeApp({ projectId: EMULATOR_PROJECT_ID });
 });
 
 async function reset() {

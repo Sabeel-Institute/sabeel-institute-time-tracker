@@ -120,11 +120,13 @@ export function reopenTimesheet(ts: Timesheet): Promise<void> {
  */
 export function useTimesheet(uid: string, periodKey: string): Timesheet | null | undefined {
   return useLiveDoc<Timesheet | null | undefined>(
-    'useTimesheet',
     () => doc(db, COLLECTIONS.timesheets, tsId(uid, periodKey)),
-    (snap) => (snap.exists() ? { id: snap.id, ...(snap.data() as TimesheetDoc) } : null),
-    undefined,
     [uid, periodKey],
+    {
+      label: 'useTimesheet',
+      map: (snap) => (snap.exists() ? { id: snap.id, ...(snap.data() as TimesheetDoc) } : null),
+      empty: undefined,
+    },
   );
 }
 
@@ -135,7 +137,6 @@ export function useMyTimesheetsRange(
   toKey: string,
 ): Timesheet[] {
   return useLiveQuery(
-    'useMyTimesheetsRange',
     () =>
       query(
         collection(db, COLLECTIONS.timesheets),
@@ -143,13 +144,16 @@ export function useMyTimesheetsRange(
         where('periodKey', '>=', fromKey),
         where('periodKey', '<=', toKey),
       ),
-    (snap) => {
-      const list = snap.docs.map((d) => ({ id: d.id, ...(d.data() as TimesheetDoc) }));
-      list.sort((a, b) => a.periodKey.localeCompare(b.periodKey));
-      return list;
-    },
-    [],
     [uid, fromKey, toKey],
+    {
+      label: 'useMyTimesheetsRange',
+      map: (snap) => {
+        const list = snap.docs.map((d) => ({ id: d.id, ...(d.data() as TimesheetDoc) }));
+        list.sort((a, b) => a.periodKey.localeCompare(b.periodKey));
+        return list;
+      },
+      empty: [],
+    },
   );
 }
 
@@ -160,39 +164,43 @@ export function useMyTimesheetsRange(
 export function useApprovalQueue(approverUid: string, opts?: { all?: boolean }): Timesheet[] {
   const all = opts?.all ?? false;
   return useLiveQuery(
-    'useApprovalQueue',
     () => {
       const base = collection(db, COLLECTIONS.timesheets);
       return all
         ? query(base, where('status', '==', 'submitted'))
         : query(base, where('approverUid', '==', approverUid), where('status', '==', 'submitted'));
     },
-    (snap) => {
-      const list = snap.docs.map((d) => ({ id: d.id, ...(d.data() as TimesheetDoc) }));
-      list.sort((a, b) => a.submittedAt - b.submittedAt);
-      return list;
-    },
-    [],
     [approverUid, all],
+    {
+      label: 'useApprovalQueue',
+      map: (snap) => {
+        const list = snap.docs.map((d) => ({ id: d.id, ...(d.data() as TimesheetDoc) }));
+        list.sort((a, b) => a.submittedAt - b.submittedAt);
+        return list;
+      },
+      empty: [],
+    },
   );
 }
 
 /** Live list of my rejected timesheets, oldest first (the resolution backlog). */
 export function useRejectedSheets(uid: string): Timesheet[] {
   return useLiveQuery(
-    'useRejectedSheets',
     () =>
       query(
         collection(db, COLLECTIONS.timesheets),
         where('uid', '==', uid),
         where('status', '==', 'rejected'),
       ),
-    (snap) => {
-      const list = snap.docs.map((d) => ({ id: d.id, ...(d.data() as TimesheetDoc) }));
-      list.sort((a, b) => a.periodKey.localeCompare(b.periodKey));
-      return list;
-    },
-    [],
     [uid],
+    {
+      label: 'useRejectedSheets',
+      map: (snap) => {
+        const list = snap.docs.map((d) => ({ id: d.id, ...(d.data() as TimesheetDoc) }));
+        list.sort((a, b) => a.periodKey.localeCompare(b.periodKey));
+        return list;
+      },
+      empty: [],
+    },
   );
 }

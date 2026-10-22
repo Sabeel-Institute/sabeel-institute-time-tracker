@@ -4,6 +4,7 @@ import { getAuth } from 'firebase-admin/auth';
 import { getFirestore } from 'firebase-admin/firestore';
 import { HttpsError } from 'firebase-functions/v2/https';
 import { applyUserAccess } from '../../src/users';
+import { EMULATOR_PROJECT_ID } from '@sabeel/shared';
 
 // Runs under `firebase emulators:exec` — FIRESTORE_EMULATOR_HOST and
 // FIREBASE_AUTH_EMULATOR_HOST are set, so the admin SDK talks to the emulators.
@@ -29,7 +30,7 @@ async function seedUser(uid: string, doc: Record<string, unknown>) {
 
 beforeAll(() => {
   if (getApps().length === 0) {
-    initializeApp({ projectId: 'demo-sabeel' });
+    initializeApp({ projectId: EMULATOR_PROJECT_ID });
   }
 });
 

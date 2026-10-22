@@ -9,7 +9,7 @@ on:
   pull_request:
     paths:
       - maestro/**
-      - scripts/seed-native.mjs
+      - scripts/seed-emulators.mjs
       - ci-tools.json
       - package-lock.json
       - .github/workflows/native.yml
@@ -66,11 +66,6 @@ jobs:
       # demo ones, which the debug build only needs to compile against.
       - name: Placeholder Firebase app configuration
         run: if [ ! -f app/google-services.json ]; then sabeel-ci ci-premerge prepare; fi
-      - name: Emulator secret placeholders
-        env:
-          SECRETS: '{"SENTRY_DSN":"disabled","APNS_KEY":"unused-in-emulator"}'
-        run: |
-          node -e 'const secrets = JSON.parse(process.env.SECRETS); require("node:fs").writeFileSync("functions/.secret.local", Object.entries(secrets).map(([name, value]) => name + "=" + value + "\n").join(""))'
       - name: Boot an Android emulator
         run: sabeel-ci ci-avd
       - name: Install Maestro
@@ -122,11 +117,6 @@ jobs:
         run: npm ci
       - name: Install Firebase CLI
         run: npm install --global firebase-tools@^15
-      - name: Emulator secret placeholders
-        env:
-          SECRETS: '{"SENTRY_DSN":"disabled","APNS_KEY":"unused-in-emulator"}'
-        run: |
-          node -e 'const secrets = JSON.parse(process.env.SECRETS); require("node:fs").writeFileSync("functions/.secret.local", Object.entries(secrets).map(([name, value]) => name + "=" + value + "\n").join(""))'
       - name: Install Maestro
         run: sabeel-ci install-maestro
       - name: Native flows on the iOS simulator

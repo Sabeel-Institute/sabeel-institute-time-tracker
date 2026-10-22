@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useEffectEvent } from 'react';
 import { ActivityIndicator, View } from 'react-native';
 import { doc, updateDoc } from 'firebase/firestore';
 import { COLLECTIONS, deviceTimeZone, hasAcceptedRules } from '@sabeel/shared';
@@ -60,15 +60,22 @@ export default function App() {
     session.phase === 'signedIn' && session.claims.status === 'active'
       ? session.user.uid
       : null;
+  //
+  // The timezone is compared with the profile as it stands at sign-in, read
+  // through an effect event so the effect keys on who is signed in alone. Keyed
+  // on the profile too, two devices in different zones signed in at once would
+  // each write its own zone back whenever the other's arrived, forever.
   const knownTz = session.phase === 'signedIn' ? session.profile.timeZone : null;
+  const recordTimeZone = useEffectEvent((uid: string) => {
+    const tz = deviceTimeZone();
+    if (knownTz !== tz) {
+      updateDoc(doc(db, COLLECTIONS.users, uid), { timeZone: tz }).catch(() => undefined);
+    }
+  });
   useEffect(() => {
     if (!activeUid) return;
     void registerPush(activeUid);
-    const tz = deviceTimeZone();
-    if (knownTz !== tz) {
-      updateDoc(doc(db, COLLECTIONS.users, activeUid), { timeZone: tz }).catch(() => undefined);
-    }
-    // Deps are only who-is-signed-in — deliberately not the profile snapshot.
+    recordTimeZone(activeUid);
   }, [activeUid]);
 
   // Notification taps are collected unconditionally — one can land during the
