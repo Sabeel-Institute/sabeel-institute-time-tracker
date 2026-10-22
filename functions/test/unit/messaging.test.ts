@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { PUSH_CHANNEL_ID, WEB_APP_ORIGIN } from '@sabeel/shared';
+import type { sendToApns as SendToApns } from '../../src/apns';
 
 /**
  * The one place a push leaves the server (functions/src/messaging.ts): which
@@ -54,7 +55,7 @@ async function live(opts: {
     if (r instanceof Error) throw r;
     return { responses: r, successCount: r.filter((x) => x.success).length };
   });
-  const sendToApns = vi.fn(async (devices: { token: string }[]) => {
+  const sendToApns = vi.fn<typeof SendToApns>(async (devices) => {
     const tokens = devices.map((d) => d.token);
     const r = opts.apple?.(tokens) ?? { delivered: tokens, dead: [], failed: [] };
     if (r instanceof Error) throw r;

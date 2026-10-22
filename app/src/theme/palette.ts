@@ -1,7 +1,6 @@
 /**
  * Raw color values. THE ONLY FILE IN THE APP ALLOWED TO CONTAIN COLOR LITERALS —
- * an ESLint rule enforces this everywhere under app/src except app/src/theme and
- * app/src/printStatement.web.ts (a print stylesheet; see that file).
+ * an ESLint rule enforces this everywhere under app/ except app/src/theme.
  *
  * These are the Sabeel Institute brand colors, **Option 1** — the designer's
  * revised palette (2026-07-21), which SUPERSEDES the original

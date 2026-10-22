@@ -21,11 +21,13 @@ export function setApprover(uid: string, approverUid: string | null): Promise<vo
  */
 export function useUser(uid: string): UserRow | null {
   return useLiveDoc(
-    'useUser',
     () => doc(db, COLLECTIONS.users, uid),
-    (snap) => (snap.exists() ? { uid: snap.id, ...(snap.data() as UserDoc) } : null),
-    null,
     [uid],
+    {
+      label: 'useUser',
+      map: (snap) => (snap.exists() ? { uid: snap.id, ...(snap.data() as UserDoc) } : null),
+      empty: null,
+    },
   );
 }
 
@@ -41,18 +43,20 @@ export function approverChoices(users: UserRow[]): UserRow[] {
  */
 export function useApproverChoices(): UserRow[] {
   return useLiveQuery(
-    'useApproverChoices',
     () =>
       query(
         collection(db, COLLECTIONS.users),
         or(where('role', '==', 'manager'), where('admin', '==', true)),
       ),
-    (snap) => {
-      const list = snap.docs.map((d) => ({ uid: d.id, ...(d.data() as UserDoc) }));
-      return approverChoices(list).sort((a, b) => a.displayName.localeCompare(b.displayName));
+    [],
+    {
+      label: 'useApproverChoices',
+      map: (snap) => {
+        const list = snap.docs.map((d) => ({ uid: d.id, ...(d.data() as UserDoc) }));
+        return approverChoices(list).sort((a, b) => a.displayName.localeCompare(b.displayName));
+      },
+      empty: [],
     },
-    [],
-    [],
   );
 }
 
@@ -63,28 +67,32 @@ export function useApproverChoices(): UserRow[] {
  */
 export function usePendingCount(enabled: boolean): number {
   return useLiveQuery(
-    'usePendingCount',
     () =>
       enabled
         ? query(collection(db, COLLECTIONS.users), where('status', '==', 'pending'))
         : null,
-    (snap) => snap.size,
-    0,
     [enabled],
+    {
+      label: 'usePendingCount',
+      map: (snap) => snap.size,
+      empty: 0,
+    },
   );
 }
 
 /** Live list of all users — managers use it for report filters and person detail. */
 export function useUsers(): UserRow[] {
   return useLiveQuery(
-    'useUsers',
     () => query(collection(db, COLLECTIONS.users)),
-    (snap) => {
-      const list = snap.docs.map((d) => ({ uid: d.id, ...(d.data() as UserDoc) }));
-      list.sort((a, b) => a.displayName.localeCompare(b.displayName));
-      return list;
+    [],
+    {
+      label: 'useUsers',
+      map: (snap) => {
+        const list = snap.docs.map((d) => ({ uid: d.id, ...(d.data() as UserDoc) }));
+        list.sort((a, b) => a.displayName.localeCompare(b.displayName));
+        return list;
+      },
+      empty: [],
     },
-    [],
-    [],
   );
 }

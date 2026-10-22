@@ -8,16 +8,18 @@ export type Activity = ActivityDoc & { id: string };
 /** Live list of activities; active-only for pickers, everything for management. */
 export function useActivities(opts: { includeArchived: boolean }): Activity[] {
   return useLiveQuery(
-    'useActivities',
     () => {
       const base = collection(db, COLLECTIONS.activities);
       return opts.includeArchived
         ? query(base, orderBy('name'))
         : query(base, where('status', '==', 'active'), orderBy('name'));
     },
-    (snap) => snap.docs.map((d) => ({ id: d.id, ...(d.data() as ActivityDoc) })),
-    [],
     [opts.includeArchived],
+    {
+      label: 'useActivities',
+      map: (snap) => snap.docs.map((d) => ({ id: d.id, ...(d.data() as ActivityDoc) })),
+      empty: [],
+    },
   );
 }
 
