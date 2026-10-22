@@ -40,10 +40,15 @@ export function DateTimeField({
         <Text style={styles.value}>{value || (kind === 'date' ? 'Pick a date' : 'Pick a time')}</Text>
       </Pressable>
       <Modal visible={draft !== null} transparent animationType="fade" onRequestClose={close}>
-        <Pressable style={styles.backdrop} onPress={close}>
+        {/* Neither Pressable is an accessibility element: one is by default,
+            and on iOS it swallows everything under it: the accessibility tree
+            would hold the whole sheet as ONE element, with no Cancel or Done
+            for VoiceOver to move to. react-native-web does not forward the prop. */}
+        <Pressable style={styles.backdrop} onPress={close} accessible={false}>
           <Pressable
             style={[styles.sheet, { paddingBottom: spacing(4) + insets.bottom }]}
             onPress={() => {}}
+            accessible={false}
           >
             <View style={styles.bar}>
               <Pressable onPress={close} hitSlop={spacing(2)}>

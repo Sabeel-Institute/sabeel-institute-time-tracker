@@ -63,8 +63,12 @@ export function SearchablePicker({
       </Pressable>
 
       <Modal visible={open} transparent animationType="fade" onRequestClose={() => setOpen(false)}>
-        <Pressable style={styles.backdrop} onPress={() => setOpen(false)}>
-          <Pressable style={styles.sheet} onPress={() => {}}>
+        {/* Neither Pressable is an accessibility element: one is by default,
+            and on iOS it swallows everything under it: the accessibility tree
+            held the whole picker as ONE element, so VoiceOver had no row to
+            move to and Maestro could not tap one. react-native-web does not forward the prop. */}
+        <Pressable style={styles.backdrop} onPress={() => setOpen(false)} accessible={false}>
+          <Pressable style={styles.sheet} onPress={() => {}} accessible={false}>
             <Text style={styles.title}>{title ?? placeholder}</Text>
             <TextInput
               value={filter}
