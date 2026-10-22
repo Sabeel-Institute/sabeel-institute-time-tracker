@@ -21,8 +21,13 @@ Set with `firebase functions:secrets:set <NAME>`; bind in code via `defineSecret
 | `APNS_KEY` | push to iPhones (`functions/src/messaging.ts`, bound to every sender via `PUSH_SECRETS`) | The team's APNs key, `AuthKey_X5R8FL94BC.p8` (the same key the LMS and Kanban use): `~/.config/secrets-vault/sabeel/apple/` on Linux, `~/.apns/` on the Mac. Set with `firebase functions:secrets:set APNS_KEY --data-file <the .p8> --project dev` |
 
 The emulator reads stand-ins from the gitignored `functions/.secret.local`
-(`APNS_KEY=unused-in-emulator`; CI writes the same line). The emulated functions
-send no push, so the value is never used.
+(`SENTRY_DSN=disabled`, `APNS_KEY=unused-in-emulator`; CI writes the same lines
+from `ci.emulatorSecrets` in `ci-tools.json`). The emulated functions send no
+push, so the value is never used.
+
+A test push to an iPhone (`npx sabeel-ci send-test-push --apple`) reads the
+APNs key from `~/.apns/AuthKey_<APNS_KEY_ID>.p8`, or from the file
+`APNS_KEY_FILE` names; it never prints it.
 
 ## Cloud Functions parameters (`functions/.env.<project>`, committed)
 `defineString` params, read from the committed `functions/.env.<project>` of the
@@ -68,14 +73,15 @@ stay minified.
 ## Android release signing key
 `~/keystores/sabeel-time-tracker-release.jks` (alias and password in
 `sabeel-time-tracker-release.credentials.txt` beside it), named for Gradle by
-`~/.config/sabeel-time-tracker/keystore.properties` (mode 600, outside the repo).
+`~/.config/sabeel-time-tracker/keystore.properties` (mode 600, outside the repo),
+or by the file `SABEEL_KEYSTORE_PROPERTIES` names, as CI sets it.
 It is also Google Play's app signing key for this app. Losing it means no update
 can ever be signed again: the vault holds a copy (`sabeel/time-tracker/android/`).
 
 ## Google Play publishing key
 `~/keys/sabeel-play-publisher.json`, the key of
 `sabeel-play-publisher@sabeel-institute-kanban.iam.gserviceaccount.com`, read by
-`scripts/publish-play.mjs` (or the path in `PLAY_KEY`). One service account
+`sabeel-ci publish-play` (or the path in `PLAY_KEY`). One service account
 publishes every Sabeel app; Play Console gives it "Release apps to testing
 tracks" app by app. Outside the repo because the repo is public. If it leaks or
 is lost, delete that key in the Google Cloud console (project
@@ -98,7 +104,7 @@ nowhere else: never in this repo, a chat or a log.
 ## iOS build (the Mac and GitHub)
 `app/.env.sentry-build-plugin` (gitignored) holds `SENTRY_ORG`, `SENTRY_PROJECT`,
 `SENTRY_AUTH_TOKEN`, `IOS_TEAM_ID`, `ASC_KEY_ID`, `ASC_ISSUER_ID`, read by
-`scripts/load-build-env.sh`. The App Store Connect key lives at
+`sabeel-ci build-ios`. The App Store Connect key lives at
 `~/.appstoreconnect/private_keys/AuthKey_<ASC_KEY_ID>.p8`. On GitHub the same values
 come from the secrets `IOS_BUILD_ENV`, `APP_ENV_LOCAL`, `ASC_KEY_P8`, `IOS_DIST_P12`,
 `IOS_DIST_P12_PASSWORD` and `IOS_PROFILE`; `docs/IOS-BUILD.md` says what each is.

@@ -49,17 +49,17 @@ approval.
 | File | Without it |
 |---|---|
 | `~/keystores/sabeel-time-tracker-release.jks`, `~/.config/sabeel-time-tracker/keystore.properties` | Gradle refuses to package a release |
-| `~/keys/sabeel-play-publisher.json` (or `PLAY_KEY`) | `publish-play.mjs` stops; the rest of the release stands |
+| `~/keys/sabeel-play-publisher.json` (or `PLAY_KEY`) | `sabeel-ci publish-play` stops; the rest of the release stands |
 | `app/.env.local` (`EXPO_PUBLIC_SENTRY_DSN`, `EXPO_PUBLIC_FCM_VAPID_KEY`) | the APK and the web ship with crash reporting and web push off |
 | `app/android/sentry.properties` | the APK's stack traces in Sentry stay minified |
 | `functions/.env` (`PROBE_TOKEN`) | a functions deploy leaves `probeQueries` refusing every call |
 
-**Tools.** Node 22, JDK 17 as the default `java` (Gradle, and `jarsigner` and
-`keytool` for `publish-play.mjs`), JDK 21 for the emulators, the Android SDK and
-the `tb_emu` AVD: the bootstrap installs them. Also `firebase` (firebase-tools
-15), `gh`, `unzip`, and for the manual PDF that `npm run release` re-renders
-(`docs/render-manual.py`): `google-chrome` and Python's `markdown`
-(`python3-markdown`).
+**Tools.** Node 22.18 or later, JDK 17 as the default `java` (Gradle, and
+`jarsigner` and `keytool` for `sabeel-ci publish-play`), JDK 21 for the
+emulators, the Android SDK and the `tb_emu` AVD: the bootstrap installs them.
+Also `firebase` (firebase-tools 15), `gh`, `unzip`, and for the manual PDF that
+`npx sabeel-ci release` re-renders (`docs/render-manual.py`): `google-chrome`
+and Python's `markdown` (`python3-markdown`).
 
 ## One-time, per Firebase project
 Done for production; this is the order for a new project.
@@ -110,9 +110,9 @@ and afterwards checks every callable, `probeQueries` and the error logs. It
 needs no local Google login. The same guards run here:
 ```sh
 export FIREBASE_PROJECT_ID=sabeel-institute-time-tracker PROBE_TOKEN=…   # functions/.env
-node scripts/ci-functions.mjs require-ci && node scripts/ci-functions.mjs plan
+npx sabeel-ci ci-functions require-ci && npx sabeel-ci ci-functions plan
 firebase deploy --only functions --project dev
-node scripts/ci-functions.mjs verify --since <the time the deploy started, ISO>
+npx sabeel-ci ci-functions verify --since <the time the deploy started, ISO>
 ```
 - Hosting serves `app/dist-web`, which the hosting predeploy in `firebase.json`
   rebuilds (`npm run web:export -w @sabeel/app`) on every hosting deploy.
@@ -139,54 +139,64 @@ admin claim. From then on, promote others in-app (Manage users).
 
 ## Ship it — the release runbook
 
-`android/` is committed (no EAS); everything below is local. **Do not run the
-Gradle/`gh release` commands by hand** — `npm run release` encodes the steps and
-the checks, and skipping it is how versions and stamps drift apart.
+`android/` is committed (no EAS); the build is local. **Do not run the
+Gradle/`gh release` commands by hand** — `npx sabeel-ci release` (ci-tools)
+encodes the steps and the checks, and skipping it is how versions and stamps
+drift apart. The version scheme: X.Y.Z, no suffix, written only in
+`app/app.json`; Android's versionCode and the iOS build number are both
+`major * 1000000 + minor * 1000 + patch` (0.29.1 is 29001), and each version
+must be above main's and every released tag's.
 
 ```sh
-# 0. clean tree, CI green on the commit you are shipping
+# 0. CI green on main
 npm run verify                       # lint (incl. version check) + typecheck + knip + unit
-scripts/emulator.sh headless &       # the release VERIFIES on the AVD; it needs one
 
 # 0b. server code the new app calls goes live FIRST (a callable the app has not
 #     got yet fails every use of it): e.g. accountExists, which native sign-in asks
 #     before signing in, and acceptRules, without which nobody gets past the
 #     rules screen (docs/STORE-RELEASE.md). Rules and indexes with them: the
-#     reports index serves reportProblem's five-an-hour count.
+#     reports index serves reportProblem's five-an-hour count. Functions can
+#     also go through Deploy Functions (docs/GITHUB-ACTIONS.md).
 firebase deploy --only firestore:rules,firestore:indexes,functions --project dev
 
-# 1. open the release pull request — version is X.Y.Z, no suffix, and must
-#    increase (see check-version.mjs); Faisal merges it once its checks pass
-npm run release -- 0.29.1 --notes notes.md
+# 1. the deploy-log entry, heading first, kept outside the checkout (--ship
+#    refuses an untracked file):
+#      ### 2026-11-02 — <summary> — v0.30.0
+#      <the release notes>
+#    then the release pull request; Faisal merges it once its checks pass
+npx sabeel-ci release 0.30.0 --notes ../v0.30.0.md
 
 # 2. ship the merged commit from main: build, AVD check, tag, Play internal
 git switch main && git pull --ff-only
-npm run release -- --ship --notes notes.md
+npx sabeel-ci release --ship
 
-# 3. deploy the web from the commit the release tagged; the predeploy
-#    exports again from the same commit and env, so check before and after
-npm run web:export -w @sabeel/app && npm run check:web-push
-firebase deploy --only hosting --project dev
-npm run check:web-push
-#    …plus `functions` / `firestore:rules` / `firestore:indexes` if they changed.
+# 3. the web and the iPhones, from the same commit: the two runs --ship prints
+gh workflow run web-deploy.yml -f build_run_id=<the Web run for that commit> -f deploy=true
+gh workflow run ios.yml --ref v0.30.0 -f testflight=true    # with Faisal's go-ahead
 ```
 
-`npm run release -- X.Y.Z` updates the version and renders the manual on a
-`release/vX.Y.Z` branch from origin/main, commits it and opens the pull
-request. `--ship`, on main after the merge, refuses unless main matches
-origin/main, then builds APKs and the AAB, verifies the production APK on the
-AVD, creates the versioned Institute GitHub release with its tag on that
-commit, and publishes to Play internal testing. No personal website or Pages
-credentials are required.
+`npx sabeel-ci release X.Y.Z --notes <entry>` works from origin/main in a
+worktree of its own: it writes the version and the iOS build number in
+`app/app.json`, moves the manual's version line and renders the manual PDF,
+adds the entry to the deploy log in `docs/PHASE_STATUS.md`, commits that on
+`release/vX.Y.Z`, pushes the branch and opens the pull request, titled and
+described by the entry. `--dry-run` shows the change and leaves nothing behind.
+
+`--ship`, on main after the merge, refuses unless main is clean and matches
+origin/main, then builds the AAB and both APKs, checks Play's permission,
+cold-starts the production APK on the AVD (booting it when no device is
+attached), creates the versioned Institute GitHub release with its tag on that
+commit, titled and described by the deploy-log entry, and publishes to Play
+internal testing. No personal website or Pages credentials are required.
 
 The tag targets the verified build commit. Deploy backend changes before their
 clients; web hosting and iOS use that same release commit.
-`--dry-run` changes the version files and renders the manual in place, with no
-branch or commit.
 
-`npm run publish:play -- --check` checks the bundle and Play access;
-`-- --internal` publishes it, checking version, commit and signing, including
-Play's generated APK certificates. Signing files are in `docs/SECRETS.md`.
+`npx sabeel-ci publish-play --check` checks the bundle and Play access;
+`--internal` publishes it, checking version, commit and signing, including
+Play's generated APK certificates, which must match
+`release.appSigningCertificate` in `ci-tools.json`. Signing files are in
+`docs/SECRETS.md`.
 
 ### Play testers
 
@@ -200,7 +210,8 @@ They must use the Google account on the list; later releases arrive as updates.
 - Verify the live web and installed Android version/commit stamps.
 - Check the intended release on Play internal testing.
 - Run the iOS workflow on the release tag and check TestFlight when uploading.
-- Record release notes in `docs/PHASE_STATUS.md`.
+- Complete the version's deploy-log entry in `docs/PHASE_STATUS.md` (written
+  with the bump) with what shipped where, by pull request.
 
 Android signing uses `~/keystores/sabeel-time-tracker-release.jks`, configured
 through `~/.config/sabeel-time-tracker/keystore.properties`. Play signs
@@ -233,7 +244,7 @@ error — wait 2–5 minutes and redeploy just the failed functions
 (`firebase deploy --only functions:<name>,functions:<name> --project dev`).
 
 **e2e: "internal" from a callable / "blocked by CORS policy" in the browser.**
-The functions emulator accepts connections on 5001 *before* it registers any
+The functions emulator accepts connections on its port *before* it registers any
 function; until then calls 404, and a 404 carries no CORS headers, so the browser
 blames CORS and the app shows a bare `internal`. It is a startup race, not a
 callable bug. `scripts/web-e2e.mjs` now waits for a known callable to exist

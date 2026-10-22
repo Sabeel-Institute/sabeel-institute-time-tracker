@@ -14,16 +14,27 @@ import http from 'node:http';
 import { createReadStream, createWriteStream, existsSync } from 'node:fs';
 import { extname, join } from 'node:path';
 import { chromium } from 'playwright';
-import { EMULATOR_PORTS } from './ports.mjs';
+import { config } from '@sabeel-institute/ci-tools/lib/config.mjs';
+import { ports } from '@sabeel-institute/ci-tools/lib/ports.mjs';
 
 export const ROOT = new URL('../..', import.meta.url).pathname;
-export const PROJECT = 'demo-sabeel';
+// The ports and the demo project are this app's, from ci-tools.json through
+// ci-tools: the one place they are stated (docs/DEV-TOOLING.md, "Emulator
+// ports are this checkout's own").
+const SETTINGS = config(ROOT);
+const PORTS = ports(SETTINGS);
+export const PROJECT = SETTINGS.emulators.project;
 const HOST = '127.0.0.1';
 export const EMULATOR_HOSTS = {
-  auth: `${HOST}:${EMULATOR_PORTS.auth}`,
-  firestore: `${HOST}:${EMULATOR_PORTS.firestore}`,
-  functions: `${HOST}:${EMULATOR_PORTS.functions}`,
+  auth: `${HOST}:${PORTS.auth}`,
+  firestore: `${HOST}:${PORTS.firestore}`,
+  functions: `${HOST}:${PORTS.functions}`,
 };
+
+/** A ci-tools command, through the pinned package; its output goes to the terminal. */
+function sabeelCi(args, options = {}) {
+  return execFileSync('npx', ['--no', 'sabeel-ci', ...args], { cwd: ROOT, ...options });
+}
 
 const children = [];
 
@@ -113,15 +124,14 @@ function waitForFunctionRegistered(name, timeoutMs = 180000) {
   });
 }
 
-/** JDK 21 for the emulators, without disturbing the Gradle default (JDK 17). */
+/**
+ * JDK 21 for the emulators, without disturbing the Gradle default (JDK 17):
+ * `sabeel-ci jdk21` finds one (SABEEL_JDK21_HOME, ~/opt/jdk-21, JAVA_HOME,
+ * `java`) or says where it looked and stops the run.
+ */
 function emulatorEnv() {
-  const env = { ...process.env };
-  const jdk = env.ST_JDK21_HOME ?? `${env.HOME}/opt/jdk-21`;
-  if (existsSync(jdk)) {
-    env.JAVA_HOME = jdk;
-    env.PATH = `${jdk}/bin:${env.PATH}`;
-  }
-  return env;
+  const jdk = sabeelCi(['jdk21'], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'inherit'] }).trim();
+  return { ...process.env, JAVA_HOME: jdk, PATH: `${jdk}/bin:${process.env.PATH}` };
 }
 
 /**
@@ -152,8 +162,8 @@ export function buildWebBundle() {
  */
 export async function startEmulators({ logPath, readyCallable = 'setUserAccess' }) {
   // A previous run that was killed leaves emulators squatting on these ports;
-  // the next run then talks to a half-dead one (see free-emulator-ports.sh).
-  execFileSync('bash', [join(ROOT, 'scripts/free-emulator-ports.sh')], { stdio: 'inherit' });
+  // the next run then talks to a half-dead one (`sabeel-ci free-emulator-ports`).
+  sabeelCi(['free-emulator-ports'], { stdio: 'inherit' });
 
   const emu = bg(
     'firebase',

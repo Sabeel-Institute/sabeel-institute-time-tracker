@@ -13,7 +13,7 @@
     ],
     "ios": {
       "bundleIdentifier": "com.sabeelinstitute.timetracker",
-      "buildNumber": "1",
+      "buildNumber": "29001",
       "supportsTablet": false,
       "googleServicesFile": "./GoogleService-Info.plist",
       "infoPlist": {

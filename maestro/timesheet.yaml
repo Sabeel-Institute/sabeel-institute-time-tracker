@@ -1,13 +1,13 @@
 # A day's work on Android: sign-in, the institute's rules, an activity made,
 # clocked in and out, and the manager's screens. The account comes from
-# scripts/seed-native.mjs; run by scripts/native-e2e.sh.
+# scripts/seed-native.mjs; run by `npx sabeel-ci native-e2e`.
 appId: ${APP_ID}
 name: Rules, clock in and out, and the manager screens
 ---
 - launchApp:
     clearState: true
 - extendedWaitUntil:
-    visible: "Dev \\(emulator\\) sign-in"
+    visible: "Dev sign-in \\(emulator only\\)"
     timeout: 180000
 - assertVisible: "volunteer@oursabeel.com"
 - tapOn: "Dev: sign in"

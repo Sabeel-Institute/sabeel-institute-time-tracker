@@ -9,25 +9,39 @@ stack behaviour they guard against is documented once, in the shared
 `expo-firebase-stack` skill — see `docs/STACK-GOTCHAS.md`. Facts about Expo,
 Firebase or the emulators belong there; what we built in response belongs here.
 
+**Two homes for the tools.** The CI, release, emulator and device tools are
+the shared `Sabeel-Institute/ci-tools` package, pinned to a commit in
+`package-lock.json` and run as `npx sabeel-ci <command>`; its README lists
+every command and every `ci-tools.json` key, and `ci-tools.json` says what
+differs for this app. Only this app's own tools live in `scripts/`: the two
+browser suites and their shared bring-up (`web-e2e.mjs`, `screens-e2e.mjs`,
+`lib/e2e-stack.mjs`), the native flows' seed (`seed-native.mjs`) and the
+first-admin bootstrap (`grant-admin.mjs`). The entries below keep the reasons
+for both.
+
 ## Commands
 
 | Command | What it does |
 |---|---|
 | `npm run verify` | the fast CI gates in one shot: lint + typecheck + knip + unit — **run before pushing** |
-| `npm run lint` | eslint + `check:text` (see below) |
+| `npm run lint` | eslint + `check:text` + `check:version` (see below) |
 | `npm run typecheck` | tsc across all workspaces |
 | `npm test` | Vitest units (functions + shared) |
-| `npm run test:emulator` | rules/integration suite (frees ports first) |
+| `npm run test:emulator` | rules/integration suites, `sabeel-ci test-emulator` (frees ports first) |
+| `npm run emulators` | the emulators, left running for a dev server (`sabeel-ci emulators`) |
 | `npm run test:e2e` | full browser e2e against emulators — the product LIFECYCLE |
 | `npm run test:screens` | every screen at five widths, asserted — the LAYOUT sweep (in CI) |
 | `npm run knip` | dead-code audit |
-| `npm run emulators:free` | kill whatever is squatting on emulator ports |
-| `npm run release -- <version> --notes FILE` | open a release pull request; `-- --ship --notes FILE` after the merge publishes the GitHub release and Play internal testing (`docs/DEPLOY.md`) |
-| `npm run publish:play -- --check` / `-- --internal` | the Play gates alone / rerun the Play upload alone |
+| `npm run emulators:free` | stop this checkout's leftovers on its emulator ports (`sabeel-ci free-emulator-ports`) |
+| `npx sabeel-ci check-app` | what ci-tools assumes of this repo: `ci-tools.json`, the rendered workflows, the ports, the version and its deploy-log entry, `.gitignore` (in CI) |
+| `npx sabeel-ci native-e2e [--ios]` | the Maestro flows on the emulator, or an iPhone simulator (below) |
+| `npx sabeel-ci release X.Y.Z --notes <entry>` | open a release pull request; `npx sabeel-ci release --ship` after the merge publishes the GitHub release and Play internal testing (`docs/DEPLOY.md`) |
+| `npx sabeel-ci publish-play --check` / `--internal` | the Play gates alone / rerun the Play upload alone |
+| `npm run build:aab` | the signed Play bundle alone, every gate first (`sabeel-ci build-aab`) |
 | `npm run check:web-push` | the exported web bundle carries the VAPID key (`docs/DEPLOY.md`) |
 | `npm run check:push` | FCM and Apple accept a message from the project |
 | `npm run check:ios` | the iOS config: app.json against the plist, plugins, export compliance, icon, privacy manifest, DSN |
-| `npm run build:ios` | `scripts/build-ios.sh`: every gate, then archive and export a signed `.ipa` (Mac only, never uploads) |
+| `npm run build:ios` | `sabeel-ci build-ios`: every gate, then archive and export a signed `.ipa` (Mac only, never uploads) |
 
 ## Setting up a machine
 
@@ -42,12 +56,15 @@ no root, and is idempotent:
 ```sh
 ../agent-skills/skills/expo-firebase-stack/tools/check-host.sh   # what is missing
 ../agent-skills/skills/expo-firebase-stack/tools/bootstrap-linux.sh \
-    --jdk21-aliases ST --repo "$PWD"
+    --jdk21-aliases SABEEL --repo "$PWD"
 ```
 
-`--jdk21-aliases ST` sets `ST_JDK21_HOME`, which
-`scripts/test-emulator.sh` reads to find JDK 21 without disturbing the Gradle
-default.
+`--jdk21-aliases SABEEL` sets `SABEEL_JDK21_HOME`, which `npx sabeel-ci jdk21`
+reads first to find JDK 21 without disturbing the Gradle default (it also looks
+in `~/opt/jdk-21`, `JAVA_HOME` and the `java` on `PATH`). The other local
+settings ci-tools reads: `SABEEL_AVD`, the AVD `sabeel-ci emulator` boots
+(`tb_emu` unless set), and `SABEEL_STOP_GRADLE=1`, which makes `npm run
+test:emulator` stop the Gradle daemons first (below).
 
 Releasing needs more (access, the download-page clone, the keys, the manual
 renderer's tools): `docs/DEPLOY.md`, "Before your first release".
@@ -61,11 +78,12 @@ to boot and ~14 s per `screencap`**, so screenshot-based verification stops
 being practical while input events (~1.4 s) remain usable. **Builds are
 unaffected** — Gradle needs no KVM. `check-host.sh` gives the verdict.
 
-## `scripts/free-emulator-ports.sh`
+## `sabeel-ci free-emulator-ports` (`npm run emulators:free`)
 
-A killed run leaves emulators holding 5001/8080/9099. The next run then talks to
-a **half-dead emulator**: it answers on the port but has registered no
-functions, so every callable 404s.
+A killed run leaves emulators holding this checkout's ports. The next run then
+talks to a **half-dead emulator**: it answers on the port but has registered no
+functions, so every callable 404s. `npm run test:emulator`, `npm run emulators`
+and both browser suites free the ports first.
 
 The symptom chain is vicious — a 404 carries no CORS headers, so the browser
 reports *"blocked by CORS policy"*, and the app surfaces a bare **`internal`**.
@@ -74,11 +92,11 @@ this made a clean `HEAD` fail identically to a working branch, which is the only
 reason it was caught: **when a failure reproduces on stashed changes, it is
 environmental.** Bisect against clean HEAD before debugging your own diff.
 
-Ports are looked up **by port**, never `pkill -f firebase` — that pattern also
-matches the script's own command line and kills the caller (seen as a shell
-exiting 144). This is easy to re-learn the hard way: on 2026-07-26 a
+Owners are looked up **by port**, never `pkill -f firebase` — that pattern also
+matches the caller's own command line and kills it (seen as a shell exiting
+144). This is easy to re-learn the hard way: on 2026-07-26 a
 `pkill -f functionsEmulatorRuntime` typed by hand killed the agent shell the
-same way. Kill by PID, skipping `$$`/`$PPID`:
+same way. By hand, kill by PID, skipping `$$`/`$PPID`:
 
 ```sh
 for p in $(pgrep -f "emulator/functionsEmulatorRuntime"); do
@@ -87,10 +105,16 @@ for p in $(pgrep -f "emulator/functionsEmulatorRuntime"); do
 done
 ```
 
-**What this script cannot clean up:** orphaned `functionsEmulatorRuntime`
-children. They hold no fixed port, so a port-based sweep never sees them, and
-`npm run emulators:free` will happily report *"emulator ports clear"* while
-several are still resident. Check for them directly when a run misbehaves:
+**It reaches no further than this checkout.** It sweeps only this app's suite
+ports (`npx sabeel-ci ports --suite`), and stops a holder only when its working
+directory is inside this checkout; a holder from anywhere else (the other
+checkout of this repo, a worktree, a sibling app) is named with its pid and
+directory, nothing is stopped, and the run fails. Stop it by pid if it is yours.
+
+**Orphaned `functionsEmulatorRuntime` children** hold no fixed port, so a
+port-based sweep never sees them; it stops the ones working in this checkout's
+`functions/` whose emulator is gone. Check for any others directly when a run
+misbehaves:
 
 ```sh
 ps -eo pid,args --no-headers | grep [f]unctionsEmulatorRuntime
@@ -102,8 +126,8 @@ use `ps | grep [f]…` when you want a truthful count.)
 ## The emulator suite dies with `ECONNREFUSED` and most tests "skipped"
 
 Signature: the run lasts ~6 seconds, a dozen tests fail with
-`connect ECONNREFUSED 127.0.0.1:61002` (this checkout's auth port; the
-signature predates the port move and used to read 9099), and 80+ are skipped.
+`connect ECONNREFUSED 127.0.0.1:61002` (this checkout's auth port), and 80+
+are skipped.
 Buried above the vitest output — and easy to miss, because the tail of the log
 is all test noise — is the real cause:
 
@@ -114,19 +138,16 @@ Killed
 
 That is the **OOM killer**, not a bug in your diff.
 
-**Correction (verified 2026-08-28).** This file used to say the machine runs
-`earlyoom` with a `--prefer` list that makes the Java Firestore emulator the
-designated victim. **It does not run here at all** — no binary, no unit, no
-process. That mattered because it taught the wrong triage. With no `earlyoom`
-the kernel picks by RSS, so under real pressure the first things to go are the
+**No `earlyoom` runs here** (verified 2026-08-28) — no binary, no unit, no
+process — so nothing makes the Java Firestore emulator the designated victim,
+and triage that assumes one goes wrong. The kernel picks by RSS, so under real pressure the first things to go are the
 **AVD (~5 GB)** and a **Gradle daemon (~3.7 GB)**, not the emulator. The
 emulator dying is usually a *consequence* of memory another process took — quite
 possibly a process in a **sibling repo**, since `~/.gradle` and the AVD are
 shared machine-wide.
 
 The memory picture, checked the same day: **15 GiB of RAM plus a 16 GiB swapfile**
-(`/proc/swaps`, `vm.swappiness=10`). An earlier note here said "no swap", which
-was wrong and pointed at the wrong failure: with swap present, memory pressure
+(`/proc/swaps`, `vm.swappiness=10`). With swap present, memory pressure
 usually shows up first as **thrashing** — an AVD or emulator that has gone
 treacle-slow — and only later as a kill. Treat a suite that suddenly takes
 minutes per step as a memory symptom, not a flaky test.
@@ -141,10 +162,13 @@ cd app/android && ./gradlew --stop    # freed 4.1 GB; suite immediately green
 
 So when the suite fails right after you have built an APK or run the AVD, check
 `free -h` and `ps -eo pid,rss,comm --sort=-rss | head` **before** reading the
-failures. Always `./gradlew --stop` and kill the AVD when finishing build work —
-it also keeps the machine usable for anyone else working in the repo.
+failures. `npm run test:emulator` says when a Gradle daemon is resident and
+leaves it, since `./gradlew --stop` stops every checkout's daemons, a sibling
+session's build included; `SABEEL_STOP_GRADLE=1 npm run test:emulator` stops
+them first. Always `./gradlew --stop` and kill the AVD when finishing build
+work — it also keeps the machine usable for anyone else working in the repo.
 
-## `scripts/check-text-sources.mjs` (runs inside `npm run lint`)
+## `sabeel-ci check-text-sources` (`npm run check:text`, inside `npm run lint`)
 
 A functions source file once contained a **raw NUL byte** inside a template
 literal used as a composite Map-key separator. It compiled and ran correctly —
@@ -203,6 +227,14 @@ Chromium, not `/usr/bin/google-chrome`.** `playwright` was already a
 devDependency (it drives the e2e — see the knip notes above); pointing at a
 system Chrome was the only thing keeping a browser suite off a CI runner.
 
+**Ports, the project, Java and the sweep come from ci-tools.** The emulator
+ports are `ports(config(ROOT))` (`@sabeel-institute/ci-tools/lib/ports.mjs`
+and `lib/config.mjs`, from this app's `ci-tools.json`), the demo project is
+`config(ROOT).emulators.project`, JDK 21 is `npx --no sabeel-ci jdk21`, and the
+ports are freed with `npx --no sabeel-ci free-emulator-ports`. Nothing in
+`scripts/` states a port of the block, comments included: `sabeel-ci
+check-app` refuses one, because a copy is a copy that drifts.
+
 ## `scripts/screens-e2e.mjs` — the layout sweep
 
 `npm run test:screens`. Every screen, five accounts, five viewport widths, looked at
@@ -210,16 +242,16 @@ system Chrome was the only thing keeping a browser suite off a CI runner.
 tight loop.
 
 **Review a sweep in its report.** The sweep writes its screenshots and every
-check (`results.json`) to `e2e-shots/screens/`, emptied at the start of each run;
-`scripts/screens-report.mjs` turns them into one page: every screen at every
+check (`results.json`) to `shots/screens/`, emptied at the start of each run;
+`sabeel-ci screens-report` turns them into one page: every screen at every
 width side by side, the failed checks beside the screenshot they are about,
 and what changed against a baseline sweep as before / after / difference. A
 filter narrows it to a screen or a width, or to what failed or changed.
 `manifest.json` beside the page holds the same data for an agent.
 
 ```bash
-node scripts/screens-report.mjs e2e-shots/screens --baseline-from-main   # → e2e-shots/screens-report/index.html
-node scripts/screens-report.mjs e2e-shots/screens --baseline <dir of screenshots>
+npx sabeel-ci screens-report shots/screens --baseline-from-main   # → shots/screens-report/index.html
+npx sabeel-ci screens-report shots/screens --baseline <dir of screenshots>
 ```
 
 `--baseline-from-main` compares with the report of the latest successful CI
@@ -297,13 +329,14 @@ Design decisions worth not undoing:
   three accounts are seeded as having accepted the rules, as `acceptRules`
   records it; `web-e2e.mjs` drives the real acceptance.
 
-**It is not part of `release.mjs`, deliberately.** That script's AVD step exists
-to check the one thing CI cannot — that the production APK boots and is not an
-emulator-mode bundle. The sweep checks the *web* layout, which CI has already run
-on every push; re-proving it would add ~2.5 minutes to every release for a result
-that is already green. The only commit a release builds that CI has not yet seen
-is the version bump the script makes itself, whose diff is a version string and a
-build-info stamp — nothing that can move a layout.
+**It is not part of `sabeel-ci release`, deliberately.** The release's AVD step
+exists to check the one thing CI cannot — that the production APK boots and is
+not an emulator-mode bundle. The sweep checks the *web* layout, which CI has
+already run on every push; re-proving it would add ~2.5 minutes to every release
+for a result that is already green. The commit a release builds is the merged
+release pull request, whose diff is a version, a build number, the manual and
+the deploy-log entry — nothing that can move a layout — and CI has swept it
+too.
 
 Two checks in the sibling kanban's version were deliberately **not** ported, and
 both times for the same reason — *a check that fires on correct code is worse
@@ -341,7 +374,7 @@ Beyond the flows themselves, the harness encodes:
 - **Frees emulator ports first** (above).
 - **Waits for a callable to EXIST, not for the port to answer**
   (`waitForFunctionRegistered`). Port-open is not function-ready.
-- **Truncates `e2e-shots/emulator.log` per run.** A stale log from days earlier
+- **Truncates `shots/emulator.log` per run.** A stale log from days earlier
   once produced confident, wrong conclusions.
 - **Captures failed calls to the functions emulator with their response bodies**,
   and dumps them (plus console errors and per-page screenshots) on failure. This
@@ -369,27 +402,29 @@ one run in two. Both are stack behaviour, so the *why* lives in the
 **When this suite fails, check which of the two it is before believing the
 step.**
 
-The shared-machine hazard behind them is **fixed as of 2026-08-28**: this
-checkout owns ports **61000–61008** and `free-emulator-ports.sh` sweeps nothing
-outside that block. Previously this repo and its two siblings all pinned
-8080/9099/5001 and all called that script at the start of every run, so a run in
-one repo SIGTERMed the other's Firestore (`exited with code: 143`) — or, worse,
-silently cost it a write. See **"Emulator ports are this checkout's own"** below.
+The shared-machine hazard behind them is closed: this checkout owns its own
+port block, and `sabeel-ci free-emulator-ports` stops nothing outside that
+block or outside this checkout. With shared ports and a sweep that killed
+whatever held them, a run in one repo SIGTERMed the other's Firestore (`exited
+with code: 143`) — or, worse, silently cost it a write. See **"Emulator ports
+are this checkout's own"** below.
 
-## `scripts/native-e2e.sh` — Maestro flows on the Android emulator
+## `sabeel-ci native-e2e` — Maestro flows on the Android emulator
 
-`bash scripts/native-e2e.sh` runs the Maestro flows in `maestro/` against the
+`npx sabeel-ci native-e2e` runs the Maestro flows in `maestro/` against the
 debug build: it builds and installs the APK, starts the emulators, makes the
-account the flows sign in as (`scripts/seed-native.mjs`), serves the JavaScript
-from Metro on 8081 with `EXPO_PUBLIC_USE_EMULATORS=1`, and runs every flow, or
-the one you name (`bash scripts/native-e2e.sh maestro/timesheet.yaml`). It needs
-one booted emulator (`scripts/emulator.sh headless`) and installs the pinned
-Maestro itself (`scripts/install-maestro.sh`). Screenshots, Maestro's JUnit
-report and the emulator, Metro and device logs land in `e2e-shots/native/`. It
-refuses a held 8081, since that port is shared with the sibling apps.
+account the flows sign in as (`scripts/seed-native.mjs`, `native.seed` in
+`ci-tools.json`), serves the JavaScript from Metro on 8081 with
+`EXPO_PUBLIC_USE_EMULATORS=1`, and runs every flow, or the one you name (`npx
+sabeel-ci native-e2e maestro/timesheet.yaml`). It needs one booted emulator
+(`npx sabeel-ci emulator headless`) and installs the pinned Maestro itself
+(`sabeel-ci install-maestro`). Screenshots, Maestro's JUnit report and the
+emulator, Metro and device logs land in `shots/native/`. It refuses a held
+8081, since that port is shared with the sibling apps.
 
-- **The account is the dev row's own address.** The dev sign-in row on a phone
-  is filled with `volunteer@oursabeel.com` and refuses an address with no
+- **The account is the dev row's own address.** The dev sign-in row ("Dev
+  sign-in (emulator only)", testID `dev-sign-in`) on a phone is filled with
+  `volunteer@oursabeel.com` and refuses an address with no
   account, so `seed-native.mjs` makes that account the way the row would (an
   unsigned Google token, which the Auth emulator accepts), waits for
   `onUserCreate`'s profile, and makes it an admin. It has not accepted the
@@ -403,8 +438,8 @@ refuses a held 8081, since that port is shared with the sibling apps.
   runner starts Metro with `EXPO_PUBLIC_E2E=1` and `app/index.ts` then tells
   LogBox to ignore warnings; they still reach `logs/metro.log`.
 
-**On the iOS simulator**: `bash scripts/native-e2e.sh --ios` (macOS) builds the
-debug app for the simulator with `scripts/ios-sim-build.sh` (a prebuild scoped
+**On the iOS simulator**: `npx sabeel-ci native-e2e --ios` (macOS) builds the
+debug app for the simulator with `sabeel-ci ios-sim-build` (a prebuild scoped
 to iOS, the committed `Podfile.lock`, `xcodebuild` for `iphonesimulator`),
 installs it on a booted iPhone simulator, and runs the same flows. Each flow
 takes the installed app's id as `${APP_ID}`, since the Android and iOS builds
@@ -422,15 +457,18 @@ kept; any other failure stands. A failed run also keeps Maestro's view of the
 screen (`logs/hierarchy-at-failure.json`), the labels to match against.
 
 The **Native** workflow runs the same command on GitHub's emulator
-(`scripts/ci-avd.sh`) on every main push, every release tag, every pull
-request that changes the flows or their scripts, and by hand, and keeps
-`e2e-shots/native/` as the `native-<sha>` artifact. Its `ios` job runs `--ios` on a
+(`sabeel-ci ci-avd`) on every main push, every release tag, every pull
+request that changes the flows, the seed or `ci-tools.json`, and by hand, and
+keeps `shots/native/` as the `native-<sha>` artifact. Its `ios` job runs `--ios` on a
 macOS runner for release tags, by hand and for pull requests that change
 the flows, and keeps the same folder as `native-ios-<sha>`.
 
 ## Emulator ports are this checkout's own
 
-**This repo owns 61000–61008.** The sibling projects own 61100+ and 61200+.
+**This repo owns the block 61000–61099** (`emulators.base` in
+`ci-tools.json`); Kanban owns 61200+, LMS 61300+, and 61100+ is the legacy
+recording app's. Every service sits at the same offset in every block (ci-tools'
+`lib/ports.mjs`; `npx sabeel-ci ports` lists this app's):
 
 | port | service |
 |---|---|
@@ -441,14 +479,14 @@ the flows, and keeps the same folder as `native-ios-<sha>`.
 | 61004 | emulator UI |
 | 61005 | hub |
 | 61006 | logging |
-| 61007 | eventarc |
 | 61008 | tasks (Cloud Tasks) |
+| 61009 | eventarc |
 
-Three repos share this machine and all three used to pin 8080/9099/5001, so
-whichever suite started second killed the other's Firestore. `61003` also reads
-as "this project, functions" at a glance — which is the diagnostic that was
-missing when one session killed another's emulator after misreading a truncated
-`ps` line.
+The apps share this machine, and with Firebase's default ports
+(8080/9099/5001) whichever suite started second killed the other's Firestore.
+`61003` also reads as "this project, functions" at a glance, and `61303` as
+"LMS, functions" — which is the diagnostic that was missing when one session
+killed another's emulator after misreading a truncated `ps` line.
 
 **Why 61000+, and not some other free-looking numbers.** The ephemeral range on
 this box is 32768–60999 (`/proc/sys/net/ipv4/ip_local_port_range`), so anything
@@ -456,15 +494,15 @@ above it is never handed out at random; and Firebase's own defaults top out at
 9499 (`firebase-tools/lib/emulator/constants.js`), so the block cannot collide
 with something the CLI picks for itself.
 
-**Four files state these numbers and they cannot share a representation** —
-`firebase.json` (JSON), `app/src/env.ts` (TS, inlined into the client bundle),
-`scripts/lib/ports.mjs` (ESM) and the `PORTS=(…)` array in
-`free-emulator-ports.sh` (shell). Four copies are unavoidable; four copies
-drifting is not. `functions/test/unit/emulator-ports.test.ts` asserts they agree,
-that every port is inside the block, and that the kill list contains **nothing
-this checkout does not own**. Change one, change all four, and let `npm run
-verify` prove it in seconds rather than discovering it when an emulator answers
-on a port nobody expected.
+**Two files state these numbers, because they cannot read ci-tools** —
+`firebase.json` (what the emulators bind) and `app/src/env.ts` (inlined into the
+client bundle). Everything else reads them: shell through `npx sabeel-ci ports
+<name>`, Node through `ports(config(root))`, and the demo project through
+`config(root).emulators.project`. `sabeel-ci check-app`, in CI, holds the two
+files in step with `ci-tools.json`, and refuses a port of the block, a Firebase
+default or another app's port stated anywhere in `scripts/` or `package.json`,
+comments included. A disagreement fails a pull request rather than surfacing
+when an emulator answers on a port nobody expected.
 
 **Two ports nobody asked for.** The functions emulator starts the Eventarc
 and Cloud Tasks emulators beside itself, used or not, on 9299 and 9499 unless
@@ -524,77 +562,91 @@ from it, and flagged by knip. Being repo config rather than a wrapper-script env
 var, it also covers a hand-run `npx expo start`, which no script sets `TMPDIR`
 for.
 
-## The iOS scripts
+## The iOS commands
 
-The iPhone build has its own runbook, `docs/IOS-BUILD.md`. What each script is
+The iPhone build has its own runbook, `docs/IOS-BUILD.md`. What each command is
 for, in one line:
 
-- `scripts/check-ios-config.mjs` — the iOS settings live in two files that must
-  agree (`app/app.json`, `app/GoogleService-Info.plist`), and every mismatch it
-  catches surfaces otherwise at upload, at review or at runtime.
-- `scripts/build-ios.sh` — the gates first (a locked keychain is found in a
-  second, not twenty minutes into an archive), then prebuild, the pods held to
-  `app/Podfile.lock`, archive, export. Automatic signing on the Mac, manual with
-  `IOS_PROFILE_NAME` on GitHub.
-- `scripts/load-build-env.sh` — the build machine's values from the gitignored
-  `app/.env.sentry-build-plugin`, parsed rather than sourced.
-- `scripts/testflight-check.mjs` — before an upload: is this commit the
+- `sabeel-ci check-ios-config` (`npm run check:ios`) — the iOS settings live in
+  two files that must agree (`app/app.json`, `app/GoogleService-Info.plist`),
+  and every mismatch it catches surfaces otherwise at upload, at review or at
+  runtime.
+- `sabeel-ci build-ios` (`npm run build:ios`) — the gates first (a locked
+  keychain is found in a second, not twenty minutes into an archive), then
+  prebuild, the pods held to `app/Podfile.lock`, archive, export. Automatic
+  signing on the Mac, manual with `IOS_PROFILE_NAME` on GitHub. It reads the
+  build machine's values from the gitignored `app/.env.sentry-build-plugin`,
+  parsed rather than sourced.
+- `sabeel-ci testflight-check` — before an upload: is this commit the
   `v<version>` tag on GitHub, and has Apple not taken the build number.
 
-`scripts/free-emulator-ports.sh` and `scripts/preflight-metro.mjs` find port
-owners with `ss` and `/proc`, which a Mac does not have, so on the Mac both
-report every port free. Check by hand there: `lsof -nP -iTCP:<port>
--sTCP:LISTEN`.
+`sabeel-ci free-emulator-ports` and `sabeel-ci preflight-metro` find port owners
+with `ss` and `/proc` on Linux and with `lsof` on a Mac.
 
-## `scripts/release.mjs`
+## Releases: `sabeel-ci release`
 
-One script, because a hand-run release lets the version and the build stamps
+One command, because a hand-run release lets the version and the build stamps
 drift apart. It runs in two steps, because main takes changes only by pull
-request. `npm run release -- X.Y.Z --notes FILE` bumps the version in
-`app/app.json` (the only copy) and the manual's label, re-renders the manual
-PDF, commits that on `release/vX.Y.Z` from origin/main and opens the pull
-request. After the merge, `npm run release -- --ship --notes FILE` on main
-builds both APKs and the Play bundle, verifies on the AVD, publishes the GitHub
-release, and last puts the bundle on Play internal testing
-(`scripts/publish-play.mjs`).
+request.
+
+1. `npx sabeel-ci release X.Y.Z --notes <entry>` works from origin/main in a
+   worktree of its own, leaving the checkout it runs in alone. It writes the
+   version in `app/app.json` (the only copy) and the iOS build number that
+   follows from it, moves the manual's "For app version" line, renders the
+   manual PDF (`docs/render-manual.py`), adds `<entry>` to the deploy log in
+   `docs/PHASE_STATUS.md`, commits that as `chore(release): vX.Y.Z` on
+   `release/vX.Y.Z`, pushes the branch and opens the pull request, titled and
+   described by the entry. `--dry-run` shows the change and leaves nothing
+   behind.
+2. After Faisal merges it, `npx sabeel-ci release --ship` on main builds the
+   Play bundle (`sabeel-ci build-aab`) and both APKs, checks Play's permission,
+   cold-starts the universal APK on the AVD, publishes the GitHub release, and
+   last puts the bundle on Play internal testing (`sabeel-ci publish-play`).
+   It ends by printing the two runs that put the same commit on the web
+   (Deploy Web, with that commit's Web build) and on iPhones (the iOS workflow
+   on the tag).
+
+The entry is the version's deploy-log entry, heading first: `### <YYYY-MM-DD> —
+<summary> — vX.Y.Z`, then the notes. The version scheme is ci-tools': X.Y.Z,
+and Android's versionCode and the iOS build number are both `major * 1000000 +
+minor * 1000 + patch`.
 
 Guards worth keeping:
 
 - **Every channel ships the one verified build**: the GitHub release
   (APKs), Play internal testing (the bundle). Never attach an APK
   to chat.
-- **Both variants, every time.** arm64-only crashes on an x86_64 emulator with
+- **Both variants, every time** (arm64-v8a and universal, from
+  `build.gradle`'s ABI splits). arm64-only crashes on an x86_64 emulator with
   "Unexpected CPU variant" — which is what verification runs on.
 - **The production check is the ABSENCE of the dev sign-in row.** An
   emulator-mode bundle looks identical otherwise, and Metro will serve a cached
   bundle built under different `EXPO_PUBLIC_*` env. The AVD step is
-  `npm run check:release` on the universal APK, the check the Android workflow
-  runs on every bundle: three cold starts, each failing the release if that row
+  `sabeel-ci check-release` on the universal APK, the check the Android workflow
+  runs on every bundle: five cold starts, each failing the release if that row
   is present, the label is not `v<version> · <commit>`, or the device log shows
-  a crash.
-- **`versionCode` must increase**, or installs silently refuse to upgrade.
-- Refuses to run on a dirty tree, so a release is reproducible from a commit.
+  a crash. With no device attached it boots the AVD itself.
+- **`versionCode` must increase**, or installs silently refuse to upgrade:
+  step 1 refuses a version not above main's and every released tag's.
 - **Builds only main's merged head.** `--ship` refuses unless the checkout is a
   clean main identical to origin/main, then stamps `app/src/build-info.ts` from
-  that commit. The APK bundles it and the later `firebase deploy --only hosting`
-  regenerates it from the SAME commit — so the sign-in footer
-  (`v<version> · <hash>`) is identical on the APK and the web.
+  that commit. The APK bundles it and the Web build of the same commit stamps
+  the same — so the sign-in footer (`v<version> · <hash>`) is identical on the
+  APK and the web.
 - **Tags the built commit by name**: `gh release create --target <sha>`. Without
   a target the tag lands on whatever the remote branch head is, which is how
   v0.26.0 and v0.27.0 tagged their predecessors. A failure before the tag
-  leaves nothing published; rerun `--ship`. Finish with `firebase deploy --only
-  hosting --project dev`.
-
-`--dry-run` bumps the version and renders the manual in place, with no branch or
-commit; `--verify-only` re-runs the AVD check against already-built APKs.
+  leaves nothing published; rerun `--ship`. A failure at Play leaves the GitHub
+  release standing: rerun `npx sabeel-ci publish-play --internal` alone.
 
 ### Android distribution
 
 Testers install through Play internal testing:
 https://play.google.com/apps/internaltest/4701451587936876375
 
-`release.mjs` attaches APKs and the manual to the versioned Institute GitHub
-release. It does not publish to a personal site or Pages repository.
+`sabeel-ci release --ship` attaches APKs and the manual to the versioned
+Institute GitHub release. It does not publish to a personal site or Pages
+repository.
 
 ## Working with the Firebase emulators generally
 

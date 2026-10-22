@@ -11,8 +11,9 @@
 // The stack bring-up (emulators, bundle, static server, browser) is shared with
 // scripts/screens-e2e.mjs — see scripts/lib/e2e-stack.mjs.
 //
-// Prereqs: JDK 21 for the emulators (same as test-emulator.sh) and Playwright's
-// Chromium (`npx playwright install chromium`).
+// Prereqs: JDK 21 for the emulators (`npx sabeel-ci jdk21` finds it, as for
+// `npm run test:emulator`) and Playwright's Chromium (`npx playwright install
+// chromium`).
 import { mkdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import {
@@ -29,7 +30,7 @@ import {
   startEmulators,
 } from './lib/e2e-stack.mjs';
 
-const shots = process.env.E2E_SHOTS_DIR ?? join(root, 'e2e-shots');
+const shots = process.env.E2E_SHOTS_DIR ?? join(root, 'shots');
 
 // Which URLs are calls to OUR functions emulator. Derived, not a literal: this
 // checkout's ports moved out of the shared block, and a stale `:5001/` here

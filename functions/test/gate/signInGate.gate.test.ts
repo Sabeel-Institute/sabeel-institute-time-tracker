@@ -7,7 +7,7 @@ import { EMULATOR_PROJECT_ID, PASSWORD_ACCOUNT_EMAIL, SIGN_IN_REFUSED } from '@s
  * THE DOOR HOLDS AT THE AUTH LAYER, BEFORE ANY ACCOUNT EXISTS. Driven the way
  * an outsider would: the public Auth REST API with the site's key, against the
  * Auth emulator, which calls the blocking functions the Functions emulator runs
- * (scripts/test-emulator.sh, the second pass). The promise is in what is left
+ * (`npm run test:emulator`, the functions pass). The promise is in what is left
  * behind, not only in an error code: a refused sign-up leaves no account.
  *
  * The administrator's path is the Admin SDK, which blocking functions do not

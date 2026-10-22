@@ -18,57 +18,72 @@ phase boundary.
 
 ## Deploy log
 
-- 2026-07-16 — **First live deploy** to `sabeel-institute-time-tracker`. Firestore
-  rules + indexes, all 6 Cloud Functions (us-central1, nodejs22), and Hosting
-  (https://sabeel-institute-time-tracker.web.app, HTTP 200). Functions are now
-  bundled with esbuild (commit de32168) so Cloud Build resolves the private
-  `@sabeel/shared` workspace package. First admin (faisal.shah@gmail.com) promoted via a
-  temporary one-shot bootstrap function (deployed, called, deleted). OAuth consent
-  screen is **published** (any Google account can sign in; app admin-approval
-  gates access). **Pending:** the release keystore/SHA-1 for a shareable Android
-  APK — see `TODO.md`.
+Newest first, one entry per release, written with the version bump and
+headed `### <YYYY-MM-DD> — <summary> — vX.Y.Z`: `npx sabeel-ci release` takes
+the release's title and notes from it (`docs/DEPLOY.md`). Deploys that shipped
+no app version carry no version in their heading.
 
-- 2026-07-16 — **Phase 7 deploy**: indexes → rules → functions → one-time
-  token-guarded `wipeForTimesheets` (deployed, curled once, deleted) → hosting.
-  `web:export` now always `--clear`s Metro's cache (it can serve a bundle built
-  under different `EXPO_PUBLIC_*` env — an emulator-mode bundle must never ship).
-  Live smoke: prod sign-in page clean, no dev row, no console errors.
+### 2026-10-21 — Dependency and security maintenance — v0.29.1
 
-- 2026-08-29 — **v0.27.0 and v0.27.1** (the notification channel and icon; the
-  dead "Miscellaneous" channels retired): GitHub releases and the download page.
+Functions (all 16) deployed from `08228dd`: an unauthenticated `reportTotals`
+answered UNAUTHENTICATED and `probeQueries` read OK on all 13 lines. `npm run
+release` now opens a pull request for the version bump and `--ship` builds the
+merged commit, since main takes no direct pushes. **v0.29.1** released with it,
+tag `v0.29.1` at `ba63147`: GitHub release; Play internal testing 0.29.1
+(29001); TestFlight 0.29.1 build 1 from the tag; hosting from the Web
+workflow's artifact through Deploy Web. Before the release, a debug build
+against the emulators on the AVD: sign-in, the new rules wording and I agree,
+an activity added, clock in and out, My timesheet, Reports, Approvals and
+Users. The release APK booted five times in a row with no crash, no dev sign-in
+row and `v0.29.1 · ba63147`.
 
-- 2026-10-15 — **Functions**: `accountExists` (native sign-in asks it first),
-  the sign-in gate `beforeSignUp`/`beforeSignIn` (registered with Identity
-  Platform by the deploy), and iPhone push sent to Apple directly (`apns.ts`,
-  secret `APNS_KEY`). Email/Password enabled once the gate was live. The review
-  account `apps-reviewer@oursabeel.com` made with the Admin SDK, approved as a
-  member, approver Faisal. The Android release signing key made; its SHA-1 and
-  SHA-256 on the Firebase Android app.
+### 2026-10-16 — The app's own Play signing key; the first TestFlight build — v0.28.0
 
-- 2026-10-16 — **Play app signing key** changed from the Google-generated one to
-  the app's own release key (Change key, Export and upload a key from Java
-  keystore, PEPK). **v0.28.0** released, tag `v0.28.0` at `f387267`: GitHub
-  release, download page, hosting with `/privacy` and `/support`. Play internal
-  testing: 0.28.0 (28000) a completed release, its Play-generated APKs signed
-  with the app's own key; the earlier 0.27.1 (27001) bundle left unreleased,
-  its APKs Google-signed. First TestFlight build (0.28.0, build 1) from the tag: built
-  on GitHub, uploaded at the sixth try (App Store Connect answered 500 or
-  hung on about one request in five that day; a 23-minute validation also
-  hit the job's 30-minute limit, now 90, with altool retried), VALID and in
-  internal testing.
+**Play app signing key** changed from the Google-generated one to the app's own
+release key (Change key, Export and upload a key from Java keystore, PEPK).
+**v0.28.0** released, tag `v0.28.0` at `f387267`: GitHub release, download
+page, hosting with `/privacy` and `/support`. Play internal testing: 0.28.0
+(28000) a completed release, its Play-generated APKs signed with the app's own
+key; the earlier 0.27.1 (27001) bundle left unreleased, its APKs
+Google-signed. First TestFlight build (0.28.0, build 1) from the tag: built on
+GitHub, uploaded at the sixth try (App Store Connect answered 500 or hung on
+about one request in five that day; a 23-minute validation also hit the job's
+30-minute limit, now 90, with altool retried), VALID and in internal testing.
 
-- 2026-10-21 — **Dependency and security maintenance.** Functions (all 16)
-  deployed from `08228dd`: an unauthenticated `reportTotals` answered
-  UNAUTHENTICATED and `probeQueries` read OK on all 13 lines. `npm run
-  release` now opens a pull request for the version bump and `--ship` builds
-  the merged commit, since main takes no direct pushes. **v0.29.1** released
-  with it, tag `v0.29.1` at `ba63147`: GitHub release; Play internal testing
-  0.29.1 (29001); TestFlight 0.29.1 build 1 from the tag; hosting from the
-  Web workflow's artifact through Deploy Web. Before the release, a debug
-  build against the emulators on the AVD: sign-in, the new rules wording and
-  I agree, an activity added, clock in and out, My timesheet, Reports,
-  Approvals and Users. The release APK booted five times in a row with no
-  crash, no dev sign-in row and `v0.29.1 · ba63147`.
+### 2026-10-15 — Functions: accountExists, the sign-in gate, iPhone push
+
+`accountExists` (native sign-in asks it first), the sign-in gate
+`beforeSignUp`/`beforeSignIn` (registered with Identity Platform by the
+deploy), and iPhone push sent to Apple directly (`apns.ts`, secret
+`APNS_KEY`). Email/Password enabled once the gate was live. The review account
+`apps-reviewer@oursabeel.com` made with the Admin SDK, approved as a member,
+approver Faisal. The Android release signing key made; its SHA-1 and SHA-256 on
+the Firebase Android app.
+
+### 2026-08-29 — The notification channel and icon — v0.27.0, v0.27.1
+
+The notification channel and icon; the dead "Miscellaneous" channels retired.
+GitHub releases and the download page.
+
+### 2026-07-16 — Phase 7 deploy
+
+Indexes → rules → functions → one-time token-guarded `wipeForTimesheets`
+(deployed, curled once, deleted) → hosting. `web:export` now always `--clear`s
+Metro's cache (it can serve a bundle built under different `EXPO_PUBLIC_*` env
+— an emulator-mode bundle must never ship). Live smoke: prod sign-in page
+clean, no dev row, no console errors.
+
+### 2026-07-16 — First live deploy
+
+To `sabeel-institute-time-tracker`. Firestore rules + indexes, all 6 Cloud
+Functions (us-central1, nodejs22), and Hosting
+(https://sabeel-institute-time-tracker.web.app, HTTP 200). Functions are now
+bundled with esbuild (commit de32168) so Cloud Build resolves the private
+`@sabeel/shared` workspace package. The first admin promoted via a temporary
+one-shot bootstrap function (deployed, called, deleted). OAuth consent screen
+is **published** (any Google account can sign in; app admin-approval gates
+access). **Pending:** the release keystore/SHA-1 for a shareable Android APK —
+see `TODO.md`.
 
 ## Decision log
 

@@ -268,7 +268,7 @@ days.
 Since 2026-10-16: Play's Google-generated key replaced with the app's release
 key (App integrity, App signing, Change key, Export and upload a key from Java
 keystore, PEPK). A Play install and a locally built APK update each other.
-`scripts/publish-play.mjs` completes a release only when the APKs Play
+`sabeel-ci publish-play` completes a release only when the APKs Play
 generated carry that certificate; the earlier 0.27.1 (27001) bundle, processed
 before the change, stays unreleased. APKs older than 0.28.0 are debug-signed:
 a phone with one uninstalls it once before installing a release-signed build;

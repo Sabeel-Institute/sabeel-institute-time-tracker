@@ -10,13 +10,14 @@ import { resolve } from 'node:path';
  * assertions across five viewport widths and it is worth exactly nothing the
  * first week nobody runs it.
  *
- * CI lists its browser step by name (it needs its own emulator run and its own
- * browser install), so the list cannot be globbed and has to be kept in step by
- * hand. This is what keeps it honest.
+ * CI runs its browser suites by name, one runner each: the npm scripts in
+ * `ci-tools.json`'s `ci.browserSuites`, which `sabeel-ci workflows` renders
+ * into the browser job's matrix. The list cannot be globbed and has to be kept
+ * in step by hand. This is what keeps it honest.
  *
  * It lives in `functions/test/unit` because that is the only workspace here with
  * a test runner wired up; it asserts about repo files, not about functions. The
- * emulator suites need no equivalent guard — `test:integration` runs
+ * emulator suites need no equivalent guard — `test:emulator:rules` runs
  * `--dir test/integration`, so a new file there is picked up by the glob rather
  * than by a list somebody has to remember.
  */
@@ -90,7 +91,7 @@ describe('CI browser-suite coverage', () => {
 });
 
 /**
- * The npm scripts the browser job's matrix runs (`suite: [test:screens, …]`,
+ * The npm scripts the browser job's matrix runs (`suite: ["test:screens", …]`,
  * each handed to `npm run "$SUITE"`), as the commands they amount to.
  */
 function matrixCommands(workflow: string): string {
@@ -98,7 +99,7 @@ function matrixCommands(workflow: string): string {
   const list = workflow.match(/^\s*suite:\s*\[([^\]]*)\]/m)?.[1] ?? '';
   return list
     .split(',')
-    .map((s) => s.trim())
+    .map((s) => s.trim().replace(/^"(.*)"$/, '$1'))
     .filter(Boolean)
     .map((s) => `npm run ${s}`)
     .join('\n');

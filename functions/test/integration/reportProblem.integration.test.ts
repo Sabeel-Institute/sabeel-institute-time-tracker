@@ -26,7 +26,7 @@ import { closeFakeGoogles, fakeGoogle } from '../fakeGoogle';
  *  - a failed send keeps the report, says it failed, and is not retried.
  *
  * Runs under `firebase emulators:exec` against Firestore (the first pass of
- * scripts/test-emulator.sh), driving the callable's whole decision,
+ * `npm run test:emulator`), driving the callable's whole decision,
  * `submitProblemReport`, with the request a callable would receive.
  */
 

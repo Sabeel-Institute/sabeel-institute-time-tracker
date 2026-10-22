@@ -24,6 +24,8 @@ Hosting).
 | `functions/` | Cloud Functions (TypeScript, nodejs22) |
 | `packages/shared/` | Shared types, timezone/duration math, validation |
 | `firestore.rules` / `firestore.indexes.json` | Firestore config-as-code |
+| `ci-tools.json` | This app's settings for the shared CI, release and device tooling ([ci-tools](https://github.com/Sabeel-Institute/ci-tools), `npx sabeel-ci <command>`) |
+| `scripts/` | The app's own tools: the browser suites, the native flows' seed, the first-admin bootstrap |
 | `docs/` | Product brief, phase status, test protocols |
 | `TODO.md` | Manual (console/account) steps only a human can do |
 
@@ -34,7 +36,7 @@ npm ci
 npm run lint && npm run typecheck && npm test   # static + unit
 npm run test:emulator                            # rules/integration (needs JDK 21)
 cd app && npx expo start --web                   # web against Firebase emulators
-scripts/emulator.sh headless                     # Android AVD (tb_emu)
+npx sabeel-ci emulator headless                  # Android AVD (tb_emu)
 cd app && npx expo run:android
 ```
 

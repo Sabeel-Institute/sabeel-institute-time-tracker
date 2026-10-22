@@ -2,8 +2,8 @@ import { getMessaging } from 'firebase-admin/messaging';
 import { defineSecret, defineString } from 'firebase-functions/params';
 import type { PushTokenDoc } from '@sabeel/shared';
 import type { Notif } from './notifyCore';
-import { fcmMessage } from './fcm';
-import { sendToApns, type ApnsCredentials, type ApnsDevice } from './apns';
+import { DEAD_TOKEN_CODES, fcmMessage } from './fcm';
+import { sendToApns, type ApnsCredentials } from './apns';
 import { reportError } from './sentry';
 
 /**
@@ -12,7 +12,7 @@ import { reportError } from './sentry';
  *
  * A SEAM: there is no FCM or APNs emulator, so the emulated functions must not
  * send at all (`emulatorSender`), and only this file is unverified until a real
- * device confirms delivery (`scripts/send-test-push.mjs`). Per-device failures
+ * device confirms delivery (`npx sabeel-ci send-test-push`). Per-device failures
  * come back as results, not throws, so the caller can prune dead registrations.
  */
 
@@ -25,20 +25,7 @@ export interface SendOutcome {
 
 type Sender = (devices: PushTokenDoc[], notif: Notif) => Promise<SendOutcome>;
 
-/**
- * FCM error codes that mean "this token will never work again".
- *
- * Anything else (a quota error, a transient outage) must NOT delete the token:
- * pruning on a temporary failure silently unregisters a working device.
- * `messaging/invalid-argument` is deliberately NOT here, though it looks like it
- * belongs: FCM also returns it for a malformed MESSAGE, so one bad payload would
- * come back against every token in the batch and unregister everyone at once.
- */
-const DEAD_TOKEN_CODES = new Set([
-  'messaging/registration-token-not-registered',
-  'messaging/invalid-registration-token',
-]);
-
+/** FCM's verdict that a token will never work again (`DEAD_TOKEN_CODES`, fcm.ts). */
 function isDeadToken(code: string | undefined): boolean {
   return !!code && DEAD_TOKEN_CODES.has(code);
 }
@@ -81,9 +68,12 @@ function apnsCredentials(): ApnsCredentials {
   return { key, keyId: APNS_KEY_ID.value(), teamId: APPLE_TEAM_ID.value() };
 }
 
-async function sendToApple(devices: ApnsDevice[], notif: Notif): Promise<SendOutcome> {
+async function sendToApple(devices: Extract<PushTokenDoc, { platform: 'ios' }>[], notif: Notif): Promise<SendOutcome> {
   if (devices.length === 0) return { stale: [], sent: 0 };
-  const out = await sendToApns(devices, notif, apnsCredentials());
+  const out = await sendToApns(
+    devices.map((d) => ({ token: d.token, apnsEnvironment: d.apnsEnvironment, message: notif })),
+    apnsCredentials(),
+  );
   // Reasons only: a token is an address, and the log has no use for one.
   for (const f of out.failed) console.warn(`apns: not delivered (${f.reason})`);
   return { stale: out.dead, sent: out.delivered.length };
@@ -98,7 +88,7 @@ async function sendToApple(devices: ApnsDevice[], notif: Notif): Promise<SendOut
  * tell the people who already heard it a second time.
  */
 const deviceSender: Sender = async (devices, notif) => {
-  const apple = devices.flatMap((d) => (d.platform === 'ios' ? [{ token: d.token, apnsEnvironment: d.apnsEnvironment }] : []));
+  const apple = devices.filter((d) => d.platform === 'ios');
   const google = devices.flatMap((d) => (d.platform === 'ios' ? [] : [d.token]));
   const settled = await Promise.allSettled([sendToFcm(google, notif), sendToApple(apple, notif)]);
   const outcomes = settled.flatMap((r) => (r.status === 'fulfilled' ? [r.value] : []));

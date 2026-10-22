@@ -31,7 +31,7 @@ sabeel-institute-time-tracker/
 ├── .firebaserc                # { "projects": { "dev": "<placeholder>" } }
 ├── firestore.rules / firestore.indexes.json
 ├── CLAUDE.md, README.md, TODO.md (human-only tasks), docs/
-├── scripts/                   # emulator.sh, test-emulator.sh (from tajweed, --project demo-sabeel)
+├── scripts/                   # the app's own tools; CI, release and emulator tooling is ci-tools (`npx sabeel-ci`)
 ├── .github/workflows/ci.yml   # copy: lint / typecheck / unit / emulator tests
 ├── packages/shared/           # @sabeel/shared — types, time math, constants, entry validation
 ├── functions/                 # nodejs22 TS, Vitest unit + @firebase/rules-unit-testing integration
@@ -177,9 +177,9 @@ Not functions: profile creation (client create under rules), totals (aggregation
 ## Verification
 
 - Unit: Vitest in `functions/` and `packages/shared` (tz math especially).
-- Rules/integration: `scripts/test-emulator.sh` → `firebase emulators:exec --project demo-sabeel`.
+- Rules/integration: `npm run test:emulator` (`sabeel-ci test-emulator`) → `firebase emulators:exec --project demo-sabeel`.
 - Web: `expo start --web` (or export + serve) against emulators (`connectAuthEmulator` etc. behind an env flag); Playwright smoke later (PineTimeCompanion `web:e2e` pattern available).
-- Android: build via `expo run:android` onto `tb_emu` (headless, `scripts/emulator.sh`), Firebase emulators reached at `10.0.2.2`; screenshot-verify via adb.
+- Android: build via `expo run:android` onto `tb_emu` (headless, `npx sabeel-ci emulator headless`), Firebase emulators reached at `10.0.2.2`; screenshot-verify via adb.
 - CI: lint/typecheck/unit/emulator on every push (no Android build in CI, matching tajweed).
 
 ## Manual steps for Faisal (→ repo TODO.md; agent writes exact checklists, never touches consoles)

@@ -1,0 +1,12 @@
+{
+  "name": "time-tracker",
+  "ci": {
+    "browserSuites": ["test:screens", "test:e2e"],
+    "emulatorSecrets": { "SENTRY_DSN": "disabled", "APNS_KEY": "unused-in-emulator" },
+    "knip": true
+  },
+  "build": { "sentryDsnVariable": "EXPO_PUBLIC_SENTRY_DSN" },
+  "emulators": { "base": 61000, "project": "demo-sabeel" },
+  "native": { "seed": "scripts/seed-native.mjs" },
+  "release": { "appSigningCertificate": "B1:61:7E:20:81:67:E4:0D:16:4E:38:CB:BA:29:48:7C:96:AE:5A:6F:E4:76:A7:37:17:5A:CC:91:B3:A5:99:6E" }
+}

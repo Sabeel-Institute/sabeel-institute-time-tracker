@@ -1,15 +1,23 @@
 #!/usr/bin/env python3
 """Render docs/USER-MANUAL.md → docs/USER-MANUAL.pdf (via Chrome headless).
 
-Run from docs/:  python3 render-manual.py
-Keep the PDF committed alongside the source; regenerate both together.
+    python3 docs/render-manual.py
+
+The cover carries app/app.json's version and this month. `npx sabeel-ci
+release` runs this with the version bump; keep the PDF committed alongside the
+source and regenerate both together.
 """
 import base64
+import datetime
+import json
 import pathlib
 import subprocess
 
 HERE = pathlib.Path(__file__).parent
 import markdown  # python3-markdown
+
+version = json.loads((HERE.parent / 'app/app.json').read_text())['expo']['version']
+month = datetime.date.today().strftime('%B %Y')
 
 md_text = (HERE / 'USER-MANUAL.md').read_text()
 body = markdown.markdown(md_text, extensions=['tables', 'smarty'])
@@ -26,7 +34,7 @@ cover = f"""
   <img class="cover-logo" src="data:image/png;base64,{logo_b64}" alt="Sabeel Institute">
   <div class="cover-title">Time Tracker</div>
   <div class="cover-sub">User Manual</div>
-  <div class="cover-meta">App version 0.29.1 &nbsp;·&nbsp; July 2026</div>
+  <div class="cover-meta">App version {version} &nbsp;·&nbsp; {month}</div>
 </div>
 """
 

@@ -115,8 +115,8 @@ redeploys:
 ## Google Play, internal testing
 
 Staff install from Play through the join link on the app's Internal testing →
-Testers page. `npm run release` publishes every release there
-(`scripts/publish-play.mjs`); `docs/DEPLOY.md`, "Play testers".
+Testers page. `npx sabeel-ci release --ship` publishes every release there
+(`sabeel-ci publish-play`); `docs/DEPLOY.md`, "Play testers".
 
 - [x] **Release keystore + SHA-1** (2026-10-15) — signing config wired to the
   release key, its SHA-1 and SHA-256 registered on the Firebase Android app,

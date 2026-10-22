@@ -98,7 +98,7 @@ import {
   startEmulators,
 } from './lib/e2e-stack.mjs';
 
-const SHOTS = process.env.E2E_SHOTS_DIR ?? resolve(ROOT, 'e2e-shots', 'screens');
+const SHOTS = process.env.E2E_SHOTS_DIR ?? resolve(ROOT, 'shots', 'screens');
 
 process.env.FIRESTORE_EMULATOR_HOST ??= EMULATOR_HOSTS.firestore;
 process.env.FIREBASE_AUTH_EMULATOR_HOST ??= EMULATOR_HOSTS.auth;
@@ -110,15 +110,15 @@ process.env.GCLOUD_PROJECT = PROJECT;
  * `shutdown()` reaps the emulator process GROUP, and it runs at the end of a
  * run and in the catch below — but a signalled process runs neither, so an
  * interrupted sweep orphans its whole emulator group and leaves
- * `functionsEmulatorRuntime` children resident. They hold no port, so
- * `free-emulator-ports.sh` cannot see them and reports "ports clear" while
- * several are still eating memory (docs/DEV-TOOLING.md).
+ * `functionsEmulatorRuntime` children resident until the next
+ * `sabeel-ci free-emulator-ports` finds them as orphans (docs/DEV-TOOLING.md).
  *
- * SIGTERM matters more than SIGINT here: that is what `free-emulator-ports.sh`
- * itself sends, so a second checkout starting a run on this machine kills this
- * one — which happened repeatedly on 2026-08-27 and is where the orphans found
- * that day came from. The happy path tearing down and the interrupted path
- * silently not is indistinguishable without going to look for the strays.
+ * SIGTERM matters more than SIGINT here: it is what
+ * `sabeel-ci free-emulator-ports` sends to this checkout's leftovers, so a
+ * second run started here stops this one, and the orphans found on 2026-08-27
+ * came from runs stopped by a SIGTERM. The happy path tearing down and the
+ * interrupted path silently not is indistinguishable without going to look for
+ * the strays.
  */
 for (const sig of ['SIGINT', 'SIGTERM', 'SIGHUP']) {
   process.on(sig, () => {
@@ -219,7 +219,7 @@ const PENDING = { email: 'newcomer@oursabeel.com', name: 'Newcomer', landing: 'w
 // sees, at every width, because the tour never taps I agree.
 const UNACCEPTED = { email: 'first.day@oursabeel.com', name: 'Yusuf First-Day', landing: 'Before you continue' };
 
-// A clean folder, so the report (scripts/screens-report.mjs) shows this run's
+// A clean folder, so the report (`sabeel-ci screens-report`) shows this run's
 // screens and no other's, and the checks beside them however the run ends.
 await rm(SHOTS, { recursive: true, force: true });
 await mkdir(SHOTS, { recursive: true });
