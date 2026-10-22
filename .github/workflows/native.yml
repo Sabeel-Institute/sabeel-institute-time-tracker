@@ -11,6 +11,7 @@ on:
       - scripts/seed-native.mjs
       - scripts/ci-avd.sh
       - scripts/install-maestro.sh
+      - scripts/ios-sim-build.sh
       - .github/workflows/native.yml
   workflow_dispatch:
 
@@ -62,4 +63,40 @@ jobs:
         with:
           name: native-${{ github.sha }}
           path: e2e-shots/native/
+          retention-days: 14
+
+  ios:
+    if: github.repository_owner == 'Sabeel-Institute' && (startsWith(github.ref, 'refs/tags/v') || github.event_name != 'push')
+    runs-on: macos-26
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: 21
+      - name: Install dependencies
+        run: npm ci
+      - name: Install Firebase CLI
+        run: npm install --global firebase-tools@^15
+      - name: Emulator secret placeholders
+        run: printf 'APNS_KEY=unused-in-emulator\nSENTRY_DSN=disabled\n' > functions/.secret.local
+      - name: Install Maestro
+        run: bash scripts/install-maestro.sh
+      - name: Native flows on the iOS simulator
+        run: bash scripts/native-e2e.sh --ios
+      - name: Screens, Maestro's report and logs
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: native-ios-${{ github.sha }}
+          path: |
+            e2e-shots/native/
+            !e2e-shots/native/ios-build/
           retention-days: 14
