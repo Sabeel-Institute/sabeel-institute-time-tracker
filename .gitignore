@@ -30,6 +30,8 @@ pubsub-debug.log
 functions/.env
 # The Sentry auth token the native build uploads source maps with.
 app/.env.sentry-build-plugin
+# Sentry's Android tooling reads a token from it; any old copy stays out of Git.
+app/android/sentry.properties
 # Screenshots and logs of the browser and device suites
 shots/
 
