@@ -50,7 +50,7 @@ approval.
 |---|---|
 | `~/keystores/sabeel-time-tracker-release.jks`, `~/.config/sabeel-time-tracker/keystore.properties` | Gradle refuses to package a release |
 | `~/keys/sabeel-play-publisher.json` (or `PLAY_KEY`) | `sabeel-ci publish-play` stops; the rest of the release stands |
-| `app/.env.local` (`EXPO_PUBLIC_SENTRY_DSN_NATIVE`, `EXPO_PUBLIC_SENTRY_DSN_WEB`, `EXPO_PUBLIC_FCM_VAPID_KEY`) | the Play bundle and the iPhone build refuse to build, since each would ship with crash reporting off; a hand-run web export ships with it off, and with web push off |
+| `app/.env.local` (`EXPO_PUBLIC_SENTRY_DSN_NATIVE`, `EXPO_PUBLIC_SENTRY_DSN_WEB`) | the Play bundle and the iPhone build refuse to build, since each would ship with crash reporting off; a hand-run web export ships with it off |
 | `app/.env.sentry-build-plugin` (`SENTRY_AUTH_TOKEN`) | the Play bundle and the iPhone build refuse to build, since their crashes would reach Sentry as minified frames |
 | `functions/.env` (`PROBE_TOKEN`) | a functions deploy leaves `probeQueries` refusing every call |
 
@@ -116,16 +116,11 @@ npx sabeel-ci ci-functions verify --since <the time the deploy started, ISO>
 ```
 - Hosting serves `app/dist-web`, which the hosting predeploy in `firebase.json`
   rebuilds (`npm run web:export -w @sabeel/app`) on every hosting deploy.
-- **Web push needs `EXPO_PUBLIC_FCM_VAPID_KEY` in `app/.env.local`.** The key
-  reaches the bundle from the environment that runs the export. Miss it and
-  nothing fails: the client is inert by design, so the build succeeds, the site
-  deploys, and every device quietly reports that it cannot receive
-  notifications. `npm run check:web-push` reads `app/dist-web` and refuses when
-  the key is absent or the wrong shape. Because the deploy exports again and
-  uploads that export, the order is: `npm run web:export -w @sabeel/app && npm
-  run check:web-push` (this environment yields a keyed bundle), the deploy, then
-  `npm run check:web-push` again (`dist-web` now holds exactly what was
-  uploaded).
+- **Web push's public key is committed** (`VAPID_PUBLIC_KEY` in
+  `app/src/firebase-config.ts`; the browser needs it to subscribe, so it is
+  public by design). `npm run check:web-push` reads `app/dist-web` and refuses
+  an export without it or without the permission path; the Web build runs the
+  same check on every build.
 - A hand-run hosting deploy publishes no source maps: Deploy Web
   (`docs/GITHUB-ACTIONS.md`) is the path that uploads the web build's maps to
   Sentry before it publishes the site.

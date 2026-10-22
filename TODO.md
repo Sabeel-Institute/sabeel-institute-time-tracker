@@ -60,13 +60,11 @@ Android push works out of the box. The website needed a Web Push certificate,
 and it has one.
 
 - [x] Web Push certificate generated (Firebase console → **Project settings** →
-  **Cloud Messaging** → *Web configuration* → **Web Push certificates**) and
-  living in `app/.env.local` as `EXPO_PUBLIC_FCM_VAPID_KEY`.
-- [ ] **Confirm a web push actually arrives, after the next deploy.** The key
-  reaches the bundle from the environment that runs `expo export`, so run
-  `npm run check:web-push` between the export and the deploy — a keyless build
-  makes every device report that it cannot receive notifications, and nothing
-  else looks wrong.
+  **Cloud Messaging** → *Web configuration* → **Web Push certificates**); its
+  public key is committed as `VAPID_PUBLIC_KEY` in `app/src/firebase-config.ts`.
+- [ ] **Confirm a web push actually arrives, after the next deploy.**
+- [ ] **Drop `EXPO_PUBLIC_FCM_VAPID_KEY`** from `app/.env.local`, its vault copy
+  and the `APP_ENV_LOCAL` secret: nothing reads it.
 
   On the site: a browser that has never been asked shows **Enable
   notifications**, on Home and on Notification settings. That is expected, not a

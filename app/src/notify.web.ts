@@ -1,7 +1,6 @@
-// Web push registration. Requires the Web Push certificate (VAPID) public key
-// in EXPO_PUBLIC_FCM_VAPID_KEY (app/.env.local — not a secret, but env-local)
-// and the service worker at /firebase-messaging-sw.js (app/public/). Without
-// either, this quietly does nothing. Never throws.
+// Web push registration. Uses the Web Push certificate's public key
+// (VAPID_PUBLIC_KEY, committed in firebase-config.ts) and the service worker at
+// /firebase-messaging-sw.js (app/public/). Never throws.
 //
 // It also needs a third thing that is not configuration: permission has to be
 // asked FROM A PRESS. Signing in is not one — see enablePush.
@@ -10,11 +9,10 @@ import { getMessaging, getToken, isSupported } from 'firebase/messaging';
 import { deleteDoc, doc, setDoc } from 'firebase/firestore';
 import { COLLECTIONS, decodeNotifRoute, type PushTokenDoc } from '@sabeel/shared';
 import { app, db } from './firebase';
+import { VAPID_PUBLIC_KEY } from './firebase-config';
 import { USE_EMULATORS } from './env';
 import { openNotifRoute } from './notifRouting';
 import { captureError } from './sentry';
-
-const VAPID_KEY = process.env.EXPO_PUBLIC_FCM_VAPID_KEY ?? '';
 
 /**
  * Route notification taps. A browser can't hand the page a payload — clicking a
@@ -49,7 +47,6 @@ export function useNotifTaps(): void {
  */
 function canRequestPush(): boolean {
   return (
-    !!VAPID_KEY &&
     typeof window !== 'undefined' &&
     'Notification' in window &&
     'serviceWorker' in navigator &&
@@ -184,7 +181,7 @@ async function claimToken(uid: string): Promise<boolean> {
   ]);
   if (!registration) return false;
   const token = await getToken(getMessaging(app), {
-    vapidKey: VAPID_KEY,
+    vapidKey: VAPID_PUBLIC_KEY,
     serviceWorkerRegistration: registration,
   });
   if (!token) return false;
@@ -207,7 +204,7 @@ export async function unregisterPush(uid: string): Promise<void> {
     if (!(await isSupported().catch(() => false))) return;
     const sw = await navigator.serviceWorker.register('/firebase-messaging-sw.js');
     const token = await getToken(getMessaging(app), {
-      vapidKey: VAPID_KEY,
+      vapidKey: VAPID_PUBLIC_KEY,
       serviceWorkerRegistration: sw,
     });
     if (!token) return;

@@ -83,7 +83,7 @@ each, something builds and quietly does not work.
 
 | File | What it carries | Without it |
 |---|---|---|
-| `app/.env.local` | `EXPO_PUBLIC_SENTRY_DSN_NATIVE`, `EXPO_PUBLIC_SENTRY_DSN_WEB`, `EXPO_PUBLIC_FCM_VAPID_KEY` | the app ships with crash reporting off; `check:ios` stops the build |
+| `app/.env.local` | `EXPO_PUBLIC_SENTRY_DSN_NATIVE`, `EXPO_PUBLIC_SENTRY_DSN_WEB` | the app ships with crash reporting off; `check:ios` stops the build |
 | `app/.env.sentry-build-plugin` | `SENTRY_AUTH_TOKEN`, `IOS_TEAM_ID`, `ASC_KEY_ID`, `ASC_ISSUER_ID`, optional `ASC_KEY_PATH` | `sabeel-ci build-ios` stops: no dSYMs or source maps could be uploaded, and nothing signs automatically |
 | `~/.appstoreconnect/private_keys/AuthKey_<ASC_KEY_ID>.p8` | the App Store Connect API key (NOT the APNs key) | `-allowProvisioningUpdates` cannot sign; `sabeel-ci testflight-check` cannot ask Apple |
 

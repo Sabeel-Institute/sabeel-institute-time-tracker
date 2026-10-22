@@ -63,7 +63,6 @@ See `functions/.env.example`.
 |---|---|---|
 | `EXPO_PUBLIC_SENTRY_DSN_NATIVE` | Android and iOS crash reporting (`app/src/sentry.ts`) | Sentry → `sabeel-time-tracker-app` → Client Keys (DSN); the Play bundle and the iPhone build refuse without it (`sabeel-ci build-aab`, `check:ios`) |
 | `EXPO_PUBLIC_SENTRY_DSN_WEB` | web crash reporting (`app/src/sentry.web.ts`) | The same DSN: the web reports to the same Sentry project; the Web build refuses without it |
-| `EXPO_PUBLIC_FCM_VAPID_KEY` | web push (`docs/DEPLOY.md`, `npm run check:web-push`) | Firebase console → Project settings → Cloud Messaging → Web Push certificates |
 | `EXPO_PUBLIC_USE_EMULATORS` | dev only — point the app at local emulators | `1` |
 
 On GitHub the file is the `APP_ENV_LOCAL` secret, its `NAME=value` lines only.
@@ -95,7 +94,11 @@ is lost, delete that key in the Google Cloud console (project
 `sabeel-institute-kanban`, IAM, Service Accounts) and make a new JSON key there.
 
 ## Non-secret client config in the repo
-- `app/src/firebase-config.ts` — Firebase web app config (public).
+- `app/src/firebase-config.ts` — Firebase web app config (public), and
+  `VAPID_PUBLIC_KEY`, the web push certificate's public key (Firebase console →
+  Project settings → Cloud Messaging → Web Push certificates): every browser
+  receives it to subscribe, and `npm run check:web-push` checks the web build
+  carries it.
 - `packages/shared/src/constants.ts` → `WEB_CLIENT_ID` — the **Web** OAuth client id
   (public; needed by native Google Sign-In). Not the Android client id.
 - `app/google-services.json` (and its copy under `app/android/app/`) — the Firebase
