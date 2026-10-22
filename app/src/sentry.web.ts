@@ -1,9 +1,10 @@
 // Web side of the Sentry seam (native sibling: sentry.ts). The DSN comes from
-// gitignored app/.env.local (EXPO_PUBLIC_SENTRY_DSN), inlined at bundle time;
-// without it everything here is a no-op.
+// gitignored app/.env.local (EXPO_PUBLIC_SENTRY_DSN_WEB), inlined at bundle
+// time; without it everything here is a no-op. Deploy Web uploads the export's
+// source maps, matched to its scripts by the debug ids app/metro.config.js adds.
 import * as Sentry from '@sentry/react';
 
-const dsn = process.env.EXPO_PUBLIC_SENTRY_DSN;
+const dsn = process.env.EXPO_PUBLIC_SENTRY_DSN_WEB;
 
 export function initSentry(): void {
   if (!dsn) return;

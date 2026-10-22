@@ -2,6 +2,7 @@ import { describe, it, beforeAll, beforeEach, expect } from 'vitest';
 import { initializeApp, getApps } from 'firebase-admin/app';
 import { getFirestore } from 'firebase-admin/firestore';
 import { buildCsv, computeTotals } from '../../src/reporting';
+import { EMULATOR_PROJECT_ID } from '@sabeel/shared';
 
 const T = (dayKey: string, hhmmUTC: string) => {
   const [y, m, d] = dayKey.split('-').map(Number);
@@ -10,7 +11,7 @@ const T = (dayKey: string, hhmmUTC: string) => {
 };
 
 beforeAll(() => {
-  if (getApps().length === 0) initializeApp({ projectId: 'demo-sabeel' });
+  if (getApps().length === 0) initializeApp({ projectId: EMULATOR_PROJECT_ID });
 });
 
 // dayKeys 2026-07-12..18 → period 2026-07-12; 2026-07-01..04 → clipped period

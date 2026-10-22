@@ -111,12 +111,13 @@ outlived deleted accounts (hand-fixed once, 2026-07-19).
   decides, promotion leaves pointers alone, self-pointer cleared on demotion.
 
 ### M6 — No web security headers ✅ done (2026-07-22)
-Added `X-Frame-Options: SAMEORIGIN` (**not `DENY`** — DENY blocks Firebase Auth's
-same-origin iframe and would break redirect sign-in), `X-Content-Type-Options:
-nosniff`, `Referrer-Policy: strict-origin-when-cross-origin`. Live-verified the
-sign-in page loads with no framing/CSP/console errors. (Full CSP left as a
-separate, carefully-tested follow-up. Real-account OAuth popup is a residual
-manual check.)
+Hosting sends `X-Frame-Options: DENY`, `Content-Security-Policy:
+frame-ancestors 'none'`, `X-Content-Type-Options: nosniff` and
+`Referrer-Policy: strict-origin-when-cross-origin` on every path but
+Firebase's own `/__/**`, whose auth iframe the redirect sign-in frames
+(`DENY` there would break it): the shape every Sabeel app serves, held by
+`sabeel-ci check-app`. (Full CSP left as a separate, carefully-tested
+follow-up. Real-account OAuth popup is a residual manual check.)
 `firebase.json` sets only `Cache-Control`. No `X-Frame-Options`/`frame-ancestors`
 (clickjacking), `X-Content-Type-Options: nosniff`, or `Referrer-Policy`.
 - **Where:** `firebase.json` hosting `headers`.
@@ -305,3 +306,6 @@ supply-chain/license audit. Emulator was intentionally not run (shared machine).
   (a self-approver escaping the submitted-period freeze) was wrong. Probe, then
   pair each `assertFails` with a positive control — several existing tests were
   passing for reasons other than the one they named.
+- 2026-10-22 — M6 moved to the Sabeel apps' shared Hosting shape: `DENY` and
+  `frame-ancestors 'none'` everywhere but `/__/**`, in place of
+  `SAMEORIGIN` on every path.

@@ -52,13 +52,14 @@ committed `app/Podfile.lock`.
 | `ios.config.usesNonExemptEncryption` | `false` | answers export compliance, so builds reach testers without the questionnaire |
 | `ios.privacyManifests` | what the app collects, none of it for tracking | Expo writes `PrivacyInfo.xcprivacy` from it; Apple refuses an upload without one |
 | `@react-native-google-signin/google-signin` | registered BARE | the plugin reads `REVERSED_CLIENT_ID` out of the plist, so the URL scheme has one home |
-| `@sentry/react-native` | registered BARE | org, project and token come from the build environment; given options it writes them into `ios/sentry.properties` |
+| `@sentry/react-native` | registered BARE | `sabeel-ci build-ios` exports the org and the native project from `ci-tools.json`'s `sentry`, and the token from `app/.env.sentry-build-plugin`; given options the plugin would write them into `ios/sentry.properties` |
 | `expo-notifications` | registered BARE | writes the `aps-environment` entitlement; without it no push token ever arrives |
 | `expo-build-properties` | `ios.extraPods`: GoogleUtilities, RecaptchaInterop with modular headers | without them `pod install` refuses: "Swift pod AppCheckCore depends upon GoogleUtilities and RecaptchaInterop, which do not define modules" |
 
 There is no `ios.version`: `expo.version` is the one version on every surface.
 `npm run check:ios` (`sabeel-ci check-ios-config`) holds all of the above, plus
-the icon (1024x1024, no alpha) and a crash-reporting DSN in `app/.env.local`.
+the icon (1024x1024, no alpha) and the native crash-reporting DSN in
+`app/.env.local`.
 
 ### Reading back what prebuild wrote
 
@@ -82,8 +83,8 @@ each, something builds and quietly does not work.
 
 | File | What it carries | Without it |
 |---|---|---|
-| `app/.env.local` | `EXPO_PUBLIC_SENTRY_DSN`, `EXPO_PUBLIC_FCM_VAPID_KEY` | the app ships with crash reporting off; `check:ios` stops the build |
-| `app/.env.sentry-build-plugin` | `SENTRY_ORG`, `SENTRY_PROJECT` (`sabeel-time-tracker-app`), `SENTRY_AUTH_TOKEN`, `IOS_TEAM_ID`, `ASC_KEY_ID`, `ASC_ISSUER_ID`, optional `ASC_KEY_PATH` | no dSYMs or source maps uploaded; no automatic signing |
+| `app/.env.local` | `EXPO_PUBLIC_SENTRY_DSN_NATIVE`, `EXPO_PUBLIC_SENTRY_DSN_WEB`, `EXPO_PUBLIC_FCM_VAPID_KEY` | the app ships with crash reporting off; `check:ios` stops the build |
+| `app/.env.sentry-build-plugin` | `SENTRY_AUTH_TOKEN`, `IOS_TEAM_ID`, `ASC_KEY_ID`, `ASC_ISSUER_ID`, optional `ASC_KEY_PATH` | `sabeel-ci build-ios` stops: no dSYMs or source maps could be uploaded, and nothing signs automatically |
 | `~/.appstoreconnect/private_keys/AuthKey_<ASC_KEY_ID>.p8` | the App Store Connect API key (NOT the APNs key) | `-allowProvisioningUpdates` cannot sign; `sabeel-ci testflight-check` cannot ask Apple |
 
 `sabeel-ci build-ios` reads `app/.env.sentry-build-plugin` (parsed, not
@@ -111,7 +112,7 @@ npm run emulators
 
 # 2. Metro, in emulator mode, on a port no other project holds
 cd app
-EXPO_PUBLIC_USE_EMULATORS=1 EXPO_PUBLIC_SENTRY_DSN= npx expo start --port 8091 --clear
+EXPO_PUBLIC_USE_EMULATORS=1 EXPO_PUBLIC_SENTRY_DSN_NATIVE= npx expo start --port 8091 --clear
 
 # 3. Build and install (reuses the Metro above; exits 1 at the end, see below)
 EXPO_PUBLIC_USE_EMULATORS=1 npx expo run:ios --device "iPhone 17 Pro" --port 8091
@@ -125,7 +126,7 @@ xcrun simctl terminate $U com.sabeelinstitute.timetracker; xcrun simctl launch $
 - **Metro's port.** Several Sabeel projects share the Mac, and whichever Metro
   holds 8081 serves its own bundle to any debug app that asks there. Run this
   one elsewhere and pin the app to it with `RCT_jsLocation`, a user default
-  the debug app reads before its compiled-in port. `EXPO_PUBLIC_SENTRY_DSN=`
+  the debug app reads before its compiled-in port. `EXPO_PUBLIC_SENTRY_DSN_NATIVE=`
   keeps dev errors out of the production Sentry project.
 - **Never `CI=1` on a Metro you develop against.** It puts Metro in CI mode
   ("reloads are disabled"): it serves the first bundle it built forever, and a
@@ -220,7 +221,9 @@ round trip runs here except the tap from outside the app.
    route, here My timesheet on the week of 4 October (verified 2026-10-15).
 3. **The emulated functions send nothing.** A trigger that reaches an iPhone row
    logs `[emulator] push suppressed for 1 device(s)`: there is no APNs or FCM
-   emulator, and `APNS_KEY` is a placeholder there (`functions/.secret.local`).
+   emulator, and `APNS_KEY` is a placeholder there (`ci.emulatorSecrets` in
+   `ci-tools.json`, which `sabeel-ci emulators` writes into
+   `functions/.secret.local`).
 
 `npm run check:push` asks both real services whether they accept a
 message from this project (a bogus token each): FCM needs Google credentials
@@ -298,7 +301,7 @@ pin exactly.
 | `IOS_DIST_P12`, `IOS_DIST_P12_PASSWORD` | the team's Apple Distribution certificate and key (shared with the LMS and Kanban), base64, and its password |
 | `IOS_PROFILE` | the App Store profile "Sabeel Time Tracker App Store CI", base64 |
 | `ASC_KEY_P8` | the App Store Connect API key (Admin) |
-| `IOS_BUILD_ENV` | `app/.env.sentry-build-plugin`, its `NAME=value` lines only |
+| `BUILD_ENV` | `app/.env.sentry-build-plugin`, its `NAME=value` lines only (the Android and Web release jobs read its `SENTRY_AUTH_TOKEN` too) |
 | `APP_ENV_LOCAL` | `app/.env.local`, its `NAME=value` lines only |
 
 They are secrets of the `release-build` environment, which only main and `v*`

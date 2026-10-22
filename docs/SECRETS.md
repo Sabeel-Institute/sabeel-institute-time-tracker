@@ -18,12 +18,13 @@ Set with `firebase functions:secrets:set <NAME>`; bind in code via `defineSecret
 | Name | Used by | Where to find the value |
 |---|---|---|
 | `SENTRY_DSN` | functions error capture (`functions/src/sentry.ts`) | Sentry → Project → Client Keys (DSN) |
-| `APNS_KEY` | push to iPhones (`functions/src/messaging.ts`, bound to every sender via `PUSH_SECRETS`) | The team's APNs key, `AuthKey_X5R8FL94BC.p8` (the same key the LMS and Kanban use): `~/.config/secrets-vault/sabeel/apple/` on Linux, `~/.apns/` on the Mac. Set with `firebase functions:secrets:set APNS_KEY --data-file <the .p8> --project dev` |
+| `APNS_KEY` | push to iPhones (`functions/src/messaging.ts`, bound to every sender via `PUSH_SECRETS`) | The team's APNs key, `AuthKey_X5R8FL94BC.p8` (the same key the LMS and Kanban use): `~/.config/secrets-vault/sabeel/apple/` on Linux, `~/.apns/` on the Mac. Set with `firebase functions:secrets:set APNS_KEY --data-file <the .p8>` |
 
-The emulator reads stand-ins from the gitignored `functions/.secret.local`
-(`SENTRY_DSN=disabled`, `APNS_KEY=unused-in-emulator`; CI writes the same lines
-from `ci.emulatorSecrets` in `ci-tools.json`). The emulated functions send no
-push, so the value is never used.
+The emulators bind stand-ins: `ci.emulatorSecrets` in `ci-tools.json`
+(`SENTRY_DSN=disabled`, `APNS_KEY=unused-in-emulator`), which `sabeel-ci
+emulators`, `test-emulator` and `emulator-secrets` write into the gitignored
+`functions/.secret.local`. Nobody keeps that file by hand. The emulated
+functions send no push, so the value is never used.
 
 A test push to an iPhone (`npx sabeel-ci send-test-push --apple`) reads the
 APNs key from `~/.apns/AuthKey_<APNS_KEY_ID>.p8`, or from the file
@@ -36,9 +37,9 @@ the emulator never stops to prompt for a value.
 
 | Name | Used by | Value |
 |---|---|---|
-| `APNS_KEY_ID` | push to iPhones | The APNs key's id (`X5R8FL94BC`); `unused-in-emulator` for `demo-sabeel` |
-| `APPLE_TEAM_ID` | push to iPhones | The Apple team (`XRKWA4QRN9`); `unused-in-emulator` for `demo-sabeel` |
-| `REPORT_MAILER_SA` | Report a problem's email (`functions/src/reportProblem.ts`) | The service account that signs the delegation, `report-mailer@sabeel-institute-time-tracker.iam.gserviceaccount.com`; `unused-in-emulator` for `demo-sabeel`, where nothing is sent |
+| `APNS_KEY_ID` | push to iPhones | The APNs key's id (`X5R8FL94BC`); `unused-in-emulator` for `demo-sabeel-time-tracker` |
+| `APPLE_TEAM_ID` | push to iPhones | The Apple team (`XRKWA4QRN9`); `unused-in-emulator` for `demo-sabeel-time-tracker` |
+| `REPORT_MAILER_SA` | Report a problem's email (`functions/src/reportProblem.ts`) | The service account that signs the delegation, `report-mailer@sabeel-institute-time-tracker.iam.gserviceaccount.com`; `unused-in-emulator` for `demo-sabeel-time-tracker`, where nothing is sent |
 
 **Report a problem's email has no secret.** The function sends as
 `apps-noreply@oursabeel.com` through domain-wide delegation with no key and no
@@ -60,15 +61,21 @@ See `functions/.env.example`.
 ## App client env (`app/.env.local`, gitignored)
 | Name | Used by | Value |
 |---|---|---|
-| `EXPO_PUBLIC_SENTRY_DSN` | app Sentry seam (`app/src/sentry*.ts`) | Sentry → the app project → Client Keys (DSN); an iPhone build refuses without it (`check:ios`) |
+| `EXPO_PUBLIC_SENTRY_DSN_NATIVE` | Android and iOS crash reporting (`app/src/sentry.ts`) | Sentry → `sabeel-time-tracker-app` → Client Keys (DSN); the Play bundle and the iPhone build refuse without it (`sabeel-ci build-aab`, `check:ios`) |
+| `EXPO_PUBLIC_SENTRY_DSN_WEB` | web crash reporting (`app/src/sentry.web.ts`) | The same DSN: the web reports to the same Sentry project; the Web build refuses without it |
 | `EXPO_PUBLIC_FCM_VAPID_KEY` | web push (`docs/DEPLOY.md`, `npm run check:web-push`) | Firebase console → Project settings → Cloud Messaging → Web Push certificates |
 | `EXPO_PUBLIC_USE_EMULATORS` | dev only — point the app at local emulators | `1` |
 
-## Android Sentry upload (`app/android/sentry.properties`, gitignored)
-`auth.token` and `defaults.org`, read by Sentry's Gradle plugin from
-`app/android/` (template: `sentry.properties.example`). With it a release build
-uploads its source maps; without it the build succeeds and Android stack traces
-stay minified.
+On GitHub the file is the `APP_ENV_LOCAL` secret, its `NAME=value` lines only.
+
+## Sentry upload token (`app/.env.sentry-build-plugin`, gitignored)
+`SENTRY_AUTH_TOKEN`, an organization token (scope `org:ci`). The Play bundle
+(`app/android/app/build.gradle` applies Sentry's `sentry.gradle` exactly when
+the file exists), the iPhone build and Deploy Web upload source maps and
+symbols with it; `sabeel-ci build-aab` and `build-ios` refuse to build without
+it. The org and the projects are public and live in `ci-tools.json`'s
+`sentry`, never in the file. The same file carries the iOS build's values
+below; on GitHub it is the `BUILD_ENV` secret.
 
 ## Android release signing key
 `~/keystores/sabeel-time-tracker-release.jks` (alias and password in
@@ -102,9 +109,10 @@ Store Connect's App Review Information sign-in fields when the app is submitted;
 nowhere else: never in this repo, a chat or a log.
 
 ## iOS build (the Mac and GitHub)
-`app/.env.sentry-build-plugin` (gitignored) holds `SENTRY_ORG`, `SENTRY_PROJECT`,
-`SENTRY_AUTH_TOKEN`, `IOS_TEAM_ID`, `ASC_KEY_ID`, `ASC_ISSUER_ID`, read by
-`sabeel-ci build-ios`. The App Store Connect key lives at
-`~/.appstoreconnect/private_keys/AuthKey_<ASC_KEY_ID>.p8`. On GitHub the same values
-come from the secrets `IOS_BUILD_ENV`, `APP_ENV_LOCAL`, `ASC_KEY_P8`, `IOS_DIST_P12`,
-`IOS_DIST_P12_PASSWORD` and `IOS_PROFILE`; `docs/IOS-BUILD.md` says what each is.
+`app/.env.sentry-build-plugin` (gitignored) holds `SENTRY_AUTH_TOKEN`,
+`IOS_TEAM_ID`, `ASC_KEY_ID`, `ASC_ISSUER_ID`, read by `sabeel-ci build-ios`.
+The App Store Connect key lives at
+`~/.appstoreconnect/private_keys/AuthKey_<ASC_KEY_ID>.p8`. On GitHub the same
+values come from the secrets `BUILD_ENV`, `APP_ENV_LOCAL`, `ASC_KEY_P8`,
+`IOS_DIST_P12`, `IOS_DIST_P12_PASSWORD` and `IOS_PROFILE`; `docs/IOS-BUILD.md`
+says what each is.

@@ -2,13 +2,14 @@ import { describe, it, beforeAll, beforeEach, expect } from 'vitest';
 import { initializeApp, getApps } from 'firebase-admin/app';
 import { getFirestore } from 'firebase-admin/firestore';
 import { runHealthCheck } from '../../src/health';
+import { EMULATOR_PROJECT_ID } from '@sabeel/shared';
 
 // Runs under `firebase emulators:exec` — FIRESTORE_EMULATOR_HOST is set, so the
 // admin SDK talks to the emulator. Exercises the real count() aggregation and
 // the meta/health baseline round-trip.
 
 beforeAll(() => {
-  if (getApps().length === 0) initializeApp({ projectId: 'demo-sabeel' });
+  if (getApps().length === 0) initializeApp({ projectId: EMULATOR_PROJECT_ID });
 });
 
 async function wipe(names: string[]) {

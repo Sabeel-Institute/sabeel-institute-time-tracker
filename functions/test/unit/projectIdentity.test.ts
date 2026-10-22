@@ -45,7 +45,7 @@ describe('the app name', () => {
 
 describe('the project id', () => {
   it('is the one every config file names', () => {
-    expect(JSON.parse(read('.firebaserc')).projects.dev).toBe(FIREBASE_PROJECT_ID);
+    expect(JSON.parse(read('.firebaserc')).projects.default).toBe(FIREBASE_PROJECT_ID);
     expect(plistString(read('app/GoogleService-Info.plist'), 'PROJECT_ID')).toBe(FIREBASE_PROJECT_ID);
     expect(JSON.parse(read('app/google-services.json')).project_info.project_id).toBe(FIREBASE_PROJECT_ID);
     expect(read('app/src/firebase-config.ts')).toContain(`projectId: '${FIREBASE_PROJECT_ID}'`);

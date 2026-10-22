@@ -99,8 +99,19 @@ redeploys:
   events flowing with user ids.
 - [x] Native @sentry/react-native wired 2026-07-17 (v1.0.0-beta.11) — Android
   crashes/ANRs/errors report with user ids.
-- [x] **Readable release stack traces** — `app/android/sentry.properties` in
-  place; source-map upload verified 2026-07-18 (`4c6750a`).
+- [ ] **The Sentry setup every Sabeel app shares** (ci-tools README, "Sentry"),
+  now that this app reads `EXPO_PUBLIC_SENTRY_DSN_NATIVE` and
+  `EXPO_PUBLIC_SENTRY_DSN_WEB`:
+  - drop the old `EXPO_PUBLIC_SENTRY_DSN` line from `app/.env.local`, its vault
+    copy and `APP_ENV_LOCAL`;
+  - drop the `SENTRY_ORG` and `SENTRY_PROJECT` lines from
+    `app/.env.sentry-build-plugin` and its vault copy (`ci-tools.json`'s
+    `sentry` names them), on this machine and the Mac;
+  - delete `app/android/sentry.properties` and its vault entry: the Android
+    build takes the token from `app/.env.sentry-build-plugin`;
+  - delete the `IOS_BUILD_ENV` secret: the workflows read `BUILD_ENV`;
+  - after the next release, check one Android and one web crash read as
+    source in Sentry.
 
 ## First admin (after first deploy)
 

@@ -15,7 +15,7 @@ the shared `Sabeel-Institute/ci-tools` package, pinned to a commit in
 every command and every `ci-tools.json` key, and `ci-tools.json` says what
 differs for this app. Only this app's own tools live in `scripts/`: the two
 browser suites and their shared bring-up (`web-e2e.mjs`, `screens-e2e.mjs`,
-`lib/e2e-stack.mjs`), the native flows' seed (`seed-native.mjs`) and the
+`lib/e2e-stack.mjs`), the native flows' seed (`seed-emulators.mjs`) and the
 first-admin bootstrap (`grant-admin.mjs`). The entries below keep the reasons
 for both.
 
@@ -230,7 +230,8 @@ system Chrome was the only thing keeping a browser suite off a CI runner.
 **Ports, the project, Java and the sweep come from ci-tools.** The emulator
 ports are `ports(config(ROOT))` (`@sabeel-institute/ci-tools/lib/ports.mjs`
 and `lib/config.mjs`, from this app's `ci-tools.json`), the demo project is
-`config(ROOT).emulators.project`, JDK 21 is `npx --no sabeel-ci jdk21`, and the
+`emulatorProject(config(ROOT))` (`demo-sabeel-time-tracker`, from its `name`),
+JDK 21 is `npx --no sabeel-ci jdk21`, and the
 ports are freed with `npx --no sabeel-ci free-emulator-ports`. Nothing in
 `scripts/` states a port of the block, comments included: `sabeel-ci
 check-app` refuses one, because a copy is a copy that drifts.
@@ -413,8 +414,8 @@ are this checkout's own"** below.
 
 `npx sabeel-ci native-e2e` runs the Maestro flows in `maestro/` against the
 debug build: it builds and installs the APK, starts the emulators, makes the
-account the flows sign in as (`scripts/seed-native.mjs`, `native.seed` in
-`ci-tools.json`), serves the JavaScript from Metro on 8081 with
+account the flows sign in as (`scripts/seed-emulators.mjs`, the seed every
+app's flows have), serves the JavaScript from Metro on 8081 with
 `EXPO_PUBLIC_USE_EMULATORS=1`, and runs every flow, or the one you name (`npx
 sabeel-ci native-e2e maestro/timesheet.yaml`). It needs one booted emulator
 (`npx sabeel-ci emulator headless`) and installs the pinned Maestro itself
@@ -425,7 +426,7 @@ emulator, Metro and device logs land in `shots/native/`. It refuses a held
 - **The account is the dev row's own address.** The dev sign-in row ("Dev
   sign-in (emulator only)", testID `dev-sign-in`) on a phone is filled with
   `volunteer@oursabeel.com` and refuses an address with no
-  account, so `seed-native.mjs` makes that account the way the row would (an
+  account, so `seed-emulators.mjs` makes that account the way the row would (an
   unsigned Google token, which the Auth emulator accepts), waits for
   `onUserCreate`'s profile, and makes it an admin. It has not accepted the
   rules, so the flow meets that screen. A flow never edits the field: Maestro's
@@ -498,7 +499,8 @@ with something the CLI picks for itself.
 `firebase.json` (what the emulators bind) and `app/src/env.ts` (inlined into the
 client bundle). Everything else reads them: shell through `npx sabeel-ci ports
 <name>`, Node through `ports(config(root))`, and the demo project through
-`config(root).emulators.project`. `sabeel-ci check-app`, in CI, holds the two
+`emulatorProject(config(root))` (shell: `npx sabeel-ci ports --project`).
+`sabeel-ci check-app`, in CI, holds the two
 files in step with `ci-tools.json`, and refuses a port of the block, a Firebase
 default or another app's port stated anywhere in `scripts/` or `package.json`,
 comments included. A disagreement fails a pull request rather than surfacing
@@ -593,7 +595,8 @@ request.
    worktree of its own, leaving the checkout it runs in alone. It writes the
    version in `app/app.json` (the only copy) and the iOS build number that
    follows from it, moves the manual's "For app version" line, renders the
-   manual PDF (`docs/render-manual.py`), adds `<entry>` to the deploy log in
+   manual PDF (`npx sabeel-ci render-manual`, which needs `uv` and
+   `google-chrome`), adds `<entry>` to the deploy log in
    `docs/PHASE_STATUS.md`, commits that as `chore(release): vX.Y.Z` on
    `release/vX.Y.Z`, pushes the branch and opens the pull request, titled and
    described by the entry. `--dry-run` shows the change and leaves nothing

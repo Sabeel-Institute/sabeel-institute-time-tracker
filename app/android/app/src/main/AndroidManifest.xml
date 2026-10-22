@@ -42,10 +42,9 @@
          to the right channel instead of resurrecting the wrong one.
 
          THE ONE PLACE THE CHANNEL ID IS RESTATED. A manifest cannot import a TS
-         constant, so this literal is checked against PUSH_CHANNEL_ID by
-         functions/test/unit/pushChannel.test.ts — and unlike the client/server
-         pair, which both import the constant, that check can catch a genuine
-         disagreement. -->
+         constant, so `sabeel-ci check-app` holds this literal to PUSH_CHANNEL_ID
+         — and unlike the client/server pair, which both import the constant,
+         that check can catch a genuine disagreement. -->
     <meta-data android:name="com.google.firebase.messaging.default_notification_channel_id" android:value="sabeel-alerts"/>
     <activity android:name=".MainActivity" android:configChanges="keyboard|keyboardHidden|orientation|screenSize|screenLayout|uiMode|smallestScreenSize|assetsPaths" android:launchMode="singleTask" android:windowSoftInputMode="adjustResize" android:theme="@style/Theme.App.SplashScreen" android:exported="true" android:screenOrientation="portrait">
       <intent-filter>
