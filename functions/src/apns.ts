@@ -15,7 +15,7 @@ import { APP_ID, encodeNotifRoute, type ApnsEnvironment, type NotifRoute } from 
  * Pure of configuration: the key, its id and the team come in as arguments, and
  * so do Apple's two addresses, which is what lets `apns.test.ts` stand local
  * servers in for Apple. `messaging.ts` supplies the real ones. Imports nothing
- * relative, so `scripts/send-test-push.mjs` and `scripts/check-push.mjs` load it
+ * relative, so `sabeel-ci send-test-push` and `sabeel-ci check-push` load it
  * from source and send exactly what a notification sends.
  */
 
@@ -41,9 +41,11 @@ export interface ApnsCredentials {
   teamId: string;
 }
 
-export interface ApnsDevice {
+/** One message to one phone, through the service that issued its token. */
+export interface ApnsSend {
   token: string;
   apnsEnvironment: ApnsEnvironment;
+  message: ApnsMessage;
 }
 
 export interface ApnsOutcome {
@@ -120,19 +122,18 @@ const PROVIDER_TOKEN_REFUSED = new Set(['ExpiredProviderToken', 'InvalidProvider
 const REQUEST_TIMEOUT_MS = 15_000;
 
 /**
- * Send one message to each device, over one connection per service. Never
- * throws for a device's sake: every device ends delivered, dead or failed, and
+ * Send each message to its phone, over one connection per service. Never
+ * throws for a phone's sake: every send ends delivered, dead or failed, and
  * the caller decides what an outcome means (`messaging.ts`).
  */
 export async function sendToApns(
-  devices: ApnsDevice[],
-  message: ApnsMessage,
+  sends: ApnsSend[],
   creds: ApnsCredentials,
   origins: Record<ApnsEnvironment, string> = APNS_ORIGINS,
   now: number = Date.now(),
 ): Promise<ApnsOutcome> {
   const out: ApnsOutcome = { delivered: [], dead: [], failed: [] };
-  const sendable = devices.filter((d) => {
+  const sendable = sends.filter((d) => {
     if (APNS_TOKEN.test(d.token)) return true;
     out.dead.push(d.token);
     return false;
@@ -140,7 +141,6 @@ export async function sendToApns(
   if (sendable.length === 0) return out;
 
   const jwt = providerToken(creds, now);
-  const body = JSON.stringify(apnsPayload(message));
   const environments = [...new Set(sendable.map((d) => d.apnsEnvironment))];
 
   await Promise.all(
@@ -156,7 +156,7 @@ export async function sendToApns(
             .filter((d) => d.apnsEnvironment === environment)
             .map(async (d) => {
               try {
-                const { status, reason } = await post(session, d.token, jwt, body);
+                const { status, reason } = await post(session, d.token, jwt, JSON.stringify(apnsPayload(d.message)));
                 if (status === 200) out.delivered.push(d.token);
                 else if (isDeadApnsAnswer(status, reason)) out.dead.push(d.token);
                 else out.failed.push({ token: d.token, reason: reason ?? `HTTP ${status}` });

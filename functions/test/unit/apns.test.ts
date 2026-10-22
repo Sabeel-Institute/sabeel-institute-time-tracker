@@ -12,9 +12,9 @@ import { APP_ID, decodeNotifRoute } from '@sabeel/shared';
  * request; each answers what Apple would.
  *
  * Not covered here, because only Apple can say: that Apple accepts this
- * project's real key and topic (`scripts/check-push.mjs` asks it, with a token
- * that cannot exist), and that a phone shows the result (the simulator takes a
- * real sandbox push: `scripts/send-test-push.mjs --apple`). Plain-text HTTP/2
+ * project's real key and topic (`npx sabeel-ci check-push` asks it, with a
+ * token that cannot exist), and that a phone shows the result (the simulator
+ * takes a real sandbox push: `npx sabeel-ci send-test-push --apple`). Plain-text HTTP/2
  * stands in for TLS; the requests are the same. Ported from the sibling LMS.
  */
 
@@ -85,7 +85,7 @@ describe('a notification to an iPhone', () => {
   it('asks Apple to show the words, for this app, now', async () => {
     const { sendToApns } = await fresh();
     const apple = await both();
-    const out = await sendToApns([{ token: TOKEN, apnsEnvironment: 'production' }], MESSAGE, creds(), apple.origins);
+    const out = await sendToApns([{ token: TOKEN, apnsEnvironment: 'production', message: MESSAGE }], creds(), apple.origins);
 
     expect(out).toEqual({ delivered: [TOKEN], dead: [], failed: [] });
     expect(apple.production.seen).toHaveLength(1);
@@ -113,7 +113,7 @@ describe('a notification to an iPhone', () => {
   it('puts the route where the app reads it on an iPhone: inside a `body` dictionary', async () => {
     const { sendToApns } = await fresh();
     const apple = await both();
-    await sendToApns([{ token: TOKEN, apnsEnvironment: 'production' }], MESSAGE, creds(), apple.origins);
+    await sendToApns([{ token: TOKEN, apnsEnvironment: 'production', message: MESSAGE }], creds(), apple.origins);
     const payload = JSON.parse(apple.production.seen[0].body) as Record<string, unknown>;
     expect(Object.keys(payload).sort()).toEqual(['aps', 'body']);
     // What the app does with it, not just its shape.
@@ -131,7 +131,7 @@ describe('a notification to an iPhone', () => {
     const { sendToApns } = await fresh();
     const apple = await both();
     const now = Date.UTC(2026, 9, 15, 12, 0, 0);
-    await sendToApns([{ token: TOKEN, apnsEnvironment: 'production' }], MESSAGE, creds(), apple.origins, now);
+    await sendToApns([{ token: TOKEN, apnsEnvironment: 'production', message: MESSAGE }], creds(), apple.origins, now);
 
     const [header, claims, signature] = bearer(apple.production.seen[0]).split('.');
     expect(decode(header)).toEqual({ alg: 'ES256', kid: 'KEY1234567' });
@@ -148,16 +148,35 @@ describe('a notification to an iPhone', () => {
     const apple = await both();
     const out = await sendToApns(
       [
-        { token: TOKEN, apnsEnvironment: 'production' },
-        { token: OTHER, apnsEnvironment: 'development' },
+        { token: TOKEN, apnsEnvironment: 'production', message: MESSAGE },
+        { token: OTHER, apnsEnvironment: 'development', message: MESSAGE },
       ],
-      MESSAGE,
       creds(),
       apple.origins,
     );
     expect(out.delivered.sort()).toEqual([TOKEN, OTHER].sort());
     expect(apple.production.seen.map((s) => s.headers[':path'])).toEqual([`/3/device/${TOKEN}`]);
     expect(apple.development.seen.map((s) => s.headers[':path'])).toEqual([`/3/device/${OTHER}`]);
+  });
+
+  it('gives each phone its own message', async () => {
+    const { sendToApns } = await fresh();
+    const apple = await both();
+    const other = { title: 'Timesheet submitted', body: 'A week is waiting for you.', route: null };
+    await sendToApns(
+      [
+        { token: TOKEN, apnsEnvironment: 'production', message: MESSAGE },
+        { token: OTHER, apnsEnvironment: 'production', message: other },
+      ],
+      creds(),
+      apple.origins,
+    );
+    const sent = Object.fromEntries(
+      apple.production.seen.map((s) => [String(s.headers[':path']), JSON.parse(s.body) as Record<string, unknown>]),
+    );
+    expect(sent[`/3/device/${TOKEN}`]).toMatchObject({ aps: { alert: { title: MESSAGE.title } } });
+    expect(decodeNotifRoute(sent[`/3/device/${TOKEN}`].body)).toEqual(ROUTE);
+    expect(sent[`/3/device/${OTHER}`]).toMatchObject({ aps: { alert: { title: other.title } }, body: {} });
   });
 });
 
@@ -184,7 +203,7 @@ describe('what Apple answers', () => {
   it.each(cases)('%s (%i %s): %s', async (_what, status, reason, verdict) => {
     const { sendToApns } = await fresh();
     const apple = await both(() => ({ status, reason }));
-    const out = await sendToApns([{ token: TOKEN, apnsEnvironment: 'production' }], MESSAGE, creds(), apple.origins);
+    const out = await sendToApns([{ token: TOKEN, apnsEnvironment: 'production', message: MESSAGE }], creds(), apple.origins);
     expect(out.delivered).toEqual(verdict === 'delivered' ? [TOKEN] : []);
     expect(out.dead).toEqual(verdict === 'dead' ? [TOKEN] : []);
     expect(out.failed.map((f) => f.token)).toEqual(verdict === 'failed' ? [TOKEN] : []);
@@ -196,10 +215,9 @@ describe('what Apple answers', () => {
     const apple = await both((token) => (token === OTHER ? { status: 410, reason: 'Unregistered' } : { status: 200 }));
     const out = await sendToApns(
       [
-        { token: TOKEN, apnsEnvironment: 'production' },
-        { token: OTHER, apnsEnvironment: 'production' },
+        { token: TOKEN, apnsEnvironment: 'production', message: MESSAGE },
+        { token: OTHER, apnsEnvironment: 'production', message: MESSAGE },
       ],
-      MESSAGE,
       creds(),
       apple.origins,
     );
@@ -210,8 +228,7 @@ describe('what Apple answers', () => {
     const { sendToApns } = await fresh();
     const apple = await both();
     const out = await sendToApns(
-      [{ token: '../../../x', apnsEnvironment: 'production' }],
-      MESSAGE,
+      [{ token: '../../../x', apnsEnvironment: 'production', message: MESSAGE }],
       creds(),
       apple.origins,
     );
@@ -223,7 +240,7 @@ describe('what Apple answers', () => {
     const { sendToApns } = await fresh();
     const gone = await fakeApple();
     await gone.close();
-    const out = await sendToApns([{ token: TOKEN, apnsEnvironment: 'production' }], MESSAGE, creds(), {
+    const out = await sendToApns([{ token: TOKEN, apnsEnvironment: 'production', message: MESSAGE }], creds(), {
       production: gone.origin,
       development: gone.origin,
     });
@@ -242,7 +259,7 @@ describe('the provider token', () => {
   const minutes = (n: number) => n * 60_000;
 
   async function sendAt(api: Awaited<ReturnType<typeof fresh>>, apple: Awaited<ReturnType<typeof both>>, now: number) {
-    await api.sendToApns([{ token: TOKEN, apnsEnvironment: 'production' }], MESSAGE, creds(), apple.origins, now);
+    await api.sendToApns([{ token: TOKEN, apnsEnvironment: 'production', message: MESSAGE }], creds(), apple.origins, now);
     return bearer(apple.production.seen[apple.production.seen.length - 1]);
   }
 

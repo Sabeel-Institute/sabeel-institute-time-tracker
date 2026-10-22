@@ -102,12 +102,13 @@ describe('where each device goes', () => {
     );
     expect(out).toEqual({ stale: [], sent: 4 });
     expect(m.sendEachForMulticast.mock.calls[0][0].tokens).toEqual(['a', 'w']);
+    // One send per iPhone, each with the message.
     expect(m.sendToApns.mock.calls[0][0]).toEqual([
-      { token: 'i1', apnsEnvironment: 'development' },
-      { token: 'i2', apnsEnvironment: 'production' },
+      { token: 'i1', apnsEnvironment: 'development', message: NOTIF },
+      { token: 'i2', apnsEnvironment: 'production', message: NOTIF },
     ]);
     // The key and the two ids come from the bound secret and the params.
-    expect(m.sendToApns.mock.calls[0][2]).toEqual({ key: 'the-p8', keyId: 'KEY1234567', teamId: 'TEAM123456' });
+    expect(m.sendToApns.mock.calls[0][1]).toEqual({ key: 'the-p8', keyId: 'KEY1234567', teamId: 'TEAM123456' });
   });
 
   it('addresses the shared Android channel, and carries the route to both FCM surfaces', async () => {
