@@ -44,7 +44,7 @@ name: Rules, clock in and out, and the manager screens
     element: "Pick an activity"
     direction: UP
 - tapOn: "Pick an activity"
-- tapOn: "Teaching"
+- tapOn: "Teaching.*"
 - tapOn: "Clock in"
 - extendedWaitUntil:
     visible: "CLOCKED IN"
@@ -76,5 +76,5 @@ name: Rules, clock in and out, and the manager screens
 - scrollUntilVisible:
     element: "Manage users"
 - tapOn: "Manage users"
-- assertVisible: "volunteer@oursabeel.com"
+- assertVisible: ".*volunteer@oursabeel.com.*"
 - takeScreenshot: 04-users
