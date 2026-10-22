@@ -20,6 +20,16 @@ Source of truth: `docs/PRODUCT_BRIEF.md` (decisions & data model),
 TestFlight), `docs/DEV-TOOLING.md` (what each script guards against — **read it
 before debugging the harness or cutting a release**).
 
+**CI, release and device tooling is shared**: the `Sabeel-Institute/ci-tools`
+package, pinned to a commit in `package-lock.json` and run as `npx sabeel-ci
+<command>` (its README lists them). What differs for this app is said once, in
+`ci-tools.json`. The workflows in `.github/workflows/` are rendered from it
+(`npx sabeel-ci workflows`), never edited here, and `npx sabeel-ci check-app`
+(in CI) fails on drift and on anything else ci-tools assumes of the app. A
+change to a shared tool lands in ci-tools by pull request; this repo then moves
+its pin (`npm install --save-dev github:Sabeel-Institute/ci-tools#<commit>`)
+and re-renders.
+
 ## Converge on the optimum; do not accrete
 
 At every step — bug fix or feature — target the **globally-optimal** solution for
@@ -130,24 +140,31 @@ Do not silently change any of these.
 - Config-as-code: rules and indexes deploy from the repo, never console-edited.
 - **The version is three integers and lives only in `app/app.json` →
   `expo.version`.** Gradle derives `versionName` and `versionCode` from it — never
-  add a second copy. `scripts/check-version.mjs` enforces store legality from
-  lint/CI, `web:export`, `publish-play.mjs` and the release. A published version is
-  spent forever — never reuse one. The rule and the traps behind it are in the
-  skill ("The version number is a store contract"). `expo.ios.buildNumber` stays
-  `"1"`: every version goes to TestFlight once, from its own tag.
+  add a second copy. Android's versionCode and the iOS build number are both
+  `major * 1000000 + minor * 1000 + patch` (0.29.1 is 29001); `sabeel-ci
+  release` writes `expo.ios.buildNumber` with the version, and `sabeel-ci
+  check-app` fails when the two disagree. `sabeel-ci check-version` enforces
+  store legality from lint/CI, `web:export`, the Play bundle and the release. A
+  published version is spent forever — never reuse one. The rule and the traps
+  behind it are in the skill ("The version number is a store contract"). Every
+  version goes to TestFlight once, from its own tag.
 
 ## Dev & test loops
 
 - `npm run verify` — lint + typecheck + knip + unit, the fast CI gates in one
   shot. **Run it before pushing.**
 - Unit: `npm test` (Vitest: functions + shared).
-- Rules/integration: `npm run test:emulator` (needs JDK 21).
-- **This checkout owns emulator ports 61000–61008**; the sibling repos own 61100+
-  and 61200+. Three projects share this machine and all three used to pin
-  8080/9099/5001, so whichever suite started second killed the other's Firestore.
-  Four files state the ports and `functions/test/unit/emulator-ports.test.ts`
-  asserts they agree and that the kill list reaches no further. Never widen
-  `free-emulator-ports.sh` past this block. Details in `docs/DEV-TOOLING.md`.
+- Rules/integration: `npm run test:emulator` (`sabeel-ci test-emulator`; needs
+  JDK 21, which `npx sabeel-ci jdk21` finds). `npm run emulators` leaves the
+  emulators running for a dev server.
+- **This checkout owns the emulator block 61000–61099** (`emulators.base` in
+  `ci-tools.json`); Kanban owns 61200+ and LMS 61300+. The apps share this
+  machine, and with Firebase's default ports whichever suite started second
+  killed the other's Firestore. Scripts read ports and the demo project from
+  ci-tools (`npx sabeel-ci ports <name>`, `ports(config(root))` in Node) and
+  state none; `firebase.json` and `app/src/env.ts` state them, and `sabeel-ci
+  check-app` holds both in step. `npm run emulators:free` stops only this
+  checkout's leftovers on the block. Details in `docs/DEV-TOOLING.md`.
 - Browser e2e: `npm run test:e2e` — the full product LIFECYCLE against the
   emulators, at a 420x860 viewport. In CI, beside the sweep.
 - Layout sweep: `npm run test:screens` — every screen, five accounts, five widths
@@ -157,29 +174,30 @@ Do not silently change any of these.
   include it). Its false positives in this stack are documented in
   `docs/DEV-TOOLING.md` — check there before deleting anything.
 - Web: `npx expo start --web` in `app/` (emulator-backed via env flag).
-- Native flows: `bash scripts/native-e2e.sh` — the Maestro flows in `maestro/`
+- Native flows: `npx sabeel-ci native-e2e` — the Maestro flows in `maestro/`
   on the emulator against the debug build, the same command the Native workflow
   runs on main pushes and release tags; `--ios` runs them on an iPhone simulator
   (macOS). `docs/DEV-TOOLING.md`.
-- Android: `scripts/emulator.sh headless` (AVD `tb_emu`), then `npx expo
+- Android: `npx sabeel-ci emulator headless` (AVD `tb_emu`), then `npx expo
   run:android` in `app/`. Firebase emulators from the AVD = `10.0.2.2`. There are
   NO physical devices. The dev sign-in row on a phone refuses an address with no
   account, as production does; create the account with the web dev row first.
 - iOS (on the Mac): the simulator loop in `docs/IOS-BUILD.md` — Metro on its own
   port (another project holds 8081), the app pinned to it with `RCT_jsLocation`,
   emulators at `127.0.0.1`. `npm run check:ios` checks the iOS config;
-  `scripts/build-ios.sh` builds an `.ipa`; `.github/workflows/ios.yml` builds on
+  `npm run build:ios` builds an `.ipa`; `.github/workflows/ios.yml` builds on
   GitHub and, with `testflight=true` on a release tag, uploads.
 - Releases, in two steps because main takes changes only by pull request:
-  `npm run release -- <X.Y.Z> --notes FILE` bumps the version, rebuilds the
-  manual PDF and opens the release pull request; after Faisal merges it,
-  `npm run release -- --ship --notes FILE` on main builds both APK variants and
-  the Play bundle, verifies the production bundle on the AVD, publishes the
-  GitHub release tagged on that commit and the Play internal testing. **Never
-  hand-bump versions.** The
-  web deploy follows it (`docs/DEPLOY.md`); the iPhone build of that release is
-  the iOS workflow run on its tag (`docs/IOS-BUILD.md`, "Releasing to
-  TestFlight").
+  `npx sabeel-ci release X.Y.Z --notes <entry>` writes the version and the iOS
+  build number, renders the manual PDF, adds the deploy-log entry (`<entry>`,
+  headed `### <YYYY-MM-DD> — <summary> — vX.Y.Z`) and opens the release pull
+  request; after Faisal merges it, `npx sabeel-ci release --ship` on main builds
+  the Play bundle and both APK variants, cold-starts the production APK on the
+  AVD, publishes the GitHub release tagged on that commit and the Play internal
+  testing. **Never hand-bump versions.** The web deploy follows it
+  (`docs/DEPLOY.md`); the iPhone build of that release is the iOS workflow run
+  on its tag, `gh workflow run ios.yml --ref vX.Y.Z -f testflight=true`
+  (`docs/IOS-BUILD.md`, "Releasing to TestFlight").
 - CI (GitHub Actions): lint + typecheck + knip + unit + emulator tests + the
   layout sweep on every push. Keep it green, and **check the actual run** —
   don't assume. Nothing deploys on its own: Deploy Web, Deploy Functions and
@@ -231,12 +249,14 @@ Not for routine layout work. Use it for:
 | **Native modules** | FCM/push, pickers, sharing |
 | **Safe area / insets** | No browser equivalent |
 
-Plus **before a release** — `scripts/release.mjs` already verifies the production
-bundle on the AVD, and that gate is mandatory — and whenever Faisal asks.
+Plus **before a release** — `npx sabeel-ci release --ship` already cold-starts
+the production APK on the AVD (`sabeel-ci check-release`), and that gate is
+mandatory — and whenever Faisal asks.
 
 **Check who owns the AVD before booting it.** There is one `tb_emu` on this
 machine and all three repos default to it, so a boot can walk into another
-session's run:
+session's run. `npx sabeel-ci emulator headless` refuses to boot it twice and
+names the process running it; to look first:
 
 ```sh
 ps -eo pid,args --no-headers | grep "[q]emu-system"   # empty = no AVD running
@@ -312,6 +332,6 @@ committed by design — rules are enforced server-side. Client DSNs go in gitign
   (`app/src/liveQuery.ts`) — never hand-roll `onSnapshot` state (lint-enforced;
   see `docs/POSTMORTEM-2026-07-16-stale-week.md`). Async UI must be e2e-tested at
   least once under **injected latency**, not just localhost speed.
-- **Android distribution:** Play internal testing. `release.mjs` attaches APKs
-  and the manual to the versioned Institute app release. Never commit APKs or
-  publish to a personal Pages repository.
+- **Android distribution:** Play internal testing. `sabeel-ci release --ship`
+  attaches APKs and the manual to the versioned Institute app release. Never
+  commit APKs or publish to a personal Pages repository.

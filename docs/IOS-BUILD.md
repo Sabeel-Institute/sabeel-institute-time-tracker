@@ -45,7 +45,7 @@ committed `app/Podfile.lock`.
 |---|---|---|
 | `platforms` | includes `ios` | |
 | `ios.bundleIdentifier` | `com.sabeelinstitute.timetracker` | the Android package, and the Apple and Firebase registrations |
-| `ios.buildNumber` | integer string | Apple takes each once per version, each higher than the last; see "Releasing" |
+| `ios.buildNumber` | the versionCode, as a string (`"29001"` for 0.29.1) | Apple takes each once per version, each higher than the last; `sabeel-ci release` writes it with the version; see "Releasing" |
 | `ios.supportsTablet` | `false` | phone first; no iPad layout has been checked |
 | `ios.googleServicesFile` | `./GoogleService-Info.plist` | committed beside `google-services.json`: client identifiers, not secrets |
 | `ios.infoPlist.CFBundleDisplayName` | `Sabeel Time Tracker` | the Android launcher's name |
@@ -57,7 +57,7 @@ committed `app/Podfile.lock`.
 | `expo-build-properties` | `ios.extraPods`: GoogleUtilities, RecaptchaInterop with modular headers | without them `pod install` refuses: "Swift pod AppCheckCore depends upon GoogleUtilities and RecaptchaInterop, which do not define modules" |
 
 There is no `ios.version`: `expo.version` is the one version on every surface.
-`npm run check:ios` (`scripts/check-ios-config.mjs`) holds all of the above, plus
+`npm run check:ios` (`sabeel-ci check-ios-config`) holds all of the above, plus
 the icon (1024x1024, no alpha) and a crash-reporting DSN in `app/.env.local`.
 
 ### Reading back what prebuild wrote
@@ -84,9 +84,9 @@ each, something builds and quietly does not work.
 |---|---|---|
 | `app/.env.local` | `EXPO_PUBLIC_SENTRY_DSN`, `EXPO_PUBLIC_FCM_VAPID_KEY` | the app ships with crash reporting off; `check:ios` stops the build |
 | `app/.env.sentry-build-plugin` | `SENTRY_ORG`, `SENTRY_PROJECT` (`sabeel-time-tracker-app`), `SENTRY_AUTH_TOKEN`, `IOS_TEAM_ID`, `ASC_KEY_ID`, `ASC_ISSUER_ID`, optional `ASC_KEY_PATH` | no dSYMs or source maps uploaded; no automatic signing |
-| `~/.appstoreconnect/private_keys/AuthKey_<ASC_KEY_ID>.p8` | the App Store Connect API key (NOT the APNs key) | `-allowProvisioningUpdates` cannot sign; `testflight-check.mjs` cannot ask Apple |
+| `~/.appstoreconnect/private_keys/AuthKey_<ASC_KEY_ID>.p8` | the App Store Connect API key (NOT the APNs key) | `-allowProvisioningUpdates` cannot sign; `sabeel-ci testflight-check` cannot ask Apple |
 
-`scripts/load-build-env.sh` reads `app/.env.sentry-build-plugin` (parsed, not
+`sabeel-ci build-ios` reads `app/.env.sentry-build-plugin` (parsed, not
 sourced; a variable already in the environment wins). Never print or commit any
 of these values.
 
@@ -97,7 +97,7 @@ A debug build on the simulator, against this checkout's emulators.
 ```mermaid
 flowchart LR
   subgraph mac["Mac host processes"]
-    EMU["Firebase emulators<br/>61000-61008"]
+    EMU["Firebase emulators<br/>61000-61099"]
     METRO["Metro :8091<br/>EXPO_PUBLIC_USE_EMULATORS=1"]
   end
   SIM["iPhone simulator<br/>debug build"] -->|"127.0.0.1"| EMU
@@ -105,9 +105,9 @@ flowchart LR
 ```
 
 ```bash
-# 1. Emulators (JDK 21; /usr/bin/java on a Mac is only a stub)
-JAVA_HOME=/opt/homebrew/opt/openjdk@21 PATH=/opt/homebrew/opt/openjdk@21/bin:$PATH \
-  firebase emulators:start --project demo-sabeel --only auth,firestore,functions
+# 1. Emulators, left running (JDK 21 from `npx sabeel-ci jdk21`: Homebrew's
+#    openjdk@21 here; /usr/bin/java on a Mac is only a stub)
+npm run emulators
 
 # 2. Metro, in emulator mode, on a port no other project holds
 cd app
@@ -209,18 +209,20 @@ round trip runs here except the tap from outside the app.
 2. **A real push.** From the Mac, with the APNs key file:
 
    ```bash
-   APNS_KEY_FILE=~/.apns/AuthKey_X5R8FL94BC.p8 \
-     node scripts/send-test-push.mjs --apple development <token> screen=Timesheet periodKey=2026-10-04
+   npx sabeel-ci send-test-push --apple development <token> screen=Timesheet periodKey=2026-10-04
    ```
 
-   It sends exactly what the functions send (it loads `apns.ts` from source).
+   The key is `~/.apns/AuthKey_<APNS_KEY_ID>.p8`, or the file `APNS_KEY_FILE`
+   names. It sends exactly what the functions send (it loads `apns.ts` and
+   `testPush.ts` from source, and refuses fields that are no route the app
+   opens).
    With the app open the banner appears at the top; tap it and the app opens the
    route, here My timesheet on the week of 4 October (verified 2026-10-15).
 3. **The emulated functions send nothing.** A trigger that reaches an iPhone row
    logs `[emulator] push suppressed for 1 device(s)`: there is no APNs or FCM
    emulator, and `APNS_KEY` is a placeholder there (`functions/.secret.local`).
 
-`node scripts/check-push.mjs` asks both real services whether they accept a
+`npm run check:push` asks both real services whether they accept a
 message from this project (a bogus token each): FCM needs Google credentials
 (Application Default Credentials, or `CHECK_ACCESS_TOKEN`), Apple takes
 Secret Manager's `APNS_KEY` through `gcloud`, or `APNS_KEY_FILE`. On the Mac the
@@ -229,8 +231,8 @@ Apple half passes and the FCM half has no credentials to try.
 ## Building a release
 
 ```bash
-bash scripts/build-ios.sh --check   # every gate, nothing built
-bash scripts/build-ios.sh           # gates, prebuild, pinned pods, archive, export an .ipa
+npm run build:ios -- --check   # every gate, nothing built
+npm run build:ios              # gates, prebuild, pinned pods, archive, export an .ipa
 ```
 
 It never uploads; the workflow's TestFlight job is the one way a build reaches
@@ -242,7 +244,7 @@ finally a throwaway binary is signed, because a locked keychain is otherwise
 found twenty minutes into the archive.
 
 **Over ssh the login keychain is locked**, and stays locked: it unlocks at GUI
-login, which this Mac never has. `build-ios.sh` stops at that gate and says so.
+login, which this Mac never has. `sabeel-ci build-ios` stops at that gate and says so.
 Unlock it in the same ssh session that builds (`security unlock-keychain`,
 password typed at the prompt), or build on GitHub, which needs no keychain of
 the Mac's.
@@ -254,20 +256,20 @@ free for a public repo. Builds run automatically on main pushes. To build manual
 
 ```bash
 gh workflow run ios.yml -R Sabeel-Institute/sabeel-institute-time-tracker                                   # build an .ipa
-gh workflow run ios.yml -R Sabeel-Institute/sabeel-institute-time-tracker --ref v0.28.0 -f testflight=true  # build a release, upload it
+gh workflow run ios.yml -R Sabeel-Institute/sabeel-institute-time-tracker --ref vX.Y.Z -f testflight=true   # build a release, upload it
 ```
 
 ```mermaid
 flowchart TD
   A["workflow_dispatch<br/>(ref, testflight)"] --> B["build job<br/>npm ci, env files from secrets"]
   B --> C["signing keychain + App Store profile"]
-  C --> D["scripts/build-ios.sh<br/>gates, prebuild, pinned pods,<br/>archive, export (manual signing)"]
+  C --> D["sabeel-ci build-ios<br/>gates, prebuild, pinned pods,<br/>archive, export (manual signing)"]
   D --> E{"the exported .ipa<br/>is what was meant?"}
   E -->|wrong| X["fail"]
   E -->|right| F["artifacts: ipa, build record"]
   F --> G{"testflight=true?"}
   G -->|no| H["done"]
-  G -->|yes| I["testflight job<br/>scripts/testflight-check.mjs"]
+  G -->|yes| I["testflight job<br/>sabeel-ci testflight-check"]
   I --> J{"commit is the v-tag,<br/>build number free?"}
   J -->|no| X
   J -->|yes| K["altool --validate-app, --upload-package"]
@@ -275,16 +277,16 @@ flowchart TD
 
 **build** writes the two gitignored env files from secrets, imports the
 signing identity into a keychain of its own, installs the App Store profile and
-runs `build-ios.sh` with manual signing. It needs no new build number. Its
+runs `sabeel-ci build-ios` with manual signing. It needs no new build number. Its
 artifacts, kept 14 days: the `.ipa`, and a build record (the JavaScript source
 map and the `Podfile.lock` it resolved). **testflight**, only with
-`testflight=true`, asks `scripts/testflight-check.mjs` two questions and stops
+`testflight=true`, asks `sabeel-ci testflight-check` two questions and stops
 in seconds on either: is this commit the one tagged `v<version>` on GitHub (a
 published version is never reused for other code), and is the build number
 free for that version on App Store Connect. Then Apple validates the `.ipa` and
 it uploads.
 
-**The pods are pinned** by `app/Podfile.lock`, which `build-ios.sh` copies into
+**The pods are pinned** by `app/Podfile.lock`, which `sabeel-ci build-ios` copies into
 the generated `app/ios/` before `pod install --repo-update`, on the Mac and on
 GitHub alike. If the install resolves anything else, the build stops; when a
 native dependency changed on purpose, `cp app/ios/Podfile.lock app/Podfile.lock`,
@@ -322,7 +324,7 @@ on the Linux build machine, copied in the vault at
 1. A new key and signing request with `openssl`.
 2. `POST /v1/certificates` (`DISTRIBUTION`), then `POST /v1/profiles`
    (`IOS_APP_STORE`) per app on the new certificate, authenticated with the App
-   Store Connect API key as `testflight-check.mjs` does.
+   Store Connect API key as `sabeel-ci testflight-check` does.
 3. The new key and certificate packed with `openssl pkcs12 -export -legacy`;
    the files replaced in `~/.config/sabeel-lms/ios-distribution/`, then
    `bash vault.sh collect`.
@@ -332,12 +334,13 @@ on the Linux build machine, copied in the vault at
 
 ## Releasing to TestFlight
 
-1. Cut the release as usual (`npm run release -- X.Y.Z --notes FILE`, then
-   `--ship` after the merge, from Linux). It tags `vX.Y.Z` on the commit
-   Android and the web ship.
+1. Cut the release as usual (`npx sabeel-ci release X.Y.Z --notes <entry>`,
+   then `npx sabeel-ci release --ship` after the merge, from Linux;
+   `docs/DEPLOY.md`). It tags `vX.Y.Z` on the commit Android and the web ship.
 2. Get Faisal's go-ahead: an upload is a release.
-3. Start the workflow on that tag with `testflight=true` (the command under
-   "Builds on GitHub"), and follow it with
+3. Start the workflow on that tag with `testflight=true`, which `--ship` prints:
+   `gh workflow run ios.yml -R Sabeel-Institute/sabeel-institute-time-tracker
+   --ref vX.Y.Z -f testflight=true`, and follow it with
    `gh run watch -R Sabeel-Institute/sabeel-institute-time-tracker`.
 4. Apple processes the upload before anyone can install it, typically minutes
    to an hour; App Store Connect, TestFlight lists the build when it is done.
@@ -354,12 +357,14 @@ offers each new build.
 opening on testers' phones. A release at least every 90 days keeps the iPhones
 working.
 
-**Every version uploads once, as build 1.** `expo.ios.buildNumber` stays `"1"`:
-Apple wants it to increase within a version and lets it restart for the next.
-If Apple turns a build away after taking its number, cut the next patch
-version: an upload is built from its release tag, so a raised build number
-would need a commit the tag does not hold (`testflight-check.mjs` says the
-same).
+**Every version uploads once, its build number its versionCode.**
+`expo.ios.buildNumber` is `major * 1000000 + minor * 1000 + patch` as a string
+(`"29001"` for 0.29.1), the same number as Android's versionCode, written by
+`sabeel-ci release` with the version, so it rises with every version as Apple
+requires. If Apple turns a build away after taking its number, cut the next
+patch version: an upload is built from its release tag, so a raised build
+number would need a commit the tag does not hold (`sabeel-ci testflight-check`
+says the same).
 
 ## Open on iOS
 

@@ -29,7 +29,7 @@ stack?**
 
 Borderline cases usually split cleanly: the *fact* ("the functions emulator
 answers on its port before registering functions") is stack knowledge; *what we
-built about it* (`scripts/free-emulator-ports.sh`, the readiness wait in the e2e)
+built about it* (`sabeel-ci free-emulator-ports`, the readiness wait in the e2e)
 is ours.
 
 ## Why a stub rather than a copy
