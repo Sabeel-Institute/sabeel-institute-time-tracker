@@ -196,7 +196,9 @@ Knip has three failure modes in this stack. All three fired on the first run:
 
 **`@sabeel/shared` is deliberately absent from `functions/package.json`** —
 esbuild inlines it, and declaring it makes Cloud Build fail with
-*"404 not in this registry"*. It is in `ignoreDependencies` so nobody "fixes" it.
+*"404 not in this registry"*. The root `package.json` declares it instead
+(`devDependencies`, as in the sibling apps), which knip counts for every
+workspace, so it needs no `ignoreDependencies` entry and nobody "fixes" it.
 
 Exported **types** are kept even when only used in their own file: each names the
 parameter or return of an exported function, i.e. it documents a public surface.
