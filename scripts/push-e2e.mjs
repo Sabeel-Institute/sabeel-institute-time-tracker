@@ -71,7 +71,11 @@ async function main() {
   const { baseUrl } = await serveWebBundle();
   const origin = new URL(baseUrl).origin;
 
-  const browser = await chromium.launch({ channel: 'chromium', args: ['--no-sandbox'] });
+  // Chromium's own notification centre, not the desktop's: with a notification
+  // daemon on the machine's session bus, Chromium hands banners to it and drops
+  // them from `getNotifications()` when the daemon closes them, so the banner
+  // this suite reads back can be gone before it looks.
+  const browser = await chromium.launch({ channel: 'chromium', args: ['--no-sandbox', '--disable-features=NativeNotifications,SystemNotifications'] });
   const context = await browser.newContext({ viewport: { width: 1280, height: 900 } });
   await context.grantPermissions(['notifications'], { origin });
   const page = await context.newPage();
@@ -158,11 +162,11 @@ async function main() {
     });
     const banner = await until(async () => (await shown()).find((n) => n.body === c.notification.body && n.title === c.notification.title));
     check(`${c.kind}: the push is shown, with its words and its route`,
-      Boolean(banner) && JSON.stringify(banner.data) === JSON.stringify(data), JSON.stringify(banner));
+      Boolean(banner) && JSON.stringify(banner.data) === JSON.stringify(data), JSON.stringify(banner ?? await shown()));
     await worker.evaluate(async ({ title, body }) => {
       const n = (await self.registration.getNotifications()).find((x) => x.title === title && x.body === body);
       // eslint-disable-next-line no-undef -- runs in the worker, where it is a global
-      self.dispatchEvent(new NotificationEvent('notificationclick', { notification: n }));
+      if (n) self.dispatchEvent(new NotificationEvent('notificationclick', { notification: n }));
     }, c.notification);
     check(`${c.kind}: tapping it opens its route in the open tab`, await c.landed(page));
     check(`${c.kind}: the tapped notification is closed`,
