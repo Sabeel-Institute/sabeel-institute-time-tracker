@@ -32,8 +32,9 @@ differs from its template.
   runtime behavior or a dependency vendor's privacy defaults.
 - **CI** runs `sabeel-ci check-app`, lint, type checks, knip, unit tests,
   Firebase-emulator integration tests and the browser suites `ci-tools.json`
-  names (`npm run test:e2e`, the product lifecycle, and `npm run
-  test:screens`, the multi-width sweep, in parallel) on main pushes and pull
+  names (`npm run test:e2e`, the product lifecycle; `npm run test:screens`,
+  the multi-width sweep; and `npm run test:e2e:push`, every notification
+  tapped on the web, in parallel) on main pushes and pull
   requests. Every sweep, pass or fail, leaves a `screens-report` artifact: a
   page of every screen at every width with the failed checks beside them and
   what changed against main's latest sweep, before / after / difference. The

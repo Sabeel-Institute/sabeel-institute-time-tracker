@@ -1,7 +1,7 @@
 {
   "name": "time-tracker",
   "ci": {
-    "browserSuites": ["test:screens", "test:e2e"],
+    "browserSuites": ["test:screens", "test:e2e", "test:e2e:push"],
     "emulatorSecrets": { "SENTRY_DSN": "disabled", "APNS_KEY": "unused-in-emulator" },
     "knip": true
   },

@@ -310,6 +310,16 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
+    // `config/app` holds the oldest phone build allowed to run, and the app
+    // reads it BEFORE anyone signs in: a build the institute has retired should
+    // say so on its first screen, not after a sign-in the rules then refuse.
+    // Readable by anyone: it is one integer, and a signed-out read is the
+    // point. Written by nobody but the Admin SDK (`scripts/set-min-version.mjs`).
+    match /config/{doc} {
+      allow read: if true;
+      allow write: if false;
+    }
+
     // Append-only timesheet history, written by the onTimesheetWritten trigger.
     // Server-only for the same reason it exists: submit/approve/reject/withdraw/
     // reopen all mutate (or delete) the single timesheet doc, so without this the

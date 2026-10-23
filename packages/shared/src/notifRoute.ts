@@ -1,9 +1,9 @@
 // Where tapping a notification lands. The destination travels with the push as
-// flat string key/values, which is what BOTH transports can carry natively: an
-// FCM data payload is string-to-string, and the web build reads the identical
-// keys off the URL query when the browser opens fcm_options.link. One encoder,
-// one decoder, both surfaces.
-import { WEB_APP_ORIGIN } from './constants';
+// flat string key/values, which is what every surface can carry natively: an
+// FCM data payload is string-to-string, and on the web the service worker
+// (app/public/firebase-messaging-sw.js) posts the same keys to an open tab, or
+// opens a new one with them as the URL query. One encoder, one decoder, every
+// surface.
 
 export type NotifRoute =
   /** Pending account requests (admins). */
@@ -56,16 +56,4 @@ export function decodeNotifRoute(data: unknown): NotifRoute | null {
  */
 export function notifRouteNeedsApprover(route: NotifRoute): boolean {
   return route.screen === 'Users' || route.screen === 'TimesheetReview';
-}
-
-/**
- * The web-push click target: the hosted app with the route as a query string.
- * Built by hand rather than with URLSearchParams — this package is imported by
- * React Native, where that global comes from an incomplete polyfill.
- */
-export function notifRouteUrl(route: NotifRoute): string {
-  const q = Object.entries(encodeNotifRoute(route))
-    .map(([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(v)}`)
-    .join('&');
-  return `${WEB_APP_ORIGIN}/?${q}`;
 }
