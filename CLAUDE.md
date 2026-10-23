@@ -167,6 +167,9 @@ Do not silently change any of these.
   checkout's leftovers on the block. Details in `docs/DEV-TOOLING.md`.
 - Browser e2e: `npm run test:e2e` — the full product LIFECYCLE against the
   emulators, at a 420x860 viewport. In CI, beside the sweep.
+- Web push taps: `npm run test:e2e:push` — every kind of notification delivered
+  to the real service worker in Chromium, tapped, and followed to its screen,
+  in the open tab and in a new one. In CI.
 - Layout sweep: `npm run test:screens` — every screen, five accounts, five widths
   straddling the breakpoint, **asserted**. In CI. `SWEEP_WIDTHS=320` runs one
   width for a tight loop. See `docs/DEV-TOOLING.md`.
@@ -191,13 +194,14 @@ Do not silently change any of these.
   `npx sabeel-ci release X.Y.Z --notes <entry>` writes the version and the iOS
   build number, renders the manual PDF, adds the deploy-log entry (`<entry>`,
   headed `### <YYYY-MM-DD> — <summary> — vX.Y.Z`) and opens the release pull
-  request; after Faisal merges it, `npx sabeel-ci release --ship` on main builds
-  the Play bundle and both APK variants, cold-starts the production APK on the
-  AVD, publishes the GitHub release tagged on that commit and the Play internal
-  testing. **Never hand-bump versions.** The web deploy follows it
-  (`docs/DEPLOY.md`); the iPhone build of that release is the iOS workflow run
-  on its tag, `gh workflow run ios.yml --ref vX.Y.Z -f testflight=true`
-  (`docs/IOS-BUILD.md`, "Releasing to TestFlight").
+  request; after Faisal merges it, `npx sabeel-ci release --ship` on main
+  publishes the bundle CI built from that commit to Play internal testing,
+  cold-starts the universal APK Play signs from it on the AVD, and last
+  publishes the GitHub release, tagged on that commit, with that APK; it builds
+  and signs nothing locally. **Never hand-bump versions.** The web deploy
+  follows it (`docs/DEPLOY.md`); the iPhone build of that release is the iOS
+  workflow run on its tag, `gh workflow run ios.yml --ref vX.Y.Z -f
+  testflight=true` (`docs/IOS-BUILD.md`, "Releasing to TestFlight").
 - CI (GitHub Actions): lint + typecheck + knip + unit + emulator tests + the
   layout sweep on every push. Keep it green, and **check the actual run** —
   don't assume. Nothing deploys on its own: Deploy Web, Deploy Functions and
@@ -249,9 +253,9 @@ Not for routine layout work. Use it for:
 | **Native modules** | FCM/push, pickers, sharing |
 | **Safe area / insets** | No browser equivalent |
 
-Plus **before a release** — `npx sabeel-ci release --ship` already cold-starts
-the production APK on the AVD (`sabeel-ci check-release`), and that gate is
-mandatory — and whenever Faisal asks.
+Plus **before a release is tagged** — `npx sabeel-ci release --ship` already
+cold-starts the APK Play signs on the AVD (`sabeel-ci check-release`), and that
+gate is mandatory — and whenever Faisal asks.
 
 **Check who owns the AVD before booting it.** There is one `tb_emu` on this
 machine and all three repos default to it, so a boot can walk into another
@@ -336,5 +340,6 @@ committed by design — rules are enforced server-side. Client DSNs go in gitign
   input missing from `deps` fails lint. Async UI must be e2e-tested at least
   once under **injected latency**, not just localhost speed.
 - **Android distribution:** Play internal testing. `sabeel-ci release --ship`
-  attaches APKs and the manual to the versioned Institute app release. Never
-  commit APKs or publish to a personal Pages repository.
+  attaches Play's universal APK and the manual to the versioned Institute app
+  release; it and a Play install update each other. Never commit APKs or
+  publish to a personal Pages repository.

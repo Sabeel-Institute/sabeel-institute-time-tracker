@@ -1,4 +1,6 @@
-import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Linking, Platform, StyleSheet, Text, View } from 'react-native';
+import { APP_ID, APP_NAME } from '@sabeel/shared';
+import { BUILD_INFO } from '../build-info';
 import { retryProvisioning, signOut } from '../session';
 import { NOT_INSTITUTE_ACCOUNT_MESSAGE } from '../auth/signInMessage';
 import { Button } from '../components/ui';
@@ -95,6 +97,42 @@ export function DisabledScreen({ email }: { email: string }) {
   );
 }
 
+/**
+ * Where an update comes from: Play for an Android build, TestFlight (which
+ * opens on the build list) for an iPhone one. The only two places this app is
+ * installed from.
+ */
+const UPDATE = Platform.OS === 'ios'
+  ? { label: 'Open TestFlight', url: 'itms-beta://' }
+  : { label: 'Open Google Play', url: `https://play.google.com/store/apps/details?id=${APP_ID}` };
+
+/**
+ * A build the institute has retired (`useMinVersion`).
+ *
+ * Shown before sign-in, in place of the whole app, so nothing behind it runs
+ * on rules it no longer matches. Sign out is offered because the person may be
+ * signed in already and on a shared phone.
+ */
+export function UpdateScreen({ signedIn }: { signedIn: boolean }) {
+  return (
+    <View style={styles.container}>
+      <Text style={styles.title}>Update needed</Text>
+      <Text style={styles.message}>
+        {`This version of ${APP_NAME} is out of date. Install the current one to keep using the app; nothing you have recorded is lost by updating.`}
+      </Text>
+      <View style={styles.actions}>
+        <Button label={UPDATE.label} onPress={() => Linking.openURL(UPDATE.url).catch(() => undefined)} block />
+        {signedIn ? (
+          <Button label="Sign out" kind="secondary" onPress={() => signOut()} block />
+        ) : null}
+      </View>
+      <Text style={styles.build} testID="update-build-label">
+        Installed: v{BUILD_INFO.version} · {BUILD_INFO.commit}
+      </Text>
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
   container: {
     flex: 1,
@@ -116,4 +154,5 @@ const styles = StyleSheet.create({
   },
   email: { fontSize: 14, color: t.accent.base, fontWeight: '600' },
   actions: { marginTop: spacing(4), width: '100%', maxWidth: 240, gap: spacing(3) },
+  build: { marginTop: spacing(3), fontSize: 12, color: t.text.secondary, textAlign: 'center' },
 });

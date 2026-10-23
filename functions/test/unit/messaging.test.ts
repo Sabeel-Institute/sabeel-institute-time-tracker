@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
-import { PUSH_CHANNEL_ID, WEB_APP_ORIGIN } from '@sabeel/shared';
+import { PUSH_CHANNEL_ID } from '@sabeel/shared';
 import type { sendToApns as SendToApns } from '../../src/apns';
 
 /**
@@ -112,7 +112,7 @@ describe('where each device goes', () => {
     expect(m.sendToApns.mock.calls[0][1]).toEqual({ key: 'the-p8', keyId: 'KEY1234567', teamId: 'TEAM123456' });
   });
 
-  it('addresses the shared Android channel, and carries the route to both FCM surfaces', async () => {
+  it('addresses the shared Android channel, and carries the route in the data every surface reads', async () => {
     const m = await live();
     await m.send([android('a')], NOTIF);
     const message = m.sendEachForMulticast.mock.calls[0][0] as unknown as Record<string, unknown>;
@@ -120,9 +120,9 @@ describe('where each device goes', () => {
       android: { notification: { channelId: PUSH_CHANNEL_ID } },
       data: { screen: 'Timesheet', periodKey: '2026-10-11' },
     });
-    expect(String((message.webpush as { fcmOptions: { link: string } }).fcmOptions.link)).toMatch(
-      new RegExp(`^${WEB_APP_ORIGIN}`),
-    );
+    // No web link: the app's service worker opens the route from `data`, so a
+    // second copy of it as a URL would only be something to keep in step.
+    expect(message).not.toHaveProperty('webpush');
     // Not a data key named `body`: expo-notifications on Android takes that as
     // the whole payload.
     expect(Object.keys(message.data as object)).not.toContain('body');

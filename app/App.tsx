@@ -18,7 +18,9 @@ import {
   ProvisioningScreen,
   NotProvisionedScreen,
   StillSettingUpScreen,
+  UpdateScreen,
 } from './src/screens/GateScreens';
+import { useMinVersion } from './src/minVersion';
 import { HomeScreen } from './src/screens/HomeScreen';
 import { UsersScreen } from './src/screens/UsersScreen';
 import { ActivitiesScreen } from './src/screens/ActivitiesScreen';
@@ -46,6 +48,9 @@ const Stack = createNativeStackNavigator<RootStackParamList>();
 
 export default function App() {
   const session = useSession();
+  // The institute's floor for phone builds, read before anything else: a
+  // retired build shows the update screen whether or not anyone is signed in.
+  const { outdated } = useMinVersion();
 
   // Once per active sign-in: register this device for push and record the
   // last-seen timezone (the weekly reminder fires at local Tuesday 10:00).
@@ -91,7 +96,9 @@ export default function App() {
   }, [routingApprover]);
 
   let content;
-  if (session.phase === 'loading') {
+  if (outdated) {
+    content = <UpdateScreen signedIn={session.phase === 'signedIn'} />;
+  } else if (session.phase === 'loading') {
     content = (
       <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
         <ActivityIndicator size="large" color={t.accent.base} />

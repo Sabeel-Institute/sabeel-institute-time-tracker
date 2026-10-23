@@ -15,17 +15,31 @@ import { openNotifRoute } from './notifRouting';
 import { captureError } from './sentry';
 
 /**
- * Route notification taps. A browser can't hand the page a payload — clicking a
- * web push just opens fcm_options.link — so the route arrives as the query
- * string and is stripped once read, otherwise a reload would re-navigate.
+ * Route notification taps. The service worker (public/firebase-messaging-sw.js)
+ * delivers a tap one of two ways: to a tab of the app already open it posts
+ * `{ type: 'push-open', data }` with the route's fields; with none open it
+ * opens a new tab at the root with those fields as the query, which is read
+ * here once and stripped, otherwise a reload would re-navigate. Both go to
+ * openNotifRoute, which holds a route until there is a signed-in navigator to
+ * open it in.
  */
 export function useNotifTaps(): void {
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
-    if (![...params.keys()].length) return;
-    const route = decodeNotifRoute(Object.fromEntries(params));
-    window.history.replaceState({}, '', window.location.pathname);
-    if (route) openNotifRoute(route);
+    if ([...params.keys()].length) {
+      const route = decodeNotifRoute(Object.fromEntries(params));
+      window.history.replaceState({}, '', window.location.pathname);
+      if (route) openNotifRoute(route);
+    }
+    if (!('serviceWorker' in navigator)) return;
+    const onMessage = (event: MessageEvent) => {
+      const message = event.data as { type?: unknown; data?: unknown } | null;
+      if (message?.type !== 'push-open') return;
+      const route = decodeNotifRoute(message.data);
+      if (route) openNotifRoute(route);
+    };
+    navigator.serviceWorker.addEventListener('message', onMessage);
+    return () => navigator.serviceWorker.removeEventListener('message', onMessage);
   }, []);
 }
 

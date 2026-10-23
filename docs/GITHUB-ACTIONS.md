@@ -32,8 +32,9 @@ differs from its template.
   runtime behavior or a dependency vendor's privacy defaults.
 - **CI** runs `sabeel-ci check-app`, lint, type checks, knip, unit tests,
   Firebase-emulator integration tests and the browser suites `ci-tools.json`
-  names (`npm run test:e2e`, the product lifecycle, and `npm run
-  test:screens`, the multi-width sweep, in parallel) on main pushes and pull
+  names (`npm run test:e2e`, the product lifecycle; `npm run test:screens`,
+  the multi-width sweep; and `npm run test:e2e:push`, every notification
+  tapped on the web, in parallel) on main pushes and pull
   requests. Every sweep, pass or fail, leaves a `screens-report` artifact: a
   page of every screen at every width with the failed checks beside them and
   what changed against main's latest sweep, before / after / difference. The
@@ -129,8 +130,9 @@ differs from its template.
   Play's SHA-256 must match the selected AAB exactly.
 - Dirty-marked AABs cannot be published. Permission-check mode may inspect one
   to validate credentials, but a clean Android build is required for release.
-- The local `npx sabeel-ci publish-play --internal` command remains available.
-  Android builds never upload to Play automatically.
+- `npx sabeel-ci release --ship` runs Publish Android on the release commit's
+  bundle, and `npx sabeel-ci publish-play --internal` does the same from a
+  terminal. Android builds never upload to Play automatically.
 
 ## Credentials and trust
 

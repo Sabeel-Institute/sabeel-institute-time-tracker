@@ -252,7 +252,8 @@ The app sends push notifications so nothing sits unnoticed:
 **Tapping a notification opens the screen it is about**, not just the app: a
 decision on your timesheet opens that week; a submission opens that person's
 week ready to review; a new account request opens the user list. This works from
-a closed app too — the app finishes signing you in first, then goes there.
+a closed app too — the app finishes signing you in first, then goes there. In a
+browser it opens in the tab you already have open, or in a new one.
 
 Push notifications need the device's own permission. The app never asks by
 itself: it offers to set it up once, with an **Enable notifications** card on the
@@ -537,6 +538,7 @@ Open that week → Reopen (admin) → the owner fixes and resubmits.
 
 | What you see | What it means | What to do |
 |---|---|---|
+| "Update needed" when the app opens | This version of the phone app is too old to keep working | Tap **Open Google Play** (or **Open TestFlight** on an iPhone) and install the update; nothing you recorded is lost |
 | "Almost there" screen after signing in | Your account awaits admin approval | Ask your admin; the screen unlocks by itself once approved |
 | "Still setting up your account. Try again in a minute." | Your new account is taking longer than usual to be made | Wait a minute and tap **Try again** |
 | "Can't sign in" | The address is not an `@oursabeel.com` account | Sign out and sign in with your `@oursabeel.com` Google account |

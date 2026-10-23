@@ -15,7 +15,7 @@ TestFlight).
 | | Now | Destination |
 |---|---|---|
 | iPhone | TestFlight internal testing. The first build, 0.28.0 build 1 from tag `v0.28.0`, is VALID and in internal testing (2026-10-16). Internal group "Sabeel Time Tracker Internal" (Faisal; 19 staff invited to App Store Connect, added as they accept). App Store Connect app `6823429437` | The App Store, **unlisted**, after App Review. Nothing submitted; the Time Tracker follows Kanban through review |
-| Android | Google Play internal testing: 0.28.0 (28000) a completed release. Play signs with the app's own key (since 2026-10-16). The "Sabeel staff" tester list is ticked; testers join through the opt-in link in the deployment guide. A locally built APK carries the same key, so it and a Play install update each other | Google Play **production**, a public listing (Play has no unlisted) |
+| Android | Google Play internal testing: 0.28.0 (28000) a completed release. Play signs with the app's own key (since 2026-10-16). The "Sabeel staff" tester list is ticked; testers join through the opt-in link in the deployment guide. The GitHub release's APK is Play's own universal one, so it and a Play install update each other | Google Play **production**, a public listing (Play has no unlisted) |
 | Web | Live at `https://sabeel-institute-time-tracker.web.app`, with `/privacy` and `/support` | |
 
 ## How the Time Tracker keeps the shared decisions
@@ -267,7 +267,8 @@ days.
 
 Since 2026-10-16: Play's Google-generated key replaced with the app's release
 key (App integrity, App signing, Change key, Export and upload a key from Java
-keystore, PEPK). A Play install and a locally built APK update each other.
+keystore, PEPK). A Play install and the GitHub release's APK, which is Play's
+own, update each other.
 `sabeel-ci publish-play` completes a release only when the APKs Play
 generated carry that certificate; the earlier 0.27.1 (27001) bundle, processed
 before the change, stays unreleased. APKs older than 0.28.0 are debug-signed:
@@ -282,7 +283,8 @@ nothing is lost.
 - **Android now:** Play internal testing, the account-wide "Sabeel staff" list
   ticked on the app's Internal testing → Testers page; testers join through
   that page's link (Play sends no email) (`docs/DEPLOY.md`, "Play testers").
-  Also the APK on `https://play.google.com/apps/internaltest/4701451587936876375`.
+  Also the universal APK on each GitHub release, which Play generated from the
+  same bundle.
 - **Destination:** the App Store, unlisted, after Kanban is through review; and
   Google Play production, a public listing, which Play reviews in full.
 
