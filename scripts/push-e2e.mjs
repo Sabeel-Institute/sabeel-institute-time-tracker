@@ -63,18 +63,6 @@ async function until(fn, timeout = 15000) {
   }
 }
 
-/** Why no banner came back: the permission each side sees, and whether the worker can show one at all. */
-async function diagnose(page, worker) {
-  const pagePerm = await page.evaluate(() => Notification.permission).catch((e) => `page: ${e.message}`);
-  const inWorker = await worker.evaluate(async () => {
-    const probe = await self.registration.showNotification('probe', { tag: 'probe' }).then(() => 'shown', (e) => String(e));
-    const after = (await self.registration.getNotifications()).map((n) => n.title);
-    for (const n of await self.registration.getNotifications({ tag: 'probe' })) n.close();
-    return { perm: Notification.permission, active: self.registration.active?.state, script: self.registration.active?.scriptURL, probe, after };
-  }).catch((e) => `worker: ${e.message}`);
-  return JSON.stringify({ pagePerm, inWorker, workers: page.context().serviceWorkers().map((w) => w.url()) });
-}
-
 async function main() {
   console.log('▸ building functions and web bundle (emulator mode)…');
   buildWebBundle();
@@ -146,8 +134,21 @@ async function main() {
     await navigator.serviceWorker.register('/firebase-messaging-sw.js');
     await navigator.serviceWorker.ready;
   });
-  const worker = context.serviceWorkers().find((w) => w.url().endsWith('/firebase-messaging-sw.js'))
-    ?? (await context.waitForEvent('serviceworker'));
+  /**
+   * The worker of the registration at the origin root, the one the app registers
+   * and pushes are delivered to. Looked up each time rather than held: the
+   * browser can hold more than one worker for the same script (a second
+   * registration under another scope, or a version on its way out), and a
+   * handle to the wrong one reads another registration's banners.
+   */
+  async function worker() {
+    for (const w of context.serviceWorkers()) {
+      const root = await w.evaluate(() => self.registration.scope === `${self.location.origin}/`
+        && self.serviceWorker?.state !== 'redundant').catch(() => false);
+      if (root) return w;
+    }
+    throw new Error('no worker at the origin root');
+  }
   const cdp = await context.newCDPSession(page);
   const registrations = new Map();
   cdp.on('ServiceWorker.workerRegistrationUpdated', ({ registrations: list }) => {
@@ -157,8 +158,16 @@ async function main() {
   const registrationId = await until(() => registrations.get(`${origin}/`), 10000);
   check('the worker is registered at the origin root', Boolean(registrationId));
 
-  const shown = () =>
-    worker.evaluate(async () => (await self.registration.getNotifications()).map((n) => ({ title: n.title, body: n.body, data: n.data })));
+  const shown = async () =>
+    (await worker()).evaluate(async () => (await self.registration.getNotifications()).map((n) => ({ title: n.title, body: n.body, data: n.data })));
+  /** Every worker the browser holds, its registration's scope and its banners: what to read when none came back. */
+  async function diagnose() {
+    return JSON.stringify(await Promise.all(context.serviceWorkers().map((w) => w.evaluate(async () => ({
+      scope: self.registration.scope,
+      state: self.serviceWorker?.state,
+      banners: (await self.registration.getNotifications()).map((n) => n.title),
+    })).catch((e) => e.message))));
+  }
   /** Home first, so every tap has to navigate to be seen to work. */
   async function home(p) {
     await p.goto(baseUrl, { waitUntil: 'domcontentloaded' });
@@ -174,8 +183,8 @@ async function main() {
     });
     const banner = await until(async () => (await shown()).find((n) => n.body === c.notification.body && n.title === c.notification.title));
     check(`${c.kind}: the push is shown, with its words and its route`,
-      Boolean(banner) && JSON.stringify(banner.data) === JSON.stringify(data), banner ? JSON.stringify(banner) : await diagnose(page, worker));
-    await worker.evaluate(async ({ title, body }) => {
+      Boolean(banner) && JSON.stringify(banner.data) === JSON.stringify(data), banner ? JSON.stringify(banner) : await diagnose());
+    await (await worker()).evaluate(async ({ title, body }) => {
       const n = (await self.registration.getNotifications()).find((x) => x.title === title && x.body === body);
       // eslint-disable-next-line no-undef -- runs in the worker, where it is a global
       if (n) self.dispatchEvent(new NotificationEvent('notificationclick', { notification: n }));
@@ -185,7 +194,7 @@ async function main() {
       await until(async () => !(await shown()).some((n) => n.body === c.notification.body && n.title === c.notification.title)));
 
     // eslint-disable-next-line no-undef -- the worker's own function, run in the worker
-    const url = await worker.evaluate((d) => subjectUrl(d), data);
+    const url = await (await worker()).evaluate((d) => subjectUrl(d), data);
     const fresh = await context.newPage();
     await fresh.goto(new URL(url, baseUrl).href, { waitUntil: 'domcontentloaded' });
     check(`${c.kind}: the address the worker opens lands on the route (${url})`, await c.landed(fresh));
