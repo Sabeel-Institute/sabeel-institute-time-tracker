@@ -1,8 +1,8 @@
 import { Platform } from 'react-native';
 import { doc } from 'firebase/firestore';
 import {
+  APP_CONFIG_COLLECTION,
   APP_CONFIG_DOC,
-  COLLECTIONS,
   isBuildOutdated,
   versionCodeOf,
   type AppConfigDoc,
@@ -35,7 +35,7 @@ const BUILD_VERSION_CODE: number = versionCodeOf(BUILD_INFO.version);
  */
 export function useMinVersion(): { outdated: boolean; minVersionCode: number | null } {
   const config = useLiveDoc<AppConfigDoc | null>(
-    () => (Platform.OS === 'web' ? null : doc(db, COLLECTIONS.config, APP_CONFIG_DOC)),
+    () => (Platform.OS === 'web' ? null : doc(db, APP_CONFIG_COLLECTION, APP_CONFIG_DOC)),
     [],
     {
       label: 'appConfig',

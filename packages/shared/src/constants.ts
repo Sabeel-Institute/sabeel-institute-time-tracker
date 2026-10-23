@@ -11,11 +11,6 @@ export const COLLECTIONS = {
    * reads or writes them. The same name in every Sabeel app's project.
    */
   reports: 'reports',
-  /**
-   * `config/app`: the oldest phone build allowed to run (AppConfigDoc). Read by
-   * anyone, before sign-in; written only by `scripts/set-min-version.mjs`.
-   */
-  config: 'config',
 } as const;
 
 /**
@@ -121,6 +116,7 @@ export const EMULATOR_PROJECT_ID = 'demo-sabeel-time-tracker';
  * `scripts/set-min-version.mjs`. The web has no floor: the site always serves
  * the current bundle.
  */
+export const APP_CONFIG_COLLECTION = 'config';
 export const APP_CONFIG_DOC = 'app';
 
 export interface AppConfigDoc {

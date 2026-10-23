@@ -23,7 +23,7 @@
 import { initializeApp } from 'firebase-admin/app';
 import { getFirestore } from 'firebase-admin/firestore';
 import { versionCode } from '@sabeel-institute/ci-tools/lib/version.mjs';
-import { APP_CONFIG_DOC, COLLECTIONS, FIREBASE_PROJECT_ID } from '@sabeel/shared';
+import { APP_CONFIG_COLLECTION, APP_CONFIG_DOC, FIREBASE_PROJECT_ID } from '@sabeel/shared';
 
 
 const version = process.argv[2];
@@ -38,7 +38,7 @@ try {
 const PROJECT_ID = process.env.CHECK_PROJECT ?? FIREBASE_PROJECT_ID;
 initializeApp({ projectId: PROJECT_ID });
 const db = getFirestore();
-const ref = db.collection(COLLECTIONS.config).doc(APP_CONFIG_DOC);
+const ref = db.collection(APP_CONFIG_COLLECTION).doc(APP_CONFIG_DOC);
 const before = (await ref.get()).data()?.minVersionCode ?? null;
 await ref.set({ minVersionCode }, { merge: true });
 console.log(`${PROJECT_ID}: config/app.minVersionCode ${before ?? '(unset)'} → ${minVersionCode} (v${version})`);

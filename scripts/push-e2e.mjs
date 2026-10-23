@@ -23,6 +23,7 @@
 //
 // Full Chromium, not the headless shell: the shell refuses notification
 // permission, so the worker could draw nothing.
+import { mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { chromium } from 'playwright';
 import { initializeApp } from 'firebase-admin/app';
@@ -42,6 +43,7 @@ import {
 } from './lib/e2e-stack.mjs';
 
 const shots = process.env.E2E_SHOTS_DIR ?? join(root, 'shots');
+mkdirSync(shots, { recursive: true });
 process.on('SIGINT', () => cleanup(130));
 
 const results = [];
