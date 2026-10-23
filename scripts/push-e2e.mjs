@@ -160,6 +160,22 @@ async function main() {
 
   const shown = async () =>
     (await worker()).evaluate(async () => (await self.registration.getNotifications()).map((n) => ({ title: n.title, body: n.body, data: n.data })));
+  /**
+   * Deliver a push to the worker and wait for the banner it draws.
+   *
+   * One DevTools delivery was lost in CI (one push in six, with the worker and
+   * the page otherwise fine and the next push shown), so a push whose banner
+   * has not come within ten seconds is delivered once more, and the run says so.
+   */
+  async function pushed(payload, match) {
+    for (const attempt of [1, 2]) {
+      await cdp.send('ServiceWorker.deliverPushMessage', { origin, registrationId, data: JSON.stringify(payload) });
+      const banner = await until(async () => (await shown()).find(match), 10000);
+      if (banner && attempt > 1) console.log('  ..   the push was delivered a second time');
+      if (banner) return banner;
+    }
+    return undefined;
+  }
   /** Every worker the browser holds, its registration's scope and its banners: what to read when none came back. */
   async function diagnose() {
     return JSON.stringify(await Promise.all(context.serviceWorkers().map((w) => w.evaluate(async () => ({
@@ -178,10 +194,8 @@ async function main() {
     console.log(`\n${c.kind}`);
     const data = encodeNotifRoute(c.route);
     check(`${c.kind}: the app is on Home before the tap`, await home(page));
-    await cdp.send('ServiceWorker.deliverPushMessage', {
-      origin, registrationId, data: JSON.stringify({ notification: c.notification, data }),
-    });
-    const banner = await until(async () => (await shown()).find((n) => n.body === c.notification.body && n.title === c.notification.title));
+    const banner = await pushed({ notification: c.notification, data },
+      (n) => n.body === c.notification.body && n.title === c.notification.title);
     check(`${c.kind}: the push is shown, with its words and its route`,
       Boolean(banner) && JSON.stringify(banner.data) === JSON.stringify(data), banner ? JSON.stringify(banner) : await diagnose());
     await (await worker()).evaluate(async ({ title, body }) => {
