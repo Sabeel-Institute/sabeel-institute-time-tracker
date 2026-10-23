@@ -63,7 +63,7 @@ and it has one.
   **Cloud Messaging** → *Web configuration* → **Web Push certificates**); its
   public key is committed as `VAPID_PUBLIC_KEY` in `app/src/firebase-config.ts`.
 - [ ] **Confirm a web push actually arrives, after the next deploy.**
-- [ ] **Drop `EXPO_PUBLIC_FCM_VAPID_KEY`** from `app/.env.local`, its vault copy
+- [x] **Drop `EXPO_PUBLIC_FCM_VAPID_KEY`** from `app/.env.local`, its vault copy
   and the `APP_ENV_LOCAL` secret: nothing reads it.
 
   On the site: a browser that has never been asked shows **Enable
@@ -100,14 +100,14 @@ redeploys:
 - [ ] **The Sentry setup every Sabeel app shares** (ci-tools README, "Sentry"),
   now that this app reads `EXPO_PUBLIC_SENTRY_DSN_NATIVE` and
   `EXPO_PUBLIC_SENTRY_DSN_WEB`:
-  - drop the old `EXPO_PUBLIC_SENTRY_DSN` line from `app/.env.local`, its vault
-    copy and `APP_ENV_LOCAL`;
+  - [x] drop the old `EXPO_PUBLIC_SENTRY_DSN` line from `app/.env.local`, its
+    vault copy and `APP_ENV_LOCAL`;
   - drop the `SENTRY_ORG` and `SENTRY_PROJECT` lines from
     `app/.env.sentry-build-plugin` and its vault copy (`ci-tools.json`'s
     `sentry` names them), on this machine and the Mac;
   - delete `app/android/sentry.properties` and its vault entry: the Android
     build takes the token from `app/.env.sentry-build-plugin`;
-  - delete the `IOS_BUILD_ENV` secret: the workflows read `BUILD_ENV`;
+  - [x] delete the `IOS_BUILD_ENV` secret: the workflows read `BUILD_ENV`;
   - after the next release, check one Android and one web crash read as
     source in Sentry.
 
