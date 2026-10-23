@@ -192,8 +192,10 @@ origin/main, and builds and signs nothing on this machine. Then it:
   Play internal testing, completing the release only if the APKs Play
   generates carry `release.appSigningCertificate`;
 - downloads the universal APK Play generated, signed exactly as Play installs
-  it (`sabeel-ci play-apk`, refusing any other signer), and cold-starts it on
-  the AVD (booting it when no device is attached);
+  it (`sabeel-ci play-apk`, refusing any other signer, and an APK carrying
+  Play's installer check: Play Console's automatic protection stays off for
+  this app, since a protected APK opens only when Play installed it), and
+  cold-starts it on the AVD (booting it when no device is attached);
 - last, creates the versioned Institute GitHub release at that commit, titled
   and described by the deploy-log entry, with that APK and the manual: a
   draft, then published, which creates the tag.
