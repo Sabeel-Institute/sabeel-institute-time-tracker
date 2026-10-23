@@ -69,9 +69,9 @@ On GitHub the file is the `APP_ENV_LOCAL` secret, its `NAME=value` lines only.
 
 ## Sentry upload token (`app/.env.sentry-build-plugin`, gitignored)
 `SENTRY_AUTH_TOKEN`, an organization token (scope `org:ci`). The Play bundle
-(`app/android/app/build.gradle` applies Sentry's `sentry.gradle` exactly when
-the file exists), the iPhone build and Deploy Web upload source maps and
-symbols with it; `sabeel-ci build-aab` and `build-ios` refuse to build without
+(`app/android/app/build.gradle` applies Sentry's `sentry.gradle` and its
+Android Gradle plugin's R8 mapping upload exactly when the file exists), the
+iPhone build and Deploy Web upload source maps, mappings and symbols with it; `sabeel-ci build-aab` and `build-ios` refuse to build without
 it. The org and the projects are public and live in `ci-tools.json`'s
 `sentry`, never in the file. The same file carries the iOS build's values
 below; on GitHub it is the `BUILD_ENV` secret.
