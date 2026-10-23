@@ -145,7 +145,7 @@ async function main() {
     worker.evaluate(async () => (await self.registration.getNotifications()).map((n) => ({ title: n.title, body: n.body, data: n.data })));
   /** Home first, so every tap has to navigate to be seen to work. */
   async function home(p) {
-    await p.goto(baseUrl, { waitUntil: 'networkidle' });
+    await p.goto(baseUrl, { waitUntil: 'domcontentloaded' });
     return onScreen(p.getByText('Salaam,', { exact: false }), 30000);
   }
 
@@ -171,7 +171,7 @@ async function main() {
     // eslint-disable-next-line no-undef -- the worker's own function, run in the worker
     const url = await worker.evaluate((d) => subjectUrl(d), data);
     const fresh = await context.newPage();
-    await fresh.goto(new URL(url, baseUrl).href, { waitUntil: 'networkidle' });
+    await fresh.goto(new URL(url, baseUrl).href, { waitUntil: 'domcontentloaded' });
     check(`${c.kind}: the address the worker opens lands on the route (${url})`, await c.landed(fresh));
     check(`${c.kind}: and the route leaves the address bar`, new URL(fresh.url()).search === '', fresh.url());
     await fresh.close();
