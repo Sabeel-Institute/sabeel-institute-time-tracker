@@ -63,6 +63,18 @@ async function until(fn, timeout = 15000) {
   }
 }
 
+/** Why no banner came back: the permission each side sees, and whether the worker can show one at all. */
+async function diagnose(page, worker) {
+  const pagePerm = await page.evaluate(() => Notification.permission).catch((e) => `page: ${e.message}`);
+  const inWorker = await worker.evaluate(async () => {
+    const probe = await self.registration.showNotification('probe', { tag: 'probe' }).then(() => 'shown', (e) => String(e));
+    const after = (await self.registration.getNotifications()).map((n) => n.title);
+    for (const n of await self.registration.getNotifications({ tag: 'probe' })) n.close();
+    return { perm: Notification.permission, active: self.registration.active?.state, script: self.registration.active?.scriptURL, probe, after };
+  }).catch((e) => `worker: ${e.message}`);
+  return JSON.stringify({ pagePerm, inWorker, workers: page.context().serviceWorkers().map((w) => w.url()) });
+}
+
 async function main() {
   console.log('▸ building functions and web bundle (emulator mode)…');
   buildWebBundle();
@@ -162,7 +174,7 @@ async function main() {
     });
     const banner = await until(async () => (await shown()).find((n) => n.body === c.notification.body && n.title === c.notification.title));
     check(`${c.kind}: the push is shown, with its words and its route`,
-      Boolean(banner) && JSON.stringify(banner.data) === JSON.stringify(data), JSON.stringify(banner ?? await shown()));
+      Boolean(banner) && JSON.stringify(banner.data) === JSON.stringify(data), banner ? JSON.stringify(banner) : await diagnose(page, worker));
     await worker.evaluate(async ({ title, body }) => {
       const n = (await self.registration.getNotifications()).find((x) => x.title === title && x.body === body);
       // eslint-disable-next-line no-undef -- runs in the worker, where it is a global
