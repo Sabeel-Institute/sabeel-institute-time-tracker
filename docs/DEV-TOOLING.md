@@ -31,6 +31,7 @@ for both.
 | `npm run emulators` | the emulators, left running for a dev server (`sabeel-ci emulators`) |
 | `npm run test:e2e` | full browser e2e against emulators — the product LIFECYCLE |
 | `npm run test:screens` | every screen at five widths, asserted — the LAYOUT sweep (in CI) |
+| `npm run test:e2e:push` | every kind of notification, delivered to the real service worker and tapped, opens its screen (in CI) |
 | `npm run knip` | dead-code audit |
 | `npm run emulators:free` | stop this checkout's leftovers on its emulator ports (`sabeel-ci free-emulator-ports`) |
 | `npx sabeel-ci check-app` | what ci-tools assumes of this repo: `ci-tools.json`, the rendered workflows, the ports, the version and its deploy-log entry, `.gitignore` (in CI) |

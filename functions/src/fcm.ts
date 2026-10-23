@@ -1,4 +1,4 @@
-import { PUSH_CHANNEL_ID, encodeNotifRoute, notifRouteUrl, type NotifRoute } from '@sabeel/shared';
+import { PUSH_CHANNEL_ID, encodeNotifRoute, type NotifRoute } from '@sabeel/shared';
 
 /**
  * FCM error codes that mean "this token will never work again".
@@ -22,10 +22,10 @@ export const DEAD_TOKEN_CODES: ReadonlySet<string> = new Set([
  * relative, so `sabeel-ci check-push` and `send-test-push` load it from source
  * and send exactly this.
  *
- * The tap destination rides along twice, because the two surfaces consume it
- * differently: Android reads the flat `data` bag (expo-notifications hands it to
- * JS verbatim as long as no key is named `body`), while a browser only ever gets
- * a URL, so the same fields are re-encoded as the query of fcm_options.link.
+ * The tap destination rides in the flat `data` bag, which every surface reads:
+ * Android through expo-notifications (verbatim, as long as no key is named
+ * `body`), and the browser through the app's own service worker
+ * (app/public/firebase-messaging-sw.js), which opens the route itself.
  */
 export function fcmMessage(message: { title: string; body: string; route: NotifRoute | null }) {
   return {
@@ -36,6 +36,5 @@ export function fcmMessage(message: { title: string; body: string; route: NotifR
     // created is never addressed by anything — see PUSH_CHANNEL_ID. Nothing
     // errors either side, so only the payload can hold this honest.
     android: { notification: { channelId: PUSH_CHANNEL_ID } },
-    ...(message.route ? { webpush: { fcmOptions: { link: notifRouteUrl(message.route) } } } : {}),
   };
 }

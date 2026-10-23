@@ -3,7 +3,6 @@ import {
   decodeNotifRoute,
   encodeNotifRoute,
   notifRouteNeedsApprover,
-  notifRouteUrl,
   type NotifRoute,
 } from '../src';
 
@@ -17,13 +16,6 @@ describe('notif route encoding', () => {
   it('round-trips every route through the flat string form', () => {
     for (const route of routes) {
       expect(decodeNotifRoute(encodeNotifRoute(route))).toEqual(route);
-    }
-  });
-
-  it('round-trips through a URL query — the web transport', () => {
-    for (const route of routes) {
-      const query = new URL(notifRouteUrl(route)).searchParams;
-      expect(decodeNotifRoute(Object.fromEntries(query))).toEqual(route);
     }
   });
 

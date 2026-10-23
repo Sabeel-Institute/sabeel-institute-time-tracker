@@ -167,6 +167,9 @@ Do not silently change any of these.
   checkout's leftovers on the block. Details in `docs/DEV-TOOLING.md`.
 - Browser e2e: `npm run test:e2e` — the full product LIFECYCLE against the
   emulators, at a 420x860 viewport. In CI, beside the sweep.
+- Web push taps: `npm run test:e2e:push` — every kind of notification delivered
+  to the real service worker in Chromium, tapped, and followed to its screen,
+  in the open tab and in a new one. In CI.
 - Layout sweep: `npm run test:screens` — every screen, five accounts, five widths
   straddling the breakpoint, **asserted**. In CI. `SWEEP_WIDTHS=320` runs one
   width for a tight loop. See `docs/DEV-TOOLING.md`.

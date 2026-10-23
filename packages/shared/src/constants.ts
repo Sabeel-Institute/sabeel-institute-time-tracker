@@ -11,6 +11,11 @@ export const COLLECTIONS = {
    * reads or writes them. The same name in every Sabeel app's project.
    */
   reports: 'reports',
+  /**
+   * `config/app`: the oldest phone build allowed to run (AppConfigDoc). Read by
+   * anyone, before sign-in; written only by `scripts/set-min-version.mjs`.
+   */
+  config: 'config',
 } as const;
 
 /**
@@ -85,8 +90,7 @@ export const FIREBASE_PROJECT_ID = 'sabeel-institute-time-tracker';
  */
 export const APP_ID = 'com.sabeelinstitute.timetracker';
 
-// Where the web build is hosted. Used to build the click target of a web push;
-// the browser has no app to hand a route to, so the route rides in the URL.
+// Where the web build is hosted.
 export const WEB_APP_ORIGIN = 'https://sabeel-institute-time-tracker.web.app';
 
 /**
@@ -107,6 +111,39 @@ export const SUPPORT_URL = `${WEB_APP_ORIGIN}/support`;
  * cannot be true in a deploy.
  */
 export const EMULATOR_PROJECT_ID = 'demo-sabeel-time-tracker';
+
+/**
+ * The oldest phone build still allowed to run, read from `config/app` before
+ * sign-in. A build below it shows the update screen in place of the app, so a
+ * release that older builds can no longer run against (a rules change that
+ * refuses a listener they still open) can retire them, rather than leave them
+ * failing with nothing on screen to say why. Raised by hand with
+ * `scripts/set-min-version.mjs`. The web has no floor: the site always serves
+ * the current bundle.
+ */
+export const APP_CONFIG_DOC = 'app';
+
+export interface AppConfigDoc {
+  /** A version's code (`versionCodeOf`); a build below this shows the update screen. */
+  minVersionCode: number;
+}
+
+/** Is a build too old to run? Unknown floors (no document yet) refuse nobody. */
+export function isBuildOutdated(versionCode: number, minVersionCode: number | null | undefined): boolean {
+  return typeof minVersionCode === 'number' && versionCode < minVersionCode;
+}
+
+/**
+ * The versionCode of an app version (X.Y.Z): major * 1000000 + minor * 1000 +
+ * patch, the number build.gradle stamps into the APK and the iPhone build
+ * carries as its build number. The scheme is ci-tools' (lib/version.mjs);
+ * `appVersion.test.ts` holds this to it, because the update gate compares
+ * this number with the floor `set-min-version` writes from ci-tools' own.
+ */
+export function versionCodeOf(version: string): number {
+  const [major, minor, patch] = version.split('.').map(Number);
+  return major * 1000000 + minor * 1000 + patch;
+}
 
 /** Clock sessions running longer than this get auto-closed at start + cap. */
 export const SESSION_CAP_HOURS = 12;

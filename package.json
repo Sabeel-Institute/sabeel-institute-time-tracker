@@ -21,6 +21,7 @@
     "test:emulator": "sabeel-ci test-emulator",
     "test:e2e": "node scripts/web-e2e.mjs",
     "test:screens": "node scripts/screens-e2e.mjs",
+    "test:e2e:push": "node scripts/push-e2e.mjs",
     "build": "npm run build -w @sabeel/shared && npm run build -w functions",
     "knip": "knip",
     "verify": "npm run lint && npm run typecheck && npm run knip && npm test",
