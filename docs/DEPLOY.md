@@ -48,8 +48,8 @@ approval.
 
 | File | Without it |
 |---|---|
-| `~/.config/sabeel-time-tracker/sabeel-time-tracker-release.jks` and the `keystore.properties` beside it | Gradle refuses to package a release |
-| `~/keys/sabeel-play-publisher.json` (or `PLAY_KEY`) | `sabeel-ci publish-play` stops; the rest of the release stands |
+| `~/.config/sabeel-time-tracker/sabeel-time-tracker-release.jks` and the `keystore.properties` beside it | Gradle refuses to package a release here (`npm run build:aab`); `release --ship` does not need it, since CI signs the bundle |
+| `~/keys/sabeel-play-publisher.json` (or `PLAY_KEY`) | `release --ship` cannot fetch Play's APK (`sabeel-ci play-apk`) and stops before the tag; `sabeel-ci publish-play` stops |
 | `app/.env.local` (`EXPO_PUBLIC_SENTRY_DSN_NATIVE`, `EXPO_PUBLIC_SENTRY_DSN_WEB`) | the Play bundle and the iPhone build refuse to build, since each would ship with crash reporting off; a hand-run web export ships with it off |
 | `app/.env.sentry-build-plugin` (`SENTRY_AUTH_TOKEN`) | the Play bundle and the iPhone build refuse to build, since their crashes would reach Sentry as minified frames |
 | `functions/.env` (`PROBE_TOKEN`) | a functions deploy leaves `probeQueries` refusing every call |
@@ -164,7 +164,8 @@ firebase deploy --only firestore:rules,firestore:indexes,functions
 #    then the release pull request; Faisal merges it once its checks pass
 npx sabeel-ci release 0.30.0 --notes ../v0.30.0.md
 
-# 2. ship the merged commit from main: build, AVD check, tag, Play internal
+# 2. ship the merged commit from main: CI's bundle to Play internal, Play's
+#    APK checked on the AVD, then the tag
 git switch main && git pull --ff-only
 npx sabeel-ci release --ship
 
@@ -181,14 +182,31 @@ adds the entry to the deploy log in `docs/PHASE_STATUS.md`, commits that on
 described by the entry. `--dry-run` shows the change and leaves nothing behind.
 
 `--ship`, on main after the merge, refuses unless main is clean and matches
-origin/main, then builds the AAB and both APKs, checks Play's permission,
-cold-starts the production APK on the AVD (booting it when no device is
-attached), creates the versioned Institute GitHub release with its tag on that
-commit, titled and described by the deploy-log entry, and publishes to Play
-internal testing. No personal website or Pages credentials are required.
+origin/main, and builds and signs nothing on this machine. Then it:
 
-The tag targets the verified build commit. Deploy backend changes before their
-clients; web hosting and iOS use that same release commit.
+- waits for the Android workflow's run on that commit and refuses one that
+  failed. That run signed the Play bundle in the `release-build` environment
+  (`sabeel-ci build-aab`) and cold-started it five times on an emulator;
+- has Publish Android check that bundle (provenance, checksum, signature,
+  version, commit) and Play's permission without uploading, then put it on
+  Play internal testing, completing the release only if the APKs Play
+  generates carry `release.appSigningCertificate`;
+- downloads the universal APK Play generated, signed exactly as Play installs
+  it (`sabeel-ci play-apk`, refusing any other signer), and cold-starts it on
+  the AVD (booting it when no device is attached);
+- last, creates the versioned Institute GitHub release at that commit, titled
+  and described by the deploy-log entry, with that APK and the manual: a
+  draft, then published, which creates the tag.
+
+No personal website or Pages credentials are required.
+
+The tag targets the verified build commit and comes last: Play's APK exists
+only once Play holds the bundle, so a tagged release always holds its APK and
+manual and names a version testers have. A failure before it leaves no tag;
+fix the cause and run `npx sabeel-ci release --ship` again, which resumes
+(Play's held bundle is not uploaded twice, and a draft left behind is
+replaced). Deploy backend changes before their clients; web hosting and iOS
+use that same release commit.
 
 `npx sabeel-ci publish-play --check` checks the bundle and Play access;
 `--internal` publishes it, checking version, commit and signing, including
@@ -212,8 +230,9 @@ They must use the Google account on the list; later releases arrive as updates.
   with the bump) with what shipped where, by pull request.
 
 Android signing uses `~/.config/sabeel-time-tracker/sabeel-time-tracker-release.jks`,
-named by `keystore.properties` beside it. Play signs
-installed APKs with that same certificate.
+named by `keystore.properties` beside it; CI signs the release bundle with the
+same key (`docs/GITHUB-ACTIONS.md`). Play signs installed APKs, and the GitHub
+release's APK, with that same certificate.
 
 ## Troubleshooting
 

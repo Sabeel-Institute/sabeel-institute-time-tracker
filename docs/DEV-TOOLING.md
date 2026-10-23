@@ -35,7 +35,7 @@ for both.
 | `npm run emulators:free` | stop this checkout's leftovers on its emulator ports (`sabeel-ci free-emulator-ports`) |
 | `npx sabeel-ci check-app` | what ci-tools assumes of this repo: `ci-tools.json`, the rendered workflows, the ports, the version and its deploy-log entry, `.gitignore` (in CI) |
 | `npx sabeel-ci native-e2e [--ios]` | the Maestro flows on the emulator, or an iPhone simulator (below) |
-| `npx sabeel-ci release X.Y.Z --notes <entry>` | open a release pull request; `npx sabeel-ci release --ship` after the merge publishes the GitHub release and Play internal testing (`docs/DEPLOY.md`) |
+| `npx sabeel-ci release X.Y.Z --notes <entry>` | open a release pull request; `npx sabeel-ci release --ship` after the merge publishes CI's bundle to Play internal testing, then the GitHub release with Play's APK (`docs/DEPLOY.md`) |
 | `npx sabeel-ci publish-play --check` / `--internal` | the Play gates alone / rerun the Play upload alone |
 | `npm run build:aab` | the signed Play bundle alone, every gate first (`sabeel-ci build-aab`) |
 | `npm run check:web-push` | the exported web bundle carries the VAPID key (`docs/DEPLOY.md`) |
@@ -333,13 +333,13 @@ Design decisions worth not undoing:
   records it; `web-e2e.mjs` drives the real acceptance.
 
 **It is not part of `sabeel-ci release`, deliberately.** The release's AVD step
-exists to check the one thing CI cannot — that the production APK boots and is
-not an emulator-mode bundle. The sweep checks the *web* layout, which CI has
-already run on every push; re-proving it would add ~2.5 minutes to every release
-for a result that is already green. The commit a release builds is the merged
-release pull request, whose diff is a version, a build number, the manual and
-the deploy-log entry — nothing that can move a layout — and CI has swept it
-too.
+exists to check the one thing CI cannot — that the APK Play signs from the
+bundle boots and is not an emulator-mode bundle. The sweep checks the *web*
+layout, which CI has already run on every push; re-proving it would add ~2.5
+minutes to every release for a result that is already green. The commit a
+release ships is the merged release pull request, whose diff is a version, a
+build number, the manual and the deploy-log entry — nothing that can move a
+layout — and CI has swept it too.
 
 Two checks in the sibling kanban's version were deliberately **not** ported, and
 both times for the same reason — *a check that fires on correct code is worse
@@ -603,13 +603,16 @@ request.
    `release/vX.Y.Z`, pushes the branch and opens the pull request, titled and
    described by the entry. `--dry-run` shows the change and leaves nothing
    behind.
-2. After Faisal merges it, `npx sabeel-ci release --ship` on main builds the
-   Play bundle (`sabeel-ci build-aab`) and both APKs, checks Play's permission,
-   cold-starts the universal APK on the AVD, publishes the GitHub release, and
-   last puts the bundle on Play internal testing (`sabeel-ci publish-play`).
-   It ends by printing the two runs that put the same commit on the web
-   (Deploy Web, with that commit's Web build) and on iPhones (the iOS workflow
-   on the tag).
+2. After Faisal merges it, `npx sabeel-ci release --ship` on main waits for the
+   Android workflow's bundle of that commit (signed in `release-build`,
+   cold-started five times on an emulator) and refuses one that failed, has
+   Publish Android check it and Play's permission and then put it on Play
+   internal testing, downloads the universal APK Play generated from it
+   (`sabeel-ci play-apk`) and cold-starts it on the AVD, and last publishes the
+   GitHub release with that APK and the manual, which creates the tag. It
+   builds and signs nothing locally, and ends by printing the two runs that
+   put the same commit on the web (Deploy Web, with that commit's Web build)
+   and on iPhones (the iOS workflow on the tag).
 
 The entry is the version's deploy-log entry, heading first: `### <YYYY-MM-DD> —
 <summary> — vX.Y.Z`, then the notes. The version scheme is ci-tools': X.Y.Z,
@@ -618,40 +621,47 @@ minor * 1000 + patch`.
 
 Guards worth keeping:
 
-- **Every channel ships the one verified build**: the GitHub release
-  (APKs), Play internal testing (the bundle). Never attach an APK
-  to chat.
-- **Both variants, every time** (arm64-v8a and universal, from
-  `build.gradle`'s ABI splits). arm64-only crashes on an x86_64 emulator with
-  "Unexpected CPU variant" — which is what verification runs on.
+- **Every channel ships the one verified build**: Play internal testing gets
+  the bundle CI built from the release commit, and the GitHub release the
+  universal APK Play generated from that bundle, signed as Play installs it,
+  so a sideloaded install and a Play install update each other. Never attach
+  an APK to chat.
+- **The universal APK, never arm64-only.** arm64-only crashes on an x86_64
+  emulator with "Unexpected CPU variant" — which is what verification runs on.
+  Play makes one universal APK from the bundle, and that is the release's.
 - **The production check is the ABSENCE of the dev sign-in row.** An
   emulator-mode bundle looks identical otherwise, and Metro will serve a cached
   bundle built under different `EXPO_PUBLIC_*` env. The AVD step is
-  `sabeel-ci check-release` on the universal APK, the check the Android workflow
-  runs on every bundle: five cold starts, each failing the release if that row
-  is present, the label is not `v<version> · <commit>`, or the device log shows
-  a crash. With no device attached it boots the AVD itself.
+  `sabeel-ci check-release` on Play's universal APK, the check the Android
+  workflow runs on every bundle: five cold starts, each failing the release if
+  that row is present, the label is not `v<version> · <commit>`, or the device
+  log shows a crash. With no device attached it boots the AVD itself.
 - **`versionCode` must increase**, or installs silently refuse to upgrade:
   step 1 refuses a version not above main's and every released tag's.
-- **Builds only main's merged head.** `--ship` refuses unless the checkout is a
-  clean main identical to origin/main, then stamps `app/src/build-info.ts` from
-  that commit. The APK bundles it and the Web build of the same commit stamps
-  the same — so the sign-in footer (`v<version> · <hash>`) is identical on the
-  APK and the web.
-- **Tags the built commit by name**: `gh release create --target <sha>`. Without
+- **Ships only main's merged head.** `--ship` refuses unless the checkout is a
+  clean main identical to origin/main, and takes the Android workflow's bundle
+  of that commit, which stamped `app/src/build-info.ts` from it. Play's APK
+  carries that stamp and the Web build of the same commit stamps the same — so
+  the sign-in footer (`v<version> · <hash>`) is identical on the APK and the
+  web.
+- **Tags the built commit by name, last**: `gh release create --draft --target
+  <sha>`, then `gh release edit --draft=false`, which creates the tag. Without
   a target the tag lands on whatever the remote branch head is, which is how
-  v0.26.0 and v0.27.0 tagged their predecessors. A failure before the tag
-  leaves nothing published; rerun `--ship`. A failure at Play leaves the GitHub
-  release standing: rerun `npx sabeel-ci publish-play --internal` alone.
+  v0.26.0 and v0.27.0 tagged their predecessors. The tag comes last because
+  Play's APK exists only once Play holds the bundle: a tagged release always
+  holds its APK and manual and names a version testers have. A failure before
+  it leaves no tag; rerun `--ship`, which does not upload Play's held bundle
+  twice and replaces a draft left behind. If only publishing the draft fails,
+  `--ship` prints the `gh release edit` that finishes it.
 
 ### Android distribution
 
 Testers install through Play internal testing:
 https://play.google.com/apps/internaltest/4701451587936876375
 
-`sabeel-ci release --ship` attaches APKs and the manual to the versioned
-Institute GitHub release. It does not publish to a personal site or Pages
-repository.
+`sabeel-ci release --ship` attaches Play's universal APK and the manual to the
+versioned Institute GitHub release; it and a Play install update each other.
+It does not publish to a personal site or Pages repository.
 
 ## Working with the Firebase emulators generally
 
