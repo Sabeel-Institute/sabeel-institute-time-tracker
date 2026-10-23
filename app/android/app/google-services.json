@@ -56,6 +56,50 @@
           ]
         }
       }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:858585609550:android:c1606362ae263115145a1f",
+        "android_client_info": {
+          "package_name": "com.sabeelinstitute.timetracker.debug"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "858585609550-v16iurmf9rildqjq2p625goabaqvroq0.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.sabeelinstitute.timetracker.debug",
+            "certificate_hash": "5e8f16062ea3cd2c4a0d547876baa6f38cabf625"
+          }
+        },
+        {
+          "client_id": "858585609550-4pkumltbrleru9om5q91jhrv1pcnblk9.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDDggqmvrfwe16_78VCFTWjHju9hxfoL3c"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "858585609550-4pkumltbrleru9om5q91jhrv1pcnblk9.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "858585609550-8blakujqt45jtqqfn69n1t0id1b0v5f0.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.sabeelinstitute.timetracker"
+              }
+            }
+          ]
+        }
+      }
     }
   ],
   "configuration_version": "1"
