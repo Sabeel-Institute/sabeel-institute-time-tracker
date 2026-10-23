@@ -23,6 +23,25 @@ headed `### <YYYY-MM-DD> — <summary> — vX.Y.Z`: `npx sabeel-ci release` take
 the release's title and notes from it (`docs/DEPLOY.md`). Deploys that shipped
 no app version carry no version in their heading.
 
+### 2026-10-23 — Web notifications open their page; Expo 57.0.30 — v0.30.0
+
+- **Tapping a notification on the web opens its page**, in the open tab or a
+  new one.
+- **The website fills a phone's screen**: no white band under the app as the
+  address bar slides away, and the buttons at the bottom stay in reach.
+- **"Please update"**: when an old version is retired, the app asks for the
+  update rather than misbehaving.
+- **Android**: a request over a dead connection gives up within a minute and
+  says so; the app no longer backs up its data, so after moving to a new phone
+  you sign in again; the download is smaller; and the storage and "draw over
+  other apps" permissions are gone, which nothing used.
+- After a Google sign-in that fails, the next try opens the account chooser
+  again, so a different account can be picked.
+- Expo 57.0.30 and React Native 0.86.3 with the month's patch updates; the
+  backend on firebase-admin 14; Android crash reports read as source in Sentry.
+- The release APK on GitHub is the one Play signs, so it and a Play install
+  update each other.
+
 ### 2026-10-21 — Dependency and security maintenance — v0.29.1
 
 Functions (all 16) deployed from `08228dd`: an unauthenticated `reportTotals`
