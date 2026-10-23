@@ -77,9 +77,9 @@ it. The org and the projects are public and live in `ci-tools.json`'s
 below; on GitHub it is the `BUILD_ENV` secret.
 
 ## Android release signing key
-`~/keystores/sabeel-time-tracker-release.jks` (alias and password in
-`sabeel-time-tracker-release.credentials.txt` beside it), named for Gradle by
-`~/.config/sabeel-time-tracker/keystore.properties` (mode 600, outside the repo),
+`~/.config/sabeel-time-tracker/sabeel-time-tracker-release.jks` (alias and
+password in `sabeel-time-tracker-release.credentials.txt` beside it), named for
+Gradle by `keystore.properties` in the same folder (mode 600, outside the repo),
 or by the file `SABEEL_KEYSTORE_PROPERTIES` names, as CI sets it.
 It is also Google Play's app signing key for this app. Losing it means no update
 can ever be signed again: the vault holds a copy (`sabeel/time-tracker/android/`).

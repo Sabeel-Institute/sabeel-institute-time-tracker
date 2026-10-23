@@ -48,7 +48,7 @@ approval.
 
 | File | Without it |
 |---|---|
-| `~/keystores/sabeel-time-tracker-release.jks`, `~/.config/sabeel-time-tracker/keystore.properties` | Gradle refuses to package a release |
+| `~/.config/sabeel-time-tracker/sabeel-time-tracker-release.jks` and the `keystore.properties` beside it | Gradle refuses to package a release |
 | `~/keys/sabeel-play-publisher.json` (or `PLAY_KEY`) | `sabeel-ci publish-play` stops; the rest of the release stands |
 | `app/.env.local` (`EXPO_PUBLIC_SENTRY_DSN_NATIVE`, `EXPO_PUBLIC_SENTRY_DSN_WEB`) | the Play bundle and the iPhone build refuse to build, since each would ship with crash reporting off; a hand-run web export ships with it off |
 | `app/.env.sentry-build-plugin` (`SENTRY_AUTH_TOKEN`) | the Play bundle and the iPhone build refuse to build, since their crashes would reach Sentry as minified frames |
@@ -211,8 +211,8 @@ They must use the Google account on the list; later releases arrive as updates.
 - Complete the version's deploy-log entry in `docs/PHASE_STATUS.md` (written
   with the bump) with what shipped where, by pull request.
 
-Android signing uses `~/keystores/sabeel-time-tracker-release.jks`, configured
-through `~/.config/sabeel-time-tracker/keystore.properties`. Play signs
+Android signing uses `~/.config/sabeel-time-tracker/sabeel-time-tracker-release.jks`,
+named by `keystore.properties` beside it. Play signs
 installed APKs with that same certificate.
 
 ## Troubleshooting
