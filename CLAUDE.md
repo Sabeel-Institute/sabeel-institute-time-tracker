@@ -239,7 +239,10 @@ the other. The checks, the design decisions and the two holes it had before
 anyone watched it fail are in `docs/DEV-TOOLING.md`.
 
 Both browser suites share their bring-up (`scripts/lib/e2e-stack.mjs`) and both
-run on Playwright's own Chromium, so neither needs a system browser.
+run on Playwright's own Chromium, so neither needs a system browser. They drive
+the web export `sabeel-ci build-web --emulators` makes: tree-shaken exactly as
+the site is, so a module wrongly shaken out fails a suite rather than the live
+site.
 
 ### The Android emulator is reserved for the seams a browser cannot reach
 

@@ -135,22 +135,15 @@ function emulatorEnv() {
 }
 
 /**
- * Build the shared lib + functions, then export the web bundle in emulator mode.
- *
- * `--clear`: EXPO_PUBLIC_* vars are inlined at bundle time and Metro's cache can
- * serve a bundle built under DIFFERENT env (e.g. a prod export) — never trust it.
+ * Build the shared lib + functions, then the web export as Hosting gets it,
+ * pointed at the emulators: `sabeel-ci build-web --emulators`, tree-shaken
+ * like the site, so every suite runs the code that ships. It clears Metro's
+ * cache, which can otherwise serve a bundle built under different
+ * EXPO_PUBLIC_* values.
  */
 export function buildWebBundle() {
   execFileSync('npm', ['run', 'build'], { cwd: ROOT, stdio: 'inherit' });
-  execFileSync(
-    'npx',
-    ['expo', 'export', '--platform', 'web', '--output-dir', 'dist-web', '--clear'],
-    {
-      cwd: join(ROOT, 'app'),
-      stdio: 'inherit',
-      env: { ...process.env, EXPO_PUBLIC_USE_EMULATORS: '1' },
-    },
-  );
+  sabeelCi(['build-web', '--emulators'], { stdio: 'inherit' });
 }
 
 /**
