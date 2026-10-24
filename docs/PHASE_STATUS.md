@@ -23,6 +23,15 @@ headed `### <YYYY-MM-DD> — <summary> — vX.Y.Z`: `npx sabeel-ci release` take
 the release's title and notes from it (`docs/DEPLOY.md`). Deploys that shipped
 no app version carry no version in their heading.
 
+### 2026-10-24 — A smaller website — v0.30.1
+
+- **The website is smaller.** The build leaves out code the app never
+  calls, including the parts of the error reporter it does not use, so a
+  first visit downloads less.
+- The browser tests run on the website exactly as it is built for release,
+  so a part left out by mistake fails a test first.
+- Nothing changes on the phone apps.
+
 ### 2026-10-23 — Web notifications open their page; Expo 57.0.30 — v0.30.0
 
 - **Tapping a notification on the web opens its page**, in the open tab or a
