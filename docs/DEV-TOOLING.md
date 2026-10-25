@@ -488,10 +488,9 @@ screen (`logs/hierarchy-at-failure.json`), the labels to match against.
 
 The **Native** workflow runs the same command on GitHub's emulator
 (`sabeel-ci ci-avd`) on every main push, every release tag, every pull
-request that changes the flows, the seed or `ci-tools.json`, and by hand, and
-keeps `shots/native/` as the `native-<sha>` artifact. Its `ios` job runs `--ios` on a
-macOS runner for release tags, by hand and for pull requests that change
-the flows, and keeps the same folder as `native-ios-<sha>`.
+request to main, and by hand, and keeps `shots/native/` as the `native-<sha>`
+artifact. Its `ios` job runs `--ios` on a macOS runner for release tags, pull
+requests and by hand, and keeps the same folder as `native-ios-<sha>`.
 
 ## Emulator ports are this checkout's own
 
