@@ -114,6 +114,15 @@ npx sabeel-ci ci-functions require-ci && npx sabeel-ci ci-functions plan
 firebase deploy --only functions
 npx sabeel-ci ci-functions verify --since <the time the deploy started, ISO>
 ```
+- **The Functions Framework is a dependency.** `functions/package.json` names
+  the Functions Framework (`@google-cloud/functions-framework`) though no
+  source imports it: Cloud Run starts it, and it parses every request before a
+  function sees it. Named, Cloud Build installs it from
+  `functions/package-lock.json` and Dependabot covers it; unnamed, Google's
+  buildpack installs a copy of its own from its own lock. `check-app` fails
+  without it, knip ignores it as unused, and Dependabot leaves its majors
+  alone: it stays on the 3.x line the buildpack itself installs for Node 22
+  until a major is taken on purpose.
 - Hosting serves `app/dist-web`, which the hosting predeploy in `firebase.json`
   rebuilds (`npm run web:export -w @sabeel/app`) on every hosting deploy.
 - **Web push's public key is committed** (`VAPID_PUBLIC_KEY` in
