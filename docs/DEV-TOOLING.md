@@ -434,9 +434,19 @@ emulator, Metro and device logs land in `shots/native/`. It refuses a held
   `onUserCreate`'s profile, and makes it an admin. It has not accepted the
   rules, so the flow meets that screen. A flow never edits the field: Maestro's
   `eraseText` deletes back from wherever the tap put the cursor.
-- **`maestro/timesheet.yaml`**: the rules and I agree, an activity made, clocked
-  in and out, then My timesheet, Reports, Approvals and Users, each checked by
-  text only that screen shows.
+- **`maestro/timesheet.yaml`**: the rules and I agree, an activity made (its
+  name read back before Add), clocked in and out, then My timesheet, Reports,
+  Approvals and Users, each checked by text only that screen shows.
+- **A busy simulator drops taps.** The iPhone simulator holds a CI Mac's load
+  average past 300, and a tap or a keystroke that lands before a screen takes it
+  is lost. So every step that moves the app on goes through ci-tools' shared
+  steps, `ci-tools/tap-until.yaml` (tap until the next screen shows) and
+  `back-until.yaml` (Back until the screen being left is gone). Each takes a
+  step again only while its screen is still showing, so a real failure still
+  fails. Each screen's title is the row that opened it, so Back waits for
+  something only the screen being left shows to go. `native-e2e` copies the
+  shared steps, with `back.yaml`, into `maestro/ci-tools/` for each run; Git
+  ignores the copy.
 - **A debug build's warning toast takes taps.** "Open debugger to view
   warnings" sits over the tab bar whenever the app logs a warning, so the
   runner starts Metro with `EXPO_PUBLIC_E2E=1` and `app/index.ts` then tells

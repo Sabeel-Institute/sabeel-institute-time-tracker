@@ -35,6 +35,7 @@ export function ActivitiesScreen({ selfUid }: { selfUid: string }) {
     <Screen width="read">
       <View style={styles.form}>
         <TextInput
+          testID="activity-name"
           value={name}
           onChangeText={setName}
           placeholder="New activity name"
