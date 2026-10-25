@@ -239,6 +239,14 @@ ports are freed with `npx --no sabeel-ci free-emulator-ports`. Nothing in
 `scripts/` states a port of the block, comments included: `sabeel-ci
 check-app` refuses one, because a copy is a copy that drifts.
 
+**A dead emulator CLI fails the run at once.** `startEmulators` races each
+readiness wait against `firebase emulators:start` exiting, and rejects with its
+exit code or signal and the path of this run's log. On 2026-10-23 the CLI
+crashed ("An unexpected error has occurred.") while downloading the Emulator
+UI, after the auth, firestore and functions ports had answered; the harness
+then waited 180 s for `setUserAccess` and failed with "never registered",
+which hid the cause.
+
 ## `scripts/screens-e2e.mjs` — the layout sweep
 
 `npm run test:screens`. Every screen, five accounts, five viewport widths, looked at
