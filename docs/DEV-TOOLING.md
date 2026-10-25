@@ -380,9 +380,17 @@ Beyond the flows themselves, the harness encodes:
   (`waitForFunctionRegistered`). Port-open is not function-ready.
 - **Truncates `shots/emulator.log` per run.** A stale log from days earlier
   once produced confident, wrong conclusions.
-- **Captures failed calls to the functions emulator with their response bodies**,
-  and dumps them (plus console errors and per-page screenshots) on failure. This
-  replaced hand-writing a one-off repro script to see a server error.
+- **Captures failing responses from the functions, Firestore and Auth emulators
+  with their response bodies**, and dumps them (plus console errors and per-page
+  screenshots) on failure. This replaced hand-writing a one-off repro script to
+  see a server error.
+- **Records every console error with its URL.** Chromium words a failed request
+  as "Failed to load resource: ... status of 400" and nothing else, so the URL
+  is what says which request it was.
+- **Excuses one console error on every page: a 400 on a Firestore
+  `Listen/channel` or `Write/channel` URL.** The emulator answers a request for
+  a session it has already closed with 400 "Unknown SID", and the SDK
+  reconnects. Every other 400 fails the suite, now with its URL.
 - **Injects latency** around week switching — the stale-week bug class only
   appears when snapshots lag (see `POSTMORTEM-2026-07-16-stale-week.md`).
 
