@@ -36,6 +36,15 @@ const shots = process.env.E2E_SHOTS_DIR ?? join(root, 'shots');
 // checkout's ports moved out of the shared block, and a stale `:5001/` here
 // would silently stop reporting callable failures rather than fail loudly.
 const FN_ORIGIN = `:${EMULATOR_HOSTS.functions.split(':')[1]}/`;
+
+// The emulators whose failing responses are recorded, with how much of each
+// body to keep. The app reaches all three at the literal 127.0.0.1.
+const WATCHED_EMULATORS = Object.entries({ functions: 400, firestore: 200, auth: 200 }).map(
+  ([name, keep]) => ({ name, keep, origin: `http://${EMULATOR_HOSTS[name]}/` }),
+);
+
+/** A recorded console error, as printed: who saw it, what it said, and where. */
+const describe = (e) => `[${e.label}] ${e.text} (${e.url || 'no url'})`;
 mkdirSync(shots, { recursive: true });
 
 process.on('SIGINT', () => cleanup(130));
@@ -135,13 +144,16 @@ async function main() {
   console.log('▸ launching Chromium…');
   const browser = await launchBrowser();
 
+  // { label, text, url }: Chromium words a failed request as "Failed to load
+  // resource: ... status of 400" and nothing more, so the URL travels with it.
   const consoleErrors = [];
-  // Every non-2xx response from the functions emulator, WITH ITS BODY. A
-  // callable failure reaches the UI as a bare "internal" and, if the function
-  // is missing entirely, as a browser CORS complaint — neither says what
-  // happened server-side. Capturing the raw response here is the difference
-  // between reading the answer and hand-writing a repro script to find it.
-  const callableFailures = [];
+  // Every failing response from the functions, Firestore and Auth emulators,
+  // WITH ITS BODY. A callable failure reaches the UI as a bare "internal" and,
+  // if the function is missing entirely, as a browser CORS complaint — neither
+  // says what happened server-side. Capturing the raw response here is the
+  // difference between reading the answer and hand-writing a repro script to
+  // find it.
+  const emulatorFailures = [];
   const pages = new Map();
   async function newPage(label) {
     const ctx = await browser.newContext({
@@ -151,23 +163,24 @@ async function main() {
     const page = await ctx.newPage();
     pages.set(label, page);
     page.on('console', (m) => {
-      if (m.type() === 'error') consoleErrors.push(`[${label}] ${m.text()}`);
+      if (m.type() === 'error') consoleErrors.push({ label, text: m.text(), url: m.location().url });
       if (m.type() === 'warning' && /listener|session poll/.test(m.text()))
         console.log(`  (warn) [${label}] ${m.text()}`);
     });
     page.on('response', async (resp) => {
-      if (!resp.url().includes(FN_ORIGIN) || resp.status() < 400) return;
+      const watched = WATCHED_EMULATORS.find((w) => resp.url().startsWith(w.origin));
+      if (!watched || resp.status() < 400) return;
       let body = '';
       try {
-        body = (await resp.text()).slice(0, 400);
+        body = (await resp.text()).slice(0, watched.keep);
       } catch {
         /* body already discarded */
       }
-      callableFailures.push(`[${label}] ${resp.status()} ${resp.url()}\n    ${body}`);
+      emulatorFailures.push(`[${label}] ${resp.status()} ${resp.url()}\n    ${body}`);
     });
     page.on('requestfailed', (req) => {
       if (!req.url().includes(FN_ORIGIN)) return;
-      callableFailures.push(
+      emulatorFailures.push(
         `[${label}] REQUEST FAILED ${req.url()}\n    ${req.failure()?.errorText ?? ''}` +
           '\n    (a 404 from the functions emulator carries no CORS headers, so the' +
           '\n     browser reports this as a CORS error — check function registration)',
@@ -179,13 +192,13 @@ async function main() {
   // On any failure, dump what every page was showing AND why the server said no.
   process.on('unhandledRejection', () => {});
   globalThis.dumpDiagnostics = () => {
-    if (callableFailures.length) {
-      console.error('\n--- failed calls to the functions emulator ---');
-      console.error(callableFailures.join('\n'));
+    if (emulatorFailures.length) {
+      console.error('\n--- failed calls to the emulators ---');
+      console.error(emulatorFailures.join('\n'));
     }
     if (consoleErrors.length) {
       console.error('\n--- browser console errors ---');
-      console.error(consoleErrors.slice(-15).join('\n'));
+      console.error(consoleErrors.slice(-15).map(describe).join('\n'));
     }
     console.error(`\n--- emulator log: ${join(shots, 'emulator.log')} (this run) ---`);
   };
@@ -683,12 +696,25 @@ async function main() {
   // The set-up checks provoke two on purpose: a held connection (Firestore
   // says it cannot reach the backend) and Auth's 400 for a deleted account.
   const provoked = (e) =>
-    /^\[(slow|stuck|outsider)\]/.test(e) && /Could not reach Cloud Firestore backend|status of 400/.test(e);
+    /^(slow|stuck|outsider)$/.test(e.label) &&
+    /Could not reach Cloud Firestore backend|status of 400/.test(e.text);
+  // Any page, any time: a request on a Firestore Listen or Write channel whose
+  // session the emulator has already closed is answered 400 "Unknown SID", and
+  // the SDK reconnects on its own (the same routine churn as the
+  // WebChannelConnection "transport errored" lines). Chromium logs that 400
+  // as a console error naming only the status, so the URL is what tells it
+  // from every other 400, which still fails the suite.
+  const closedSessionUrls = ['Listen', 'Write'].map(
+    (s) => `http://${EMULATOR_HOSTS.firestore}/google.firestore.v1.Firestore/${s}/channel`,
+  );
+  const closedSession = (e) =>
+    /^Failed to load resource: the server responded with a status of 400\b/.test(e.text) &&
+    closedSessionUrls.includes(e.url.split('?')[0]);
   const realErrors = consoleErrors.filter(
-    (e) => !/WebChannelConnection|transport errored/.test(e) && !provoked(e),
+    (e) => !/WebChannelConnection|transport errored/.test(e.text) && !closedSession(e) && !provoked(e),
   );
   if (realErrors.length) {
-    console.error('console errors:\n' + realErrors.join('\n'));
+    console.error('console errors:\n' + realErrors.map(describe).join('\n'));
     throw new Error('console errors during e2e');
   }
   console.log(`✔ Phase 1 e2e passed — screenshots in ${shots}`);

@@ -163,6 +163,23 @@ export async function startEmulators({ logPath, readyCallable = 'setUserAccess' 
     ['emulators:start', '--project', PROJECT, '--only', 'auth,firestore,functions'],
     { env: emulatorEnv(), detached: true },
   );
+  // The CLI can die mid-start (2026-10-23: "An unexpected error has occurred."
+  // while it downloaded the Emulator UI, after the auth, firestore and
+  // functions ports had answered). Every wait below races this, so a dead CLI
+  // fails the run at once, naming its log, instead of minutes later as a
+  // callable that "never registered".
+  const exited = new Promise((_, reject) => {
+    emu.once('exit', (code, signal) =>
+      reject(
+        new Error(`firebase emulators:start exited (${code ?? signal}) before it was ready; see ${logPath}`),
+      ),
+    );
+  });
+  // The races report it. Handled here too, so the emulators exiting after the
+  // waits have won (at shutdown) is not an unhandled rejection.
+  exited.catch(() => {});
+  const whileRunning = (wait) => Promise.race([wait, exited]);
+
   const log = createWriteStream(logPath, { flags: 'w' });
   // Surface emulator trouble (e.g. a function param prompt that would hang a
   // headless run) instead of silently timing out later.
@@ -174,11 +191,11 @@ export async function startEmulators({ logPath, readyCallable = 'setUserAccess' 
   emu.stderr.on('data', watch);
   emu.stdout.on('data', watch);
 
-  await waitFor(`http://${EMULATOR_HOSTS.auth}`, 'auth emulator');
-  await waitFor(`http://${EMULATOR_HOSTS.firestore}`, 'firestore emulator');
-  await waitFor(`http://${EMULATOR_HOSTS.functions}`, 'functions emulator', 120000);
+  await whileRunning(waitFor(`http://${EMULATOR_HOSTS.auth}`, 'auth emulator'));
+  await whileRunning(waitFor(`http://${EMULATOR_HOSTS.firestore}`, 'firestore emulator'));
+  await whileRunning(waitFor(`http://${EMULATOR_HOSTS.functions}`, 'functions emulator', 120000));
   // Port-open is not function-ready; see waitForFunctionRegistered.
-  await waitForFunctionRegistered(readyCallable);
+  await whileRunning(waitForFunctionRegistered(readyCallable));
 }
 
 /**

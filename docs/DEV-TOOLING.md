@@ -239,6 +239,14 @@ ports are freed with `npx --no sabeel-ci free-emulator-ports`. Nothing in
 `scripts/` states a port of the block, comments included: `sabeel-ci
 check-app` refuses one, because a copy is a copy that drifts.
 
+**A dead emulator CLI fails the run at once.** `startEmulators` races each
+readiness wait against `firebase emulators:start` exiting, and rejects with its
+exit code or signal and the path of this run's log. On 2026-10-23 the CLI
+crashed ("An unexpected error has occurred.") while downloading the Emulator
+UI, after the auth, firestore and functions ports had answered; the harness
+then waited 180 s for `setUserAccess` and failed with "never registered",
+which hid the cause.
+
 ## `scripts/screens-e2e.mjs` — the layout sweep
 
 `npm run test:screens`. Every screen, five accounts, five viewport widths, looked at
@@ -380,9 +388,17 @@ Beyond the flows themselves, the harness encodes:
   (`waitForFunctionRegistered`). Port-open is not function-ready.
 - **Truncates `shots/emulator.log` per run.** A stale log from days earlier
   once produced confident, wrong conclusions.
-- **Captures failed calls to the functions emulator with their response bodies**,
-  and dumps them (plus console errors and per-page screenshots) on failure. This
-  replaced hand-writing a one-off repro script to see a server error.
+- **Captures failing responses from the functions, Firestore and Auth emulators
+  with their response bodies**, and dumps them (plus console errors and per-page
+  screenshots) on failure. This replaced hand-writing a one-off repro script to
+  see a server error.
+- **Records every console error with its URL.** Chromium words a failed request
+  as "Failed to load resource: ... status of 400" and nothing else, so the URL
+  is what says which request it was.
+- **Excuses one console error on every page: a 400 on a Firestore
+  `Listen/channel` or `Write/channel` URL.** The emulator answers a request for
+  a session it has already closed with 400 "Unknown SID", and the SDK
+  reconnects. Every other 400 fails the suite, now with its URL.
 - **Injects latency** around week switching — the stale-week bug class only
   appears when snapshots lag (see `POSTMORTEM-2026-07-16-stale-week.md`).
 
@@ -434,9 +450,19 @@ emulator, Metro and device logs land in `shots/native/`. It refuses a held
   `onUserCreate`'s profile, and makes it an admin. It has not accepted the
   rules, so the flow meets that screen. A flow never edits the field: Maestro's
   `eraseText` deletes back from wherever the tap put the cursor.
-- **`maestro/timesheet.yaml`**: the rules and I agree, an activity made, clocked
-  in and out, then My timesheet, Reports, Approvals and Users, each checked by
-  text only that screen shows.
+- **`maestro/timesheet.yaml`**: the rules and I agree, an activity made (its
+  name read back before Add), clocked in and out, then My timesheet, Reports,
+  Approvals and Users, each checked by text only that screen shows.
+- **A busy simulator drops taps.** The iPhone simulator holds a CI Mac's load
+  average past 300, and a tap or a keystroke that lands before a screen takes it
+  is lost. So every step that moves the app on goes through ci-tools' shared
+  steps, `ci-tools/tap-until.yaml` (tap until the next screen shows) and
+  `back-until.yaml` (Back until the screen being left is gone). Each takes a
+  step again only while its screen is still showing, so a real failure still
+  fails. Each screen's title is the row that opened it, so Back waits for
+  something only the screen being left shows to go. `native-e2e` copies the
+  shared steps, with `back.yaml`, into `maestro/ci-tools/` for each run; Git
+  ignores the copy.
 - **A debug build's warning toast takes taps.** "Open debugger to view
   warnings" sits over the tab bar whenever the app logs a warning, so the
   runner starts Metro with `EXPO_PUBLIC_E2E=1` and `app/index.ts` then tells
@@ -462,10 +488,9 @@ screen (`logs/hierarchy-at-failure.json`), the labels to match against.
 
 The **Native** workflow runs the same command on GitHub's emulator
 (`sabeel-ci ci-avd`) on every main push, every release tag, every pull
-request that changes the flows, the seed or `ci-tools.json`, and by hand, and
-keeps `shots/native/` as the `native-<sha>` artifact. Its `ios` job runs `--ios` on a
-macOS runner for release tags, by hand and for pull requests that change
-the flows, and keeps the same folder as `native-ios-<sha>`.
+request to main, and by hand, and keeps `shots/native/` as the `native-<sha>`
+artifact. Its `ios` job runs `--ios` on a macOS runner for release tags, pull
+requests and by hand, and keeps the same folder as `native-ios-<sha>`.
 
 ## Emulator ports are this checkout's own
 

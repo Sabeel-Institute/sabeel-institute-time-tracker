@@ -49,3 +49,5 @@ app/android/keystore.properties
 .DS_Store
 build-artifacts
 gha-creds-*.json
+# native-e2e copies ci-tools' shared flow steps here for each run
+maestro/ci-tools/
