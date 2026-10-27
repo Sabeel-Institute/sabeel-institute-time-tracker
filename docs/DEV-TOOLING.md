@@ -439,8 +439,10 @@ app's flows have), serves the JavaScript from Metro on 8081 with
 sabeel-ci native-e2e maestro/timesheet.yaml`). It needs one booted emulator
 (`npx sabeel-ci emulator headless`) and installs the pinned Maestro itself
 (`sabeel-ci install-maestro`). Screenshots, Maestro's JUnit report and the
-emulator, Metro and device logs land in `shots/native/`. It refuses a held
-8081, since that port is shared with the sibling apps.
+emulator, Metro and seed logs land in `shots/native/`, with the device's log
+when a flow failed. It refuses a held 8081, since that port is shared with the
+sibling apps. Given `--build <dir>`, it installs the debug app `npx sabeel-ci
+native-build` made there instead of building one, which is how CI runs it.
 
 - **The account is the dev row's own address.** The dev sign-in row ("Dev
   sign-in (emulator only)", testID `dev-sign-in`) on a phone is filled with
@@ -469,9 +471,10 @@ emulator, Metro and device logs land in `shots/native/`. It refuses a held
   LogBox to ignore warnings; they still reach `logs/metro.log`.
 
 **On the iOS simulator**: `npx sabeel-ci native-e2e --ios` (macOS) builds the
-debug app for the simulator with `sabeel-ci ios-sim-build` (a prebuild scoped
-to iOS, the committed `Podfile.lock`, `xcodebuild` for `iphonesimulator`),
-installs it on a booted iPhone simulator, and runs the same flows. Each flow
+debug app for the simulator with `sabeel-ci native-build ios` (a prebuild
+scoped to iOS, the committed `Podfile.lock`, `xcodebuild` for
+`iphonesimulator`), boots the iPhone simulator it built for, installs the app
+and runs the same flows. Each flow
 takes the installed app's id as `${APP_ID}`, since the Android and iOS builds
 differ. Two iOS differences shape the flows: a pressable card's texts are one
 accessibility label on iOS, and Maestro matches a label whole, so texts inside
