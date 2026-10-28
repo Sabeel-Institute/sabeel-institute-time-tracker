@@ -99,7 +99,13 @@ export function ReportsScreen() {
       <SearchablePicker
         items={[
           { id: '', label: 'All activities' },
-          ...activities.map((a) => ({ id: a.id, label: a.name })),
+          // Archived ones still have hours to report, after the active ones.
+          ...activities
+            .filter((a) => a.status === 'active')
+            .map((a) => ({ id: a.id, label: a.name })),
+          ...activities
+            .filter((a) => a.status === 'archived')
+            .map((a) => ({ id: a.id, label: `${a.name} (archived)` })),
         ]}
         selectedId={activityId ?? ''}
         onSelect={(id) => setActivityId(id || null)}

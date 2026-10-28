@@ -307,8 +307,21 @@ async function main() {
   }
   await addActivity('Tutoring');
   await addActivity('Food Drive');
+  // Food Drive, the first active activity by name.
   await firstOnScreen(admin2.getByText('Archive', { exact: true })).click();
+  // Archived activities wait below the list, in a section that opens on a tap.
+  await admin2.getByRole('button', { name: 'Show Archived (1)' }).click();
   await admin2.getByText('Restore', { exact: true }).waitFor();
+  // An admin may delete an archived activity, after a confirmation. Old Drive
+  // sorts before Tutoring among the active, and after Food Drive once archived.
+  await addActivity('Old Drive');
+  await firstOnScreen(admin2.getByText('Archive', { exact: true })).click();
+  await admin2.getByRole('button', { name: 'Hide Archived (2)' }).waitFor();
+  admin2.once('dialog', (d) => d.accept());
+  await lastOnScreen(admin2.getByText('Delete', { exact: true })).click();
+  await admin2.getByRole('button', { name: 'Hide Archived (1)' }).waitFor();
+  if ((await admin2.getByText('Old Drive', { exact: true }).count()) !== 0)
+    throw new Error('the deleted activity is still listed');
   await admin2.screenshot({ path: join(shots, '6-activities.png'), animations: 'disabled', timeout: 8000 }).catch(() => {});
 
   // Members don't get the manager entry point (Home's Activities button).

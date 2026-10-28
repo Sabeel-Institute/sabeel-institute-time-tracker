@@ -1,4 +1,4 @@
-import { addDoc, collection, doc, orderBy, query, updateDoc, where } from 'firebase/firestore';
+import { addDoc, collection, deleteDoc, doc, orderBy, query, updateDoc, where } from 'firebase/firestore';
 import { COLLECTIONS, type ActivityDoc } from '@sabeel/shared';
 import { db } from './firebase';
 import { useLiveQuery } from './liveQuery';
@@ -35,4 +35,13 @@ export function createActivity(input: { name: string; createdBy: string }): Prom
 
 export function setActivityStatus(id: string, status: 'active' | 'archived'): Promise<void> {
   return updateDoc(doc(db, COLLECTIONS.activities, id), { status });
+}
+
+/**
+ * Admins only, and only an archived activity (firestore.rules). The hours logged
+ * under it keep their own copy of its name, so timesheets and reports still say
+ * what the work was.
+ */
+export function deleteActivity(id: string): Promise<void> {
+  return deleteDoc(doc(db, COLLECTIONS.activities, id));
 }

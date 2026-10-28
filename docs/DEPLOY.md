@@ -356,11 +356,10 @@ Retention only helps if the problem is noticed while a good backup still exists.
 - compares against the previous run stored at `meta/health` (server-only; the
   rules deny all client access);
 - raises to Sentry when a collection shrinks past its tolerance —
-  `users`/`activities`/`reports` have **zero tolerance** (activities can't be
-  deleted at all per the rules, nothing deletes a report, and users go only by
-  deliberate admin action), while
-  `timeEntries`/`timesheets` tolerate `max(5, 20%)` since routine deletion is
-  normal there;
+  `users`/`reports` have **zero tolerance** (nothing deletes a report, and users
+  go only by deliberate admin action), while
+  `timeEntries`/`timesheets`/`activities` tolerate `max(5, 20%)` since routine
+  deletion is normal there;
 - sends a Sentry **cron check-in**, so the job going *silent* is itself an alert.
 
 Tune the thresholds in `DROP_RULES`. It always re-baselines, so a single bad day

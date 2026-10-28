@@ -161,8 +161,9 @@ service cloud.firestore {
     }
 
     // Activities hours are assigned to. Any active user picks from
-    // them; only managers shape the list. Never deleted — archived (status flip),
-    // so historical entries keep a valid reference.
+    // them; only managers and admins shape the list. Retired by archiving (a
+    // status flip); an admin may then delete one, and the entries logged under
+    // it keep their own copy of its name.
     match /activities/{activityId} {
       function activityValid(d) {
         return d.name is string && d.name.size() > 0 && d.name.size() <= 200
@@ -177,7 +178,9 @@ service cloud.firestore {
         && activityValid(request.resource.data)
         && request.resource.data.createdAt == resource.data.createdAt
         && request.resource.data.createdBy == resource.data.createdBy;
-      allow delete: if false;
+      // An admin's alone, and only once archived: archiving takes it out of
+      // every picker first. Entries keep their own copy of its name.
+      allow delete: if isAdmin() && resource.data.status == 'archived';
     }
 
     // Hours. Entries are logged freely into a period while it is in draft (or

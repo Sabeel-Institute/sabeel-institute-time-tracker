@@ -7,7 +7,7 @@ import {
   type RulesTestEnvironment,
 } from '@firebase/rules-unit-testing';
 import { addDoc, collection, deleteDoc, doc, getDocs, setDoc, updateDoc } from 'firebase/firestore';
-import { EMULATOR_PROJECT_ID } from '@sabeel/shared';
+import { EMULATOR_PROJECT_ID, PASSWORD_ACCOUNT_EMAIL } from '@sabeel/shared';
 
 let testEnv: RulesTestEnvironment;
 
@@ -55,6 +55,17 @@ const adminNonManager = () =>
   testEnv.authenticatedContext('adm', { status: 'active', role: 'member', admin: true });
 const pendingUser = () =>
   testEnv.authenticatedContext('pen', { status: 'pending', role: 'member' });
+const admin = () =>
+  testEnv.authenticatedContext('boss', { status: 'active', role: 'manager', admin: true });
+// The same claims on the email-and-password account, which is never an admin.
+const passwordAdmin = () =>
+  testEnv.authenticatedContext('rev', {
+    status: 'active',
+    role: 'manager',
+    admin: true,
+    email: PASSWORD_ACCOUNT_EMAIL,
+    firebase: { sign_in_provider: 'password', identities: {} },
+  });
 
 describe('firestore.rules — activities', () => {
   it('managers create and archive activities', async () => {
@@ -98,11 +109,31 @@ describe('firestore.rules — activities', () => {
     await assertFails(getDocs(collection(pendingUser().firestore(), 'activities')));
   });
 
-  it('nobody deletes activities — archive only', async () => {
-    await testEnv.withSecurityRulesDisabled(async (ctx) => {
-      await setDoc(doc(ctx.firestore(), 'activities/a1'), activity);
+  describe('deleting', () => {
+    beforeEach(async () => {
+      await testEnv.withSecurityRulesDisabled(async (ctx) => {
+        await setDoc(doc(ctx.firestore(), 'activities/live'), activity);
+        await setDoc(doc(ctx.firestore(), 'activities/old'), { ...activity, status: 'archived' });
+      });
     });
-    await assertFails(deleteDoc(doc(manager().firestore(), 'activities/a1')));
+
+    it('an admin deletes an archived activity', async () => {
+      await assertSucceeds(deleteDoc(doc(admin().firestore(), 'activities/old')));
+    });
+
+    it('an admin cannot delete an activity that is still active', async () => {
+      await assertFails(deleteDoc(doc(admin().firestore(), 'activities/live')));
+    });
+
+    it('managers, members and pending users cannot delete', async () => {
+      for (const who of [manager, member, pendingUser]) {
+        await assertFails(deleteDoc(doc(who().firestore(), 'activities/old')));
+      }
+    });
+
+    it('a password session with admin claims cannot delete', async () => {
+      await assertFails(deleteDoc(doc(passwordAdmin().firestore(), 'activities/old')));
+    });
   });
 
   it('creation is validated: empty name rejected', async () => {

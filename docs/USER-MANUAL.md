@@ -352,9 +352,12 @@ Home → **Activities**. Create the activities people log hours against — a
 name is all it takes, whether it's an ongoing program ("Tutoring") or a
 one-off event ("Food Drive").
 
-Activities are never deleted — **archive** them instead. Archived activities
-disappear from pickers but keep their history in every report. **Restore**
-brings one back.
+**Archive** an activity to take it out of the pickers. Archived activities
+wait at the bottom of the list under **Archived**, closed until you open it,
+and keep their history in every report. **Restore** brings one back.
+
+An admin can also **Delete** an archived activity. It can't be undone, and the
+hours already logged under it keep its name.
 
 ## 2.4 Reports & exports
 

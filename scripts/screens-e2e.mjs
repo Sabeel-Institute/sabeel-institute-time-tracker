@@ -1098,6 +1098,9 @@ async function tourAdmin(tag, width) {
 
   await visit('activities', async () => {
     await tap(page, 'Activities');
+    await vis(page.getByText(ACTIVITIES[0][1], { exact: true })).waitFor({ timeout: 20000 });
+    // The archived one, in its section opened.
+    await page.getByRole('button', { name: 'Show Archived (1)' }).click();
     await vis(page.getByText(ACTIVITIES[3][1])).waitFor({ timeout: 20000 });
   });
   await goBack(page);

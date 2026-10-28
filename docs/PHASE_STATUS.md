@@ -115,6 +115,15 @@ see `TODO.md`.
 
 ## Decision log
 
+- 2026-10-28 — **An admin may delete an archived activity, and archived
+  activities wait in a closed section below the list** (#62, #63). Deleting
+  takes two steps, archive and then delete, and the rules hold it to admins and
+  to archived activities, so nothing anyone is picking disappears from a picker
+  under them. Entries carry `activityName`, so their timesheets and reports keep
+  the name, and reports group by `activityId`, which needs no live activity. The
+  daily health check counts activities among the collections that shrink in
+  normal use (`max(5, 20%)`) instead of with zero tolerance.
+
 - 2026-10-16 — **A slow account set-up is waited for, not refused; the report
   email reads well on a phone.** "Can't sign in" ("This app is for Sabeel
   Institute accounts only") used to follow ten seconds without a profile, which
