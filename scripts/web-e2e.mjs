@@ -372,6 +372,15 @@ async function main() {
   await vol.getByText('Save changes', { exact: true }).click();
   await vol.getByText('Week total: 2h 01m', { exact: true }).waitFor();
 
+  // A note alone saves on the clock entry, and leaves its minutes alone. The
+  // form shows whole minutes while a clocked session keeps its seconds; a
+  // session inside one minute must not read back as no length at all.
+  await lastOnScreen(vol.getByText('1m', { exact: true })).click();
+  await firstOnScreen(vol.locator('textarea')).fill('Set up the room');
+  await vol.getByText('Save changes', { exact: true }).click();
+  await vol.getByText('Set up the room', { exact: true }).waitFor();
+  await vol.getByText('Week total: 2h 01m', { exact: true }).waitFor();
+
   // Delete the 1-minute clock entry → total 2h 00m.
   await lastOnScreen(vol.getByText('1m', { exact: true })).click();
   await vol.getByText('Delete entry', { exact: true }).click();

@@ -5,10 +5,10 @@ import {
   addDays,
   dayKeyFor,
   deviceTimeZone,
+  entryMinutes,
   entryTimesValid,
-  epochFor,
   formatDuration,
-  minutesBetween,
+  formInstant,
   tzLabelFor,
 } from '@sabeel/shared';
 import { useActivities } from '../activities';
@@ -20,16 +20,6 @@ import { Button, ErrorText, Screen } from '../components/ui';
 import { getTheme, spacing } from '../theme';
 
 const t = getTheme();
-
-// Wall time → epoch ms, interpreted in the timezone the WORK happened in (which
-// is not the writer's when a manager logs hours on someone else's behalf).
-function toEpoch(dateKey: string, hhmm: string, timeZone: string): number | null {
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(dateKey) || !/^\d{1,2}:\d{2}$/.test(hhmm)) return null;
-  const [h, min] = hhmm.split(':').map(Number);
-  if (h > 23 || min > 59) return null;
-  const ms = epochFor(dateKey, hhmm, timeZone);
-  return Number.isFinite(ms) ? ms : null;
-}
 
 export function ManualEntryScreen({
   uid,
@@ -62,8 +52,10 @@ export function ManualEntryScreen({
   const [error, setError] = useState<string | null>(null);
 
   const activity = activities.find((a) => a.id === activityId) ?? null;
-  const start = toEpoch(dateKey, from, tz);
-  const end = toEpoch(dateKey, to, tz);
+  // Read in the timezone the WORK happened in, which is not the writer's when a
+  // manager logs hours on someone else's behalf.
+  const start = formInstant(dateKey, from, tz);
+  const end = formInstant(dateKey, to, tz);
   const valid =
     activity && start !== null && end !== null && entryTimesValid({ start, end });
 
@@ -124,7 +116,7 @@ export function ManualEntryScreen({
       </View>
       {/* Live duration echo — catches AM/PM slips before saving. */}
       {start !== null && end !== null && end > start ? (
-        <Text style={styles.durationPreview}>= {formatDuration(minutesBetween(start, end))}</Text>
+        <Text style={styles.durationPreview}>= {formatDuration(entryMinutes(start, end))}</Text>
       ) : null}
 
       <Text style={styles.label}>What did you work on? (optional)</Text>
