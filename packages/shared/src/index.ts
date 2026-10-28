@@ -4,6 +4,7 @@ export * from './auth';
 export * from './access';
 export * from './report';
 export * from './time';
+export * from './entryForm';
 export * from './validate';
 export * from './overlap';
 export * from './notifRoute';

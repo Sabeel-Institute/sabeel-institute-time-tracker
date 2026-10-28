@@ -3,11 +3,11 @@ import { StyleSheet, Text, TextInput, View } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import {
   dayKeyFor,
+  editedEntryTimes,
+  entryFormTimes,
+  entryMinutes,
   entryTimesValid,
-  epochFor,
   formatDuration,
-  minutesBetween,
-  timeOfDayFor,
   tzLabelFor,
 } from '@sabeel/shared';
 import { useActivities } from '../activities';
@@ -35,10 +35,11 @@ export function EntryEditScreen({ entryId, editorUid }: { entryId: string; edito
   // Seed the form once from the live entry (times shown in the entry's own tz).
   useEffect(() => {
     if (entry && entry.end !== null && !loaded) {
+      const seed = entryFormTimes({ ...entry, end: entry.end });
       setActivityId(entry.activityId);
-      setDateKey(entry.dayKey);
-      setFrom(timeOfDayFor(entry.start, entry.timeZone));
-      setTo(timeOfDayFor(entry.end, entry.timeZone));
+      setDateKey(seed.dateKey);
+      setFrom(seed.from);
+      setTo(seed.to);
       setNote(entry.note ?? '');
       setLoaded(true);
     }
@@ -46,21 +47,23 @@ export function EntryEditScreen({ entryId, editorUid }: { entryId: string; edito
 
   if (!entry) return <Screen width="read">{null}</Screen>;
 
-  const validFormats =
-    /^\d{4}-\d{2}-\d{2}$/.test(dateKey) && /^\d{1,2}:\d{2}$/.test(from) && /^\d{1,2}:\d{2}$/.test(to);
-  const start = validFormats ? epochFor(dateKey, from, entry.timeZone) : null;
-  const end = validFormats ? epochFor(dateKey, to, entry.timeZone) : null;
+  // Untouched times keep the entry's own instants (editedEntryTimes says why).
+  const times =
+    loaded && entry.end !== null
+      ? editedEntryTimes({ ...entry, end: entry.end }, { dateKey, from, to })
+      : null;
   const activity = activities.find((a) => a.id === activityId) ?? null;
-  const valid = start !== null && end !== null && entryTimesValid({ start, end });
+  const valid = times !== null && entryTimesValid(times);
+  const endKey = times ? dayKeyFor(times.end, entry.timeZone) : null;
 
   const save = async () => {
-    if (!valid || start === null || end === null) return;
+    if (!valid || times === null) return;
     setError(null);
     try {
       await updateEntry(entry, {
         activity: activity && activity.id !== entry.activityId ? activity : undefined,
-        start,
-        end,
+        start: times.start,
+        end: times.end,
         note,
         editorUid,
       });
@@ -105,8 +108,13 @@ export function EntryEditScreen({ entryId, editorUid }: { entryId: string; edito
         </View>
       </View>
       {/* Live duration echo — catches AM/PM slips before saving. */}
-      {start !== null && end !== null && end > start ? (
-        <Text style={styles.durationPreview}>= {formatDuration(minutesBetween(start, end))}</Text>
+      {times !== null && times.end > times.start ? (
+        <Text style={styles.durationPreview}>
+          = {formatDuration(entryMinutes(times.start, times.end))}
+        </Text>
+      ) : null}
+      {endKey !== null && endKey !== dateKey ? (
+        <Text style={styles.hint}>Ends on {endKey}.</Text>
       ) : null}
 
       <Text style={styles.label}>Note</Text>
@@ -118,10 +126,15 @@ export function EntryEditScreen({ entryId, editorUid }: { entryId: string; edito
       />
 
       <Button label="Save changes" onPress={save} disabled={!valid} />
+      {loaded && !valid ? (
+        <Text style={styles.hint}>Times must be HH:MM, end after start, at most 24h.</Text>
+      ) : null}
       <Button label="Delete entry" kind="danger" onPress={remove} />
       <ErrorText error={error} />
-      {dateKey && start !== null && dayKeyFor(start, entry.timeZone) !== entry.dayKey ? (
-        <Text style={styles.hint}>This moves the entry to {dayKeyFor(start, entry.timeZone)}.</Text>
+      {times !== null && dayKeyFor(times.start, entry.timeZone) !== entry.dayKey ? (
+        <Text style={styles.hint}>
+          This moves the entry to {dayKeyFor(times.start, entry.timeZone)}.
+        </Text>
       ) : null}
     </Screen>
   );

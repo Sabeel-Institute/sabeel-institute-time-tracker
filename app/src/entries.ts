@@ -15,8 +15,8 @@ import {
   COLLECTIONS,
   dayKeyFor,
   deviceTimeZone,
+  entryMinutes,
   epochFor,
-  minutesBetween,
   periodKeyFor,
   timeOfDayFor,
   type TimeEntryDoc,
@@ -72,7 +72,7 @@ export async function clockOut(uid: string, entry: TimeEntry): Promise<void> {
   const batch = writeBatch(db);
   batch.update(doc(db, COLLECTIONS.timeEntries, entry.id), {
     end: now,
-    durationMinutes: Math.max(1, minutesBetween(entry.start, now)),
+    durationMinutes: entryMinutes(entry.start, now),
     updatedAt: now,
   });
   batch.update(doc(db, COLLECTIONS.users, uid), { activeEntryId: null });
@@ -105,7 +105,7 @@ export async function createManualEntry(input: {
     activityName: input.activity.name,
     start: input.start,
     end: input.end,
-    durationMinutes: Math.max(1, minutesBetween(input.start, input.end)),
+    durationMinutes: entryMinutes(input.start, input.end),
     timeZone: tz,
     dayKey,
     periodKey: periodKeyFor(dayKey),
@@ -176,7 +176,7 @@ export async function updateEntry(
       : {}),
     start: changes.start,
     end: changes.end,
-    durationMinutes: Math.max(1, minutesBetween(changes.start, changes.end)),
+    durationMinutes: entryMinutes(changes.start, changes.end),
     dayKey,
     periodKey: periodKeyFor(dayKey),
     note: changes.note?.trim() ?? '',
@@ -228,7 +228,7 @@ export async function copyPeriodEntries(
       activityName: e.activityName,
       start,
       end: start + (e.end - e.start),
-      durationMinutes: e.durationMinutes ?? Math.max(1, minutesBetween(e.start, e.end)),
+      durationMinutes: e.durationMinutes ?? entryMinutes(e.start, e.end),
       timeZone: e.timeZone,
       dayKey,
       periodKey: periodKeyFor(dayKey),

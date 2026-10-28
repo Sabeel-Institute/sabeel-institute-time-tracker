@@ -173,6 +173,11 @@ export function minutesBetween(startMs: number, endMs: number): number {
   return Math.round((endMs - startMs) / 60000);
 }
 
+/** The minutes an entry counts: its length to the nearest minute, and at least one. */
+export function entryMinutes(startMs: number, endMs: number): number {
+  return Math.max(1, minutesBetween(startMs, endMs));
+}
+
 /** 125 → '2h 05m'; 45 → '45m'. */
 export function formatDuration(minutes: number): string {
   const h = Math.floor(minutes / 60);

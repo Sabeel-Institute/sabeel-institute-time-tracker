@@ -160,7 +160,9 @@ Home → **My timesheet**. What you're looking at, top to bottom:
   - **no dot** — empty week
 - **Week total** — the selected week's hours, with its status next to it.
 - **Day groups** — each day's entries with times and durations. **Tap an entry
-  to edit or delete it** (activity, date, times, note).
+  to edit or delete it** (activity, date, times, note). Times you leave alone
+  stay exactly as they were clocked. On a session that ran past midnight, a
+  **To** earlier than **From** is the next morning.
 - Future weeks are dimmed — there's nothing to do there yet. Wandered off?
   **Jump to current week** brings you back.
 

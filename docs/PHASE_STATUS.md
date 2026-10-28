@@ -115,6 +115,18 @@ see `TODO.md`.
 
 ## Decision log
 
+- 2026-10-28 — **Editing an entry keeps the times it does not change** (#64).
+  The edit form shows whole minutes and read both times back from them, so a
+  clocked session inside one minute could not be saved (start equal to end),
+  one past midnight ended before it began, and a note-only save moved any
+  other session's ends down to the minute, sometimes taking a minute off its
+  hours. `editedEntryTimes` (`packages/shared/src/entryForm.ts`) keeps each
+  untouched time to the millisecond, and for an entry that already ends on a
+  later day reads a To at or before From on the next day. Reproduced, then
+  shown fixed, in the web app with times set by Playwright's clock: 20 s
+  inside a minute, 20 s across one, 4 m 30 s, 5 m on whole minutes and 2 m
+  across midnight.
+
 - 2026-10-16 — **A slow account set-up is waited for, not refused; the report
   email reads well on a phone.** "Can't sign in" ("This app is for Sabeel
   Institute accounts only") used to follow ten seconds without a profile, which
