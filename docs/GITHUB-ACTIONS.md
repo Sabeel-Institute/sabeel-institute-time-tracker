@@ -40,8 +40,10 @@ differs from its template.
   Firebase-emulator integration tests and the browser suites `ci-tools.json`
   names (`npm run test:e2e`, the product lifecycle; `npm run test:screens`,
   the multi-width sweep; and `npm run test:e2e:push`, every notification
-  tapped on the web, in parallel) on main pushes and pull
-  requests. Every sweep, pass or fail, leaves a `screens-report` artifact: a
+  tapped on the web, in parallel) on main pushes and pull requests.
+  A pull request that changes documentation alone skips the emulator and
+  browser jobs, Native and the Pre-merge builds (ci-tools' README,
+  "Documentation-only pull requests"). Every sweep, pass or fail, leaves a `screens-report` artifact: a
   page of every screen at every width with the failed checks beside them and
   what changed against main's latest sweep, before / after / difference. The
   run page's summary lists the failed checks and changed screens and the `gh
