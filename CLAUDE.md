@@ -126,7 +126,7 @@ Do not silently change any of these.
 
 - One Expo codebase (`app/`): Android (local Gradle builds, committed `android/`)
   + iOS (`expo prebuild --platform ios` into a gitignored `app/ios/`, pods pinned by
-  `app/Podfile.lock`, built on a Mac or GitHub's macOS runners; `docs/IOS-BUILD.md`)
+  `app/Podfile.lock`, built on GitHub's macOS runners, or by hand on a Mac; `docs/IOS-BUILD.md`)
   + web via react-native-web (`expo export --platform web` → Firebase Hosting).
   **NO EAS.** Never a bare `npx expo prebuild`: it deletes the committed
   `android/`. Platform seams as `.web.ts(x)` siblings, plus `.ios.tsx` where iOS's
@@ -185,11 +185,13 @@ Do not silently change any of these.
   run:android` in `app/`. Firebase emulators from the AVD = `10.0.2.2`. There are
   NO physical devices. The dev sign-in row on a phone refuses an address with no
   account, as production does; create the account with the web dev row first.
-- iOS (on the Mac): the simulator loop in `docs/IOS-BUILD.md` — Metro on its own
-  port (another project holds 8081), the app pinned to it with `RCT_jsLocation`,
-  emulators at `127.0.0.1`. `npm run check:ios` checks the iOS config;
-  `npm run build:ios` builds an `.ipa`; `.github/workflows/ios.yml` builds on
-  GitHub and, with `testflight=true` on a release tag, uploads.
+- iOS: the project has no Mac of its own. GitHub's macOS runners build, sign and
+  upload every release (`.github/workflows/ios.yml`; `testflight=true` on a
+  release tag uploads) and run the simulator flows. On a Mac, the simulator loop
+  in `docs/IOS-BUILD.md` — Metro on its own port (8081 is every Expo project's
+  default), the app pinned to it with `RCT_jsLocation`, emulators at
+  `127.0.0.1`. `npm run check:ios` checks the iOS config; `npm run build:ios`
+  builds an `.ipa` on a Mac.
 - Releases, in two steps because main takes changes only by pull request:
   `npx sabeel-ci release X.Y.Z --notes <entry>` writes the version and the iOS
   build number, renders the manual PDF, adds the deploy-log entry (`<entry>`,

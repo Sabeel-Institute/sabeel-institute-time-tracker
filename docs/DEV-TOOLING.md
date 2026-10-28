@@ -607,7 +607,7 @@ for, in one line:
 - `sabeel-ci build-ios` (`npm run build:ios`) — the gates first (a locked
   keychain is found in a second, not twenty minutes into an archive), then
   prebuild, the pods held to `app/Podfile.lock`, archive, export. Automatic
-  signing on the Mac, manual with `IOS_PROFILE_NAME` on GitHub. It reads the
+  signing on a Mac, manual with `IOS_PROFILE_NAME` on GitHub. It reads the
   build machine's values from the gitignored `app/.env.sentry-build-plugin`,
   parsed rather than sourced.
 - `sabeel-ci testflight-check` — before an upload: is this commit the

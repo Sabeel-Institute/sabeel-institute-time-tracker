@@ -104,7 +104,7 @@ redeploys:
     vault copy and `APP_ENV_LOCAL`;
   - drop the `SENTRY_ORG` and `SENTRY_PROJECT` lines from
     `app/.env.sentry-build-plugin` and its vault copy (`ci-tools.json`'s
-    `sentry` names them), on this machine and the Mac;
+    `sentry` names them), on this machine;
   - delete `app/android/sentry.properties` and its vault entry: the Android
     build takes the token from `app/.env.sentry-build-plugin`;
   - [x] delete the `IOS_BUILD_ENV` secret: the workflows read `BUILD_ENV`;
