@@ -160,7 +160,9 @@ Home → **My timesheet**. What you're looking at, top to bottom:
   - **no dot** — empty week
 - **Week total** — the selected week's hours, with its status next to it.
 - **Day groups** — each day's entries with times and durations. **Tap an entry
-  to edit or delete it** (activity, date, times, note).
+  to edit or delete it** (activity, date, times, note). Times you leave alone
+  stay exactly as they were clocked. On a session that ran past midnight, a
+  **To** earlier than **From** is the next morning.
 - Future weeks are dimmed — there's nothing to do there yet. Wandered off?
   **Jump to current week** brings you back.
 
@@ -352,9 +354,12 @@ Home → **Activities**. Create the activities people log hours against — a
 name is all it takes, whether it's an ongoing program ("Tutoring") or a
 one-off event ("Food Drive").
 
-Activities are never deleted — **archive** them instead. Archived activities
-disappear from pickers but keep their history in every report. **Restore**
-brings one back.
+**Archive** an activity to take it out of the pickers. Archived activities
+wait at the bottom of the list under **Archived**, closed until you open it,
+and keep their history in every report. **Restore** brings one back.
+
+An admin can also **Delete** an archived activity. It can't be undone, and the
+hours already logged under it keep its name.
 
 ## 2.4 Reports & exports
 

@@ -179,6 +179,45 @@ export function ErrorText({ error }: { error: string | null }) {
 }
 
 /**
+ * A section that starts closed: for rows that must stay reachable without being
+ * in the way, like archived activities.
+ *
+ * Closed content is UNMOUNTED, not hidden. A hidden row still matches a test's
+ * text locator and takes the click meant for whatever is drawn over it.
+ *
+ * `aria-expanded`, not `accessibilityState`: react-native-web has no mapping for
+ * accessibilityState, so the control would announce no state on the web.
+ */
+export function Collapsible({
+  title,
+  count,
+  children,
+}: {
+  title: string;
+  count: number;
+  children: ReactNode;
+}) {
+  const [open, setOpen] = useState(false);
+  const label = `${title} (${count})`;
+  return (
+    <>
+      <Pressable
+        accessibilityRole="button"
+        aria-expanded={open}
+        accessibilityLabel={`${open ? 'Hide' : 'Show'} ${label}`}
+        onPress={() => setOpen((v) => !v)}
+        style={styles.collapseHead}
+      >
+        {/* The chevron the app's other "more" links use, turned down when open. */}
+        <Text style={[styles.collapseGlyph, open && styles.collapseGlyphOpen]}>›</Text>
+        <Text style={styles.collapseTitle}>{label}</Text>
+      </Pressable>
+      {open ? children : null}
+    </>
+  );
+}
+
+/**
  * A responsive grid for card-like list items (users, approvals, rejected sheets).
  * On a wide screen the cards flow into as many columns as fit; on a phone they
  * collapse to one full-width column. Each child is wrapped so callers pass their
@@ -238,6 +277,28 @@ const styles = StyleSheet.create({
   btnLabel: { color: t.text.inverse, fontSize: 16, fontWeight: '600' },
   btnLabelSecondary: { color: t.accent.base },
   error: { color: t.feedback.danger, fontSize: 14 },
+  collapseHead: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing(2),
+    minHeight: 44,
+    marginTop: spacing(3),
+  },
+  collapseGlyph: {
+    width: 16,
+    fontSize: 22,
+    lineHeight: 22,
+    textAlign: 'center',
+    color: t.text.secondary,
+  },
+  collapseGlyphOpen: { transform: [{ rotate: '90deg' }] },
+  collapseTitle: {
+    fontSize: 13,
+    fontWeight: '700',
+    letterSpacing: 0.8,
+    textTransform: 'uppercase',
+    color: t.text.secondary,
+  },
   listenerError: {
     backgroundColor: t.feedback.danger,
     color: t.text.inverse,

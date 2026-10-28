@@ -253,7 +253,7 @@ export default function App() {
                 title: 'Activities',
                   }}
             >
-              {() => <ActivitiesScreen selfUid={user.uid} />}
+              {() => <ActivitiesScreen selfUid={user.uid} claims={claims} />}
             </Stack.Screen>
           ) : null}
           {isApprover ? (

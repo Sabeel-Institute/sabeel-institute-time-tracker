@@ -36,12 +36,6 @@ describe('evaluateCounts — zero-tolerance collections', () => {
     expect(f[0]).toMatchObject({ collection: 'users', previous: 10, current: 9, dropped: 1, allowed: 0 });
   });
 
-  it('flags losing a single activity (rules forbid deleting them at all)', () => {
-    const f = evaluateCounts(base, { ...base, activities: 5 });
-    expect(f).toHaveLength(1);
-    expect(f[0].collection).toBe('activities');
-  });
-
   it('flags losing a single report (nothing deletes one; it is the record)', () => {
     const f = evaluateCounts({ ...base, reports: 3 }, { ...base, reports: 2 });
     expect(f).toHaveLength(1);
@@ -50,6 +44,10 @@ describe('evaluateCounts — zero-tolerance collections', () => {
 });
 
 describe('evaluateCounts — tolerant collections', () => {
+  it('absorbs an admin deleting a few archived activities', () => {
+    expect(evaluateCounts(base, { ...base, activities: 1 })).toEqual([]);
+  });
+
   it('absorbs routine deletions under the floor', () => {
     // 100 → 96 is 4, under the minDrop floor of 5.
     expect(evaluateCounts(base, { ...base, timeEntries: 96 })).toEqual([]);
