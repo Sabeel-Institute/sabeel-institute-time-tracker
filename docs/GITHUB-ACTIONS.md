@@ -68,6 +68,10 @@ differs from its template.
   the NDK and build tools React Native's version catalog names, retrying a bad
   download (`sabeel-ci ci-android-sdk`); Gradle would fetch them once and fail
   the build on a truncated file.
+- Every iOS build (iOS, the pre-merge build and a Native build) takes React
+  Native's prebuilt binaries from the Actions cache, kept per React Native
+  version, when an earlier build kept them; pod install checks each against
+  Maven's SHA-1 before using it (ci-tools' README, "Native builds in CI").
 - Android uploads a signed AAB and build record; Web uploads checksummed static
   files, their source maps beside them, and a build record; iOS uploads its
   signed IPA and build record. Each release build refuses to start without its
