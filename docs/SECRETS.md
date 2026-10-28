@@ -18,7 +18,7 @@ Set with `firebase functions:secrets:set <NAME>`; bind in code via `defineSecret
 | Name | Used by | Where to find the value |
 |---|---|---|
 | `SENTRY_DSN` | functions error capture (`functions/src/sentry.ts`) | Sentry → Project → Client Keys (DSN) |
-| `APNS_KEY` | push to iPhones (`functions/src/messaging.ts`, bound to every sender via `PUSH_SECRETS`) | The team's APNs key, `AuthKey_X5R8FL94BC.p8` (the same key the LMS and Kanban use): `~/.config/secrets-vault/sabeel/apple/` on Linux, `~/.apns/` on the Mac. Set with `firebase functions:secrets:set APNS_KEY --data-file <the .p8>` |
+| `APNS_KEY` | push to iPhones (`functions/src/messaging.ts`, bound to every sender via `PUSH_SECRETS`) | The team's APNs key, `AuthKey_X5R8FL94BC.p8` (the same key the LMS and Kanban use): `~/.apns/` on the owner's machine, copied in the vault at `~/.config/secrets-vault/sabeel/apple/`. Set with `firebase functions:secrets:set APNS_KEY --data-file <the .p8>` |
 
 The emulators bind stand-ins: `ci.emulatorSecrets` in `ci-tools.json`
 (`SENTRY_DSN=disabled`, `APNS_KEY=unused-in-emulator`), which `sabeel-ci
@@ -112,7 +112,7 @@ generated password. It lives in the vault (`sabeel/review/`), and goes into App
 Store Connect's App Review Information sign-in fields when the app is submitted;
 nowhere else: never in this repo, a chat or a log.
 
-## iOS build (the Mac and GitHub)
+## iOS build (local files and GitHub)
 `app/.env.sentry-build-plugin` (gitignored) holds `SENTRY_AUTH_TOKEN`,
 `IOS_TEAM_ID`, `ASC_KEY_ID`, `ASC_ISSUER_ID`, read by `sabeel-ci build-ios`.
 The App Store Connect key lives at

@@ -1,11 +1,9 @@
 # iOS — building and checking the iPhone app
 
 The app is one Expo codebase on three surfaces: web, Android and iOS. Linux
-builds web and Android; **iOS builds only on a Mac**, with Xcode: GitHub's
-macOS runners, which build every release, or the rented Mac
-(`ssh user300503@tx477.macincloud.com`), for simulator checks. This file is
-the runbook for whoever is at the Mac, including a Claude Code session that has
-none of the context of the one that set it up.
+builds web and Android; **iOS builds only on a Mac**, with Xcode. The project
+has no Mac of its own: GitHub's macOS runners do every iOS build and run the
+simulator flows, and the local sections below are for a Mac when one is used.
 
 | | |
 |---|---|
@@ -93,7 +91,7 @@ of these values.
 
 ## The simulator loop
 
-A debug build on the simulator, against this checkout's emulators.
+On a Mac, a debug build on the simulator, against this checkout's emulators.
 
 ```mermaid
 flowchart LR
@@ -107,10 +105,10 @@ flowchart LR
 
 ```bash
 # 1. Emulators, left running (JDK 21 from `npx sabeel-ci jdk21`: Homebrew's
-#    openjdk@21 here; /usr/bin/java on a Mac is only a stub)
+#    openjdk@21 on a Mac, where /usr/bin/java is only a stub)
 npm run emulators
 
-# 2. Metro, in emulator mode, on a port no other project holds
+# 2. Metro, in emulator mode, on a port of its own
 cd app
 EXPO_PUBLIC_USE_EMULATORS=1 EXPO_PUBLIC_SENTRY_DSN_NATIVE= npx expo start --port 8091 --clear
 
@@ -123,10 +121,10 @@ xcrun simctl spawn $U defaults write com.sabeelinstitute.timetracker RCT_jsLocat
 xcrun simctl terminate $U com.sabeelinstitute.timetracker; xcrun simctl launch $U com.sabeelinstitute.timetracker
 ```
 
-- **Metro's port.** Several Sabeel projects share the Mac, and whichever Metro
-  holds 8081 serves its own bundle to any debug app that asks there. Run this
-  one elsewhere and pin the app to it with `RCT_jsLocation`, a user default
-  the debug app reads before its compiled-in port. `EXPO_PUBLIC_SENTRY_DSN_NATIVE=`
+- **Metro's port.** Whichever Metro holds 8081 (every Expo project's default)
+  serves its own bundle to any debug app that asks there. Run this one
+  elsewhere and pin the app to it with `RCT_jsLocation`, a user default the
+  debug app reads before its compiled-in port. `EXPO_PUBLIC_SENTRY_DSN_NATIVE=`
   keeps dev errors out of the production Sentry project.
 - **Never `CI=1` on a Metro you develop against.** It puts Metro in CI mode
   ("reloads are disabled"): it serves the first bundle it built forever, and a
@@ -141,25 +139,23 @@ xcrun simctl terminate $U com.sabeelinstitute.timetracker; xcrun simctl launch $
   (`npx expo start --web` with `EXPO_PUBLIC_USE_EMULATORS=1`), then sign in on
   the phone and promote it: `node scripts/grant-admin.mjs <email>`. The pending
   screen turns into Home by itself.
-- **Restart Metro after editing.** On this Mac a running Metro serves stale
-  modules: Fast Refresh and a relaunch both kept old code, and only a restart
-  with `--clear` reliably picked up a change. Check the build stamp or the
-  change itself in the screenshot before believing a result.
-- **Address the simulator by UDID.** Other sessions boot their own simulators
-  on this Mac, and `booted` then means more than one.
+- **Restart Metro after editing.** A running Metro can serve stale modules
+  (seen on a Mac reached over ssh): Fast Refresh and a relaunch both keep old
+  code, and only a restart with `--clear` reliably picks up a change. Check the build stamp or
+  the change itself in the screenshot before believing a result.
+- **Address the simulator by UDID.** More than one simulator can be booted at
+  once, and `booted` then means more than one.
 
 ### Driving it
 
 `~/.claude/skills/expo-firebase-stack/tools/sim-ui.py` (idb): `shot`, `tapxy`
-in points (screenshot pixels / 3), `swipe`, `text`. On this Mac `idb ui
-describe-all` returns one empty element for the app, so every step is driven by
-coordinates read off the previous screenshot. `text` drops keystrokes on long
+in points (screenshot pixels / 3), `swipe`, `text`. `idb ui describe-all`
+can return one empty element for the app (seen on a Mac reached over ssh), and
+then every step is driven by coordinates read off the previous screenshot. `text` drops keystrokes on long
 strings; type short ones and check the screenshot. Tap a field before typing:
 keys with nothing focused go to React Native's dev shortcuts.
 
 ### What the simulator showed (2026-10-15, iPhone 17 Pro, iOS 26.5)
-
-Screenshots in `~/Documents/repos/time-tracker-ios-shots/` on the Mac.
 
 - Emulator sign-in, the pending screen, and the live switch to Home when an
   admin approves.
@@ -198,7 +194,7 @@ Screenshots in `~/Documents/repos/time-tracker-ios-shots/` on the Mac.
 An iPhone registers Apple's own device token, and the functions send it to
 Apple directly (`functions/src/apns.ts`); FCM is for Android and browsers only.
 An Apple-silicon simulator gets a real token from Apple's sandbox, so the whole
-round trip runs here except the tap from outside the app.
+round trip runs against it except the tap from outside the app.
 
 1. **The row.** Sign in on a debug build that already allows notifications (or
    tap **Enable notifications** on Home): the app writes
@@ -207,7 +203,8 @@ round trip runs here except the tap from outside the app.
    profile, so the release type decides). The row goes through the rules, which
    accept exactly that shape. An emulator build registers on an iPhone, unlike
    Android: the sandbox really delivers to it.
-2. **A real push.** From the Mac, with the APNs key file:
+2. **A real push.** From the owner's machine, with the APNs key file; it needs
+   the key and the device token, not a Mac:
 
    ```bash
    npx sabeel-ci send-test-push --apple development <token> screen=Timesheet periodKey=2026-10-04
@@ -228,8 +225,7 @@ round trip runs here except the tap from outside the app.
 `npm run check:push` asks both real services whether they accept a
 message from this project (a bogus token each): FCM needs Google credentials
 (Application Default Credentials, or `CHECK_ACCESS_TOKEN`), Apple takes
-Secret Manager's `APNS_KEY` through `gcloud`, or `APNS_KEY_FILE`. On the Mac the
-Apple half passes and the FCM half has no credentials to try.
+Secret Manager's `APNS_KEY` through `gcloud`, or `APNS_KEY_FILE`.
 
 ## Building a release
 
@@ -246,11 +242,10 @@ unexpired and carries the keychain's Apple Distribution certificate; and
 finally a throwaway binary is signed, because a locked keychain is otherwise
 found twenty minutes into the archive.
 
-**Over ssh the login keychain is locked**, and stays locked: it unlocks at GUI
-login, which this Mac never has. `sabeel-ci build-ios` stops at that gate and says so.
-Unlock it in the same ssh session that builds (`security unlock-keychain`,
-password typed at the prompt), or build on GitHub, which needs no keychain of
-the Mac's.
+**Over ssh the login keychain is locked**, and stays locked until a GUI login
+unlocks it. `sabeel-ci build-ios` stops at that gate and says so. Unlock it in
+the same ssh session that builds (`security unlock-keychain`, password typed at
+the prompt), or build on GitHub, which signs in a keychain of its own.
 
 ## Builds on GitHub
 
@@ -290,11 +285,18 @@ free for that version on App Store Connect. Then Apple validates the `.ipa` and
 it uploads.
 
 **The pods are pinned** by `app/Podfile.lock`, which `sabeel-ci build-ios` copies into
-the generated `app/ios/` before `pod install --repo-update`, on the Mac and on
+the generated `app/ios/` before `pod install --repo-update`, on a Mac and on
 GitHub alike. If the install resolves anything else, the build stops; when a
-native dependency changed on purpose, `cp app/ios/Podfile.lock app/Podfile.lock`,
-commit, and build again. Its third-party Google and Sentry pods match the LMS's
-pin exactly.
+native dependency changed on purpose, on a Mac
+`cp app/ios/Podfile.lock app/Podfile.lock`, commit, and build again. Its
+third-party Google and Sentry pods match the LMS's pin exactly.
+
+**Without a Mac**, a dependency update can move a pod built from `node_modules`
+(the lock's `EXTERNAL SOURCES:`), since it follows its npm package. Edit its
+`PODS:` version in `app/Podfile.lock` by hand to the new package version, after
+diffing the old and new `.podspec` for dependency changes and carrying those
+over. Pre-merge's iOS job (`sabeel-ci pods --check` on a macOS runner) fails
+unless the edit matches what `pod install` resolves; only `PODS:` is compared.
 
 | Secret | What |
 |---|---|
@@ -331,8 +333,7 @@ on the Linux build machine, copied in the vault at
 3. The new key and certificate packed with `openssl pkcs12 -export -legacy`;
    the files replaced in `~/.config/sabeel-lms/ios-distribution/`, then
    `bash vault.sh collect`.
-4. The three secrets set again in all three repos (each its own `IOS_PROFILE`),
-   and the new identity imported on the Mac if it signs there.
+4. The three secrets set again in all three repos (each its own `IOS_PROFILE`).
 5. A workflow run in each repo, then the old certificate revoked.
 
 ## Releasing to TestFlight
