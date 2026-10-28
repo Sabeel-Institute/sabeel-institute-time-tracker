@@ -203,8 +203,10 @@ Do not silently change any of these.
   workflow run on its tag, `gh workflow run ios.yml --ref vX.Y.Z -f
   testflight=true` (`docs/IOS-BUILD.md`, "Releasing to TestFlight").
 - CI (GitHub Actions): lint + typecheck + knip + unit + emulator tests + the
-  layout sweep on every push. Keep it green, and **check the actual run** —
-  don't assume. Nothing deploys on its own: Deploy Web, Deploy Functions and
+  three browser suites on every push; a pull request that changes
+  documentation alone runs the fast checks only (ci-tools' README,
+  "Documentation-only pull requests"). Keep it green, and **check the actual
+  run** — don't assume. Nothing deploys on its own: Deploy Web, Deploy Functions and
   Publish Android run only when started by hand. `functions/test/unit/ci-coverage.test.ts`
   fails if a browser suite on disk stops being run by CI.
 - **If a suite fails, first ask whether it fails on stashed changes too.** A
