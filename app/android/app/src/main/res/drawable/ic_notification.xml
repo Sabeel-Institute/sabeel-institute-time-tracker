@@ -16,7 +16,8 @@
   not, which is why it is not here.
 
   Geometry is the badge glyph from the shared generator
-  (sabeel-institute-kanban/scripts/make-app-icons.py, kind="stopwatch") mapped
+  (Sabeel-Institute/brand, skills/sabeel-brand/tools/make-app-icons.py,
+  kind="stopwatch") mapped
   from its -100..100 space onto a 24dp viewport: 2dp strokes, round caps, the
   crown stem landing inside the dial's stroke band so the two read as one shape.
   Do not nudge it by eye — re-derive it from the generator.
