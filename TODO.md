@@ -138,7 +138,7 @@ Testers page. `npx sabeel-ci release --ship` publishes every release there
   other Sabeel apps) is ticked on Internal testing → Testers (2026-10-16).
 - [ ] **Send staff the join link** (Play sends no email): `https://play.google.com/apps/internaltest/4701451587936876375`.
 
-## The stores: TestFlight, App Review, Play production
+## The stores: TestFlight and Play internal testing
 
 - [ ] **TestFlight staff:** 19 staff are invited to App Store Connect (Developer
   role); add each to "Sabeel Time Tracker Internal" once they accept (`docs/IOS-BUILD.md`,
@@ -146,19 +146,10 @@ Testers page. `npx sabeel-ci release --ship` publishes every release there
 - [ ] **The production native sign-in round trip, on a phone** (a Play or
   download-page APK, or TestFlight): a Google account with no account in the
   project is refused and no Auth user appears; then an `@oursabeel.com` account
-  signs in. Before submitting to App Review (`docs/STORE-RELEASE.md`).
+  signs in. A submission, if there is ever one, needs it first
+  (`docs/STORE-RELEASE.md`).
 - [ ] **Confirm `privacy@oursabeel.com` exists** and reaches someone: the
-  privacy policy and the support page name it, and a reviewer may write to it.
-- [ ] **App Review submission** (App Store Connect), after Kanban is through
-  review, with the answers and text in `docs/STORE-RELEASE.md`, "Before
-  submitting": App Privacy, age rating, the listing, App Review Information
-  (the review account in the sign-in fields), manual release; then the unlisted
-  request.
-- [ ] **Google Play production** (Play Console), the same file: App content
-  (privacy policy URL, App access, ads, content rating, target audience, Data
-  safety), the store listing, then a production release, which Play reviews.
-- [ ] **Texas SB 2420:** ask a lawyer before the first public listing (Play
-  production is one).
+  privacy policy and the support page name it.
 - [ ] **Renew the distribution certificate and the three App Store profiles
   before 2027-10-16**, starting in September 2027 (`docs/IOS-BUILD.md`,
   "Renewal").
