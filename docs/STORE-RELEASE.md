@@ -2,8 +2,8 @@
 
 This app's store record: where it stands, how it keeps the decisions every
 Sabeel app shares, its answers to each store's questions, its review account
-and what is left before submitting. The method and the shared decisions, with
-their reasoning, are the **`sabeel-app-stores` skill**
+and the checklist that applies if it is ever submitted. The method and the
+shared decisions, with their reasoning, are the **`sabeel-app-stores` skill**
 ([SKILL.md](https://github.com/Sabeel-Institute/brand/blob/main/skills/sabeel-app-stores/SKILL.md));
 the sections below carry its numbers. When this file and the skill disagree on
 a shared decision, the skill wins and this file is fixed. Building and shipping:
@@ -14,9 +14,15 @@ TestFlight).
 
 | | Now | Destination |
 |---|---|---|
-| iPhone | TestFlight internal testing. The first build, 0.28.0 build 1 from tag `v0.28.0`, is VALID and in internal testing (2026-10-16). Internal group "Sabeel Time Tracker Internal" (Faisal; 19 staff invited to App Store Connect, added as they accept). App Store Connect app `6823429437` | The App Store, **unlisted**, after App Review. Nothing submitted; the Time Tracker follows Kanban through review |
-| Android | Google Play internal testing: 0.28.0 (28000) a completed release. Play signs with the app's own key (since 2026-10-16). The "Sabeel staff" tester list is ticked; testers join through the opt-in link in the deployment guide. The GitHub release's APK is Play's own universal one, so it and a Play install update each other | Google Play **production**, a public listing (Play has no unlisted) |
+| iPhone | TestFlight internal testing. The first build, 0.28.0 build 1 from tag `v0.28.0`, is VALID and in internal testing (2026-10-16). Internal group "Sabeel Time Tracker Internal" (Faisal; 19 staff invited to App Store Connect, added as they accept). App Store Connect app `6823429437` | TestFlight internal testing, by Faisal's decision of 2026-10-29. Nothing submitted |
+| Android | Google Play internal testing: 0.28.0 (28000) a completed release. Play signs with the app's own key (since 2026-10-16). The "Sabeel staff" tester list is ticked; testers join through the opt-in link in the deployment guide. The GitHub release's APK is Play's own universal one, so it and a Play install update each other | Google Play internal testing, by the same decision |
 | Web | Live at `https://sabeel-institute-time-tracker.web.app`, with `/privacy` and `/support` | |
+
+Faisal decided on 2026-10-29 that only the LMS goes to the App Store
+(unlisted) and Google Play production, because students, who are not institute
+staff, must be able to install it. The Time Tracker is staff-only, with a set
+number of accounts, so it stays on TestFlight and Play internal testing. It
+keeps the decisions below, so it could follow the LMS without rework.
 
 ## How the Time Tracker keeps the shared decisions
 
@@ -285,8 +291,11 @@ nothing is lost.
   that page's link (Play sends no email) (`docs/DEPLOY.md`, "Play testers").
   Also the universal APK on each GitHub release, which Play generated from the
   same bundle.
-- **Destination:** the App Store, unlisted, after Kanban is through review; and
-  Google Play production, a public listing, which Play reviews in full.
+- **Destination:** TestFlight internal testing and Play internal testing, by
+  Faisal's decision of 2026-10-29; only the LMS goes to the App Store and
+  Google Play production. If this app were ever submitted, the route would be
+  the App Store, unlisted, and Google Play production, a public listing, which
+  Play reviews in full.
 
 ### 10. Small things each store checks
 
@@ -397,6 +406,9 @@ hours and timesheets people record are retained as the institute's records.
 
 ## Before submitting
 
+These checklists apply only if the Time Tracker is ever submitted to a store;
+it stays on TestFlight and Play internal testing (9).
+
 **App Store** (App Store Connect, app `6823429437`)
 
 - [x] The rules screen and Report a problem (4): built 2026-10-16; they ship
@@ -413,8 +425,8 @@ hours and timesheets people record are retained as the institute's records.
 - [ ] App Review Information: contact, sign-in required, the review account in
       the sign-in fields (3), the notes above. Not entered.
 - [ ] Version release: manual.
-- [ ] Submit after Kanban is through review; then the Account Holder files
-      Apple's unlisted request (the app submitted, not a beta).
+- [ ] Submit; then the Account Holder files Apple's unlisted request (the
+      app submitted, not a beta).
 
 **Google Play production** (Play Console)
 
@@ -430,8 +442,8 @@ hours and timesheets people record are retained as the institute's records.
 **Both**
 
 - [ ] Confirm `privacy@oursabeel.com` exists (a Workspace group, two admins).
-- [ ] Texas SB 2420 (5): a question for a lawyer before the first public
-      listing, which Play production is.
+- [ ] Texas SB 2420 (5): a question for a lawyer before any public listing,
+      which Play production is.
 - [x] `/privacy` and `/support` live; the privacy link on the sign-in screen
       and Home.
 - [x] The review account made and approved (3); the sign-in gate live.
@@ -443,4 +455,5 @@ hours and timesheets people record are retained as the institute's records.
 - **Google's sign-in alert names the app "SabeelTimeTracker"**: Apple's
   web-authentication prompt uses `CFBundleName` (the Xcode target's name), not
   the display name. Faisal to choose a short name.
-- The store listing copy, screenshots and category (both stores).
+- The store listing copy, screenshots and category (both stores), needed
+  only if the app is submitted.
