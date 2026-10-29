@@ -1,6 +1,6 @@
 # Sabeel Institute Time Tracker — User Manual
 
-*For app version 0.30.1 · July 2026*
+*For app version 0.31.0 · July 2026*
 
 Welcome! This guide explains everything you can do in the Sabeel Institute Time
 Tracker — from logging your first hour to approving your team's timesheets. It is

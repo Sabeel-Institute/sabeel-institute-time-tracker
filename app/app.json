@@ -3,7 +3,7 @@
     "name": "Sabeel Time Tracker",
     "slug": "sabeel-time-tracker",
     "scheme": "sabeeltimetracker",
-    "version": "0.30.1",
+    "version": "0.31.0",
     "orientation": "portrait",
     "userInterfaceStyle": "light",
     "platforms": [
@@ -13,7 +13,7 @@
     ],
     "ios": {
       "bundleIdentifier": "com.sabeelinstitute.timetracker",
-      "buildNumber": "30001",
+      "buildNumber": "31000",
       "supportsTablet": false,
       "googleServicesFile": "./GoogleService-Info.plist",
       "infoPlist": {

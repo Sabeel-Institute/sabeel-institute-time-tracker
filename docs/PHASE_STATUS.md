@@ -23,6 +23,19 @@ headed `### <YYYY-MM-DD> — <summary> — vX.Y.Z`: `npx sabeel-ci release` take
 the release's title and notes from it (`docs/DEPLOY.md`). Deploys that shipped
 no app version carry no version in their heading.
 
+### 2026-10-28 — Archived activities; notes on clocked hours — v0.31.0
+
+- **A note can be added to clocked hours.** Editing an entry keeps any
+  time left unchanged exactly as clocked, so a session under a minute,
+  one with seconds, or one past midnight saves its note without its
+  times moving. When Save is unavailable, the form says why.
+- **Archived activities have their own section**, closed by default,
+  below the active ones. Reports lists them last, marked "(archived)".
+- **An admin can delete an archived activity.** Hours logged against it
+  keep its name.
+- Expo 57.0.31 and the backend on google-auth-library 11, with the
+  month's patch updates.
+
 ### 2026-10-24 — A smaller website — v0.30.1
 
 - **The website is smaller.** The build leaves out code the app never
