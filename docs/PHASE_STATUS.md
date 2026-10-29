@@ -36,6 +36,14 @@ no app version carry no version in their heading.
 - Expo 57.0.31 and the backend on google-auth-library 11, with the
   month's patch updates.
 
+Rules deployed from `8bb1eef`. Functions (all 16) deployed from `8bb1eef`
+through Deploy Functions; the Health run after it had 6 of 6 callables
+answering. **v0.31.0** released, tag `v0.31.0` at `bf69853`: GitHub
+release; Play internal testing 0.31.0 (31000), whose universal APK booted
+five times in a row with `v0.31.0 · bf69853`; TestFlight 0.31.0 build
+31000 from the tag; hosting from the Web workflow's artifact through
+Deploy Web, serving `0.31.0` and `bf69853`.
+
 ### 2026-10-24 — A smaller website — v0.30.1
 
 - **The website is smaller.** The build leaves out code the app never
