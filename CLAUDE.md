@@ -10,9 +10,9 @@ the developer; the nonprofit's staff are the admins/managers in the app.
 `sabeel-institute-time-tracker.web.app` since 2026-07-16. Android: the APK from
 Google Play internal testing for
 invited staff. iPhone: TestFlight for invited staff, built on GitHub's macOS
-runners (App Store Connect app 6823429437). Destination: the App Store,
-unlisted, and Google Play production. Where it stands and the store answers:
-`docs/STORE-RELEASE.md`.
+runners (App Store Connect app 6823429437). Destination: TestFlight and Play
+internal testing, by Faisal's decision of 2026-10-29; only the LMS goes to the
+stores. Where it stands and the store answers: `docs/STORE-RELEASE.md`.
 
 Source of truth: `docs/PRODUCT_BRIEF.md` (decisions & data model),
 `docs/PHASE_STATUS.md` (live build status, deploy log), `docs/DEPLOY.md`
