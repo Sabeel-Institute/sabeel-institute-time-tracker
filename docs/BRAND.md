@@ -94,28 +94,32 @@ inside the app the brand is carried by the palette.
 
 ## The app icon
 
-All three Sabeel apps share **one calligraphic mark** with a Dark Raspberry
-badge saying which app it is — a stopwatch here, a board for kanban, a
-microphone for recordings. Warm Ivory canvas; raspberry is spent on the badge
+The staff apps share **one calligraphic mark**, the calligraphy before
+2026-09-28, with a Dark Raspberry badge saying which app it is: a stopwatch
+here, a board for Kanban. Warm Ivory canvas; raspberry is spent on the badge
 alone. The wordmark is deliberately dropped: "SABEEL INSTITUTE" is a smudge at
-launcher size.
+launcher size. (The LMS, which the public installs from the stores, carries
+the brand's own icon, the new calligraphy alone.)
 
-**Never hand-edit the icons.** They come from one generator, shared by all three
-repos, which re-proves its geometry invariants on every run and exits non-zero
-if either breaks:
+**Never hand-edit the icons.** Every Sabeel app's icon comes from the brand
+repository's generator, `skills/sabeel-brand/tools/make-app-icons.py` in
+[Sabeel-Institute/brand](https://github.com/Sabeel-Institute/brand) (the
+`sabeel-brand` skill, "The apps' icons"), which re-proves its geometry
+invariants on every run and exits non-zero if either breaks:
 
 ```sh
-cd ../sabeel-institute-kanban
-uv run scripts/make-app-icons.py timetracker --repo ../sabeel-institute-time-tracker
+cd ../brand
+uv run skills/sabeel-brand/tools/make-app-icons.py timetracker --repo ../sabeel-institute-time-tracker
+uv run skills/sabeel-brand/tools/make-app-icons.py timetracker --repo ../sabeel-institute-time-tracker --check
 ```
 
 It rewrites `app/assets/{icon,adaptive-icon,favicon}.png`, every
 `android/…/res/mipmap-*` icon, the two `mipmap-anydpi-v26` XMLs and the
-`iconBackground` colour. Output is deterministic — re-running it on an unchanged
-repo is a no-op, which is how you check the committed files are really generator
-output. The design rationale (badge size, how low the mark sits, bearing — all
-measured, at their limits in three directions at once) is in that repo's
-`docs/BRAND.md`. Do not nudge the numbers by eye.
+`iconBackground` colour. `--check` writes nothing and lists any committed icon
+file that is not what the generator makes. The design rationale (badge size,
+how low the mark sits, bearing — all measured, at their limits in three
+directions at once) is in the generator's docstring. Do not nudge the numbers
+by eye.
 
 Two things that will bite:
 
