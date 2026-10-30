@@ -94,12 +94,14 @@ inside the app the brand is carried by the palette.
 
 ## The app icon
 
-The staff apps share **one calligraphic mark**, the calligraphy before
+The Sabeel apps share **one calligraphic mark**, the calligraphy before
 2026-09-28, with a Dark Raspberry badge saying which app it is: a stopwatch
-here, a board for Kanban. Warm Ivory canvas; raspberry is spent on the badge
-alone. The wordmark is deliberately dropped: "SABEEL INSTITUTE" is a smudge at
-launcher size. (The LMS, which the public installs from the stores, carries
-the brand's own icon, the new calligraphy alone.)
+here, a board for Kanban, a mortarboard for the LMS. Warm Ivory canvas;
+raspberry is spent on the badge alone. The wordmark is deliberately dropped:
+"SABEEL INSTITUTE" is a smudge at launcher size. Android's adaptive
+foreground keeps the composition inside the central 72dp a launcher shows;
+the square icon (the iPhone, an older launcher, a browser tab) shows the
+whole tile, so it is drawn 1.35 times larger.
 
 **Never hand-edit the icons.** Every Sabeel app's icon comes from the brand
 repository's generator, `skills/sabeel-brand/tools/make-app-icons.py` in
