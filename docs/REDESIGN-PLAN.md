@@ -55,7 +55,8 @@ neither needs nor blocks it.
 bar at 700px, as in Kanban. The screen sweep reads the breakpoint from
 `theme/layout.ts` and already straddles it.
 
-**D4. Tabs by role.** Proposed:
+**D4. Tabs by role** (the owner chose this over one Team tab holding
+Approvals, Reports, Activities and People):
 
 | Who | Tabs |
 |---|---|
@@ -258,8 +259,9 @@ and then carried across.
    gesture. iOS through the simulator flows on CI.
 6. **The owner tries it before anyone else.** The release candidate goes
    to a Firebase Hosting preview channel against production; the owner
-   uses it with their own account for a few days. (To check: that Google
-   sign-in accepts the preview channel's domain.)
+   alone uses it with their own account for a few days. Staff first see
+   the new design in the release. (To check: that Google sign-in accepts
+   the preview channel's domain.)
 7. **Rollback.** The web is rolled back by redeploying the previous
    release. Phones keep their installed build until they update; a fix is
    a new release, as always. Nothing on the server changes, so old and new
@@ -290,8 +292,3 @@ and published to the help site before the app that links to them ships.
 One release carries all of it, so the team relearns the app once: the
 owner tries the preview, then `sabeel-ci release`, Play internal testing,
 TestFlight and the web deploy, each on the owner's go-ahead as usual.
-
-## 10. Questions for the owner
-
-1. The tabs in D4: right names, right split?
-2. The preview in §7.6: the owner alone, or the owner and one or two staff?
