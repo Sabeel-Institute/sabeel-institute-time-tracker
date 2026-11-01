@@ -137,8 +137,8 @@ Every control on today's Home, and its new place:
 | Privacy policy link | More → Privacy policy, and the sign-in screen as now |
 | | More → Help (new) |
 
-Screens that are already pages keep their place and controls; they get
-the new look. The gates (sign-in, setting up, pending, disabled, rules,
+Screens that are already pages keep their place and controls, apart from
+People (§6); they get the new look. The gates (sign-in, setting up, pending, disabled, rules,
 update needed, the error screen) show no tabs.
 
 **The active tab** is the tab whose screen is at the bottom of the stack,
@@ -148,55 +148,105 @@ target (a submitted timesheet opens as Approvals → Review timesheet), so
 both the highlight and Back are right. A tap that lands on the screen
 already open re-anchors it, as now.
 
-## 5. The screens
+## 5. How it should feel
 
-The rules for all of them: ivory chrome, raspberry only for a primary
-action, the active tab and the clocked-in card; text in the text tokens;
-true taupe only for text that carries no information; 44pt targets.
+The bar is that anyone can pick up the app and do their job without being
+shown. The help films are a shortcut for people who would rather watch
+than tap around; if a task needs a film to be found, the screen is wrong.
+Matching the siblings' parts is not enough on its own: a screen built from
+the right primitives can still be a pile of boxes.
 
-- **Today.** Title and greeting line; the rejected notice; the nudge; the
-  clock card (activity `Select` and **Clock in**, or the clocked-in card
-  with **Clock out**, or the locked-week card); the this-week row; **Add
-  hours**.
-- **Timesheet.** Month stepper with icon buttons; week chips with their
-  status dots and the legend; the week's `StatusChip` and total; entries
-  grouped by day under section titles, overlaps flagged as now; the
-  approver `Select`; the status's action (Submit, Withdraw, Resubmit,
-  Reopen for admins, Copy last week's hours on an empty draft).
-- **Add hours / Edit entry.** `Field`s for activity, date (with Today and
-  Yesterday), from, to and notes; the duration echo; Save, and Delete on
-  edit. "Adding hours for *name*" when for someone else, still in their
-  timezone.
-- **Needs attention.** Rejected weeks as rows with the reason; opens the
-  week.
-- **Approvals.** For admins, a `Segmented` "Assigned to me / All
-  submitted"; rows with name, week, submitted date and total.
-- **Review timesheet.** Name as title; week stepper; status chip and
-  total; the week's days with their entries; Add entry for *name*;
-  Approve, and Reject with the required reason, as now.
-- **Reports.** Period chips; person and activity `Select`s; the hours
-  counted chips with the unapproved warning; **the total as a large number
-  on a plain card, not a raspberry block**; by-activity and by-person
-  rows; Export CSV. The printed statement is unchanged.
-- **Lifetime hours.** The same treatment: a large number on a plain card,
-  activity rows, View timesheets, Print.
-- **Activities.** An add field; rows with Archive; the archived section
-  with Restore and, for admins, Delete.
-- **People.** The same per-person card as now (badges, approver, role,
-  admin, active), built from the primitives, with the themed toggle in
-  place of the teal switch; pending accounts first with Approve. Keeping
-  the controls on the card keeps the admin's workflow exactly as it is.
+**Principles, applied to every screen:**
+
+1. **One question, one main action.** Each screen answers one question,
+   and its one raspberry button is the obvious next step: Today, "am I
+   clocked in?" (Clock in or Clock out); Timesheet, "what did I log, and
+   is it in?" (Submit); Review timesheet, "is this week right?"
+   (Approve). Everything else on the screen is quieter.
+2. **Fewer boxes.** Related rows share one surface, divided by hairlines,
+   not a bordered card each. No card inside a card. A border means "you
+   can tap or type here"; section titles and space do the grouping.
+3. **Say what happens next.** Every empty state and every status says
+   the next step in plain words ("Nothing logged this week yet. Clock in
+   on Today, or add hours."). Buttons name what they do ("Submit this
+   week", "Add hours for Sara"), never just "OK" or "Save".
+4. **People's words, people's dates.** "Tue 13 Oct", not "2026-10-13";
+   "6h 30m"; statuses as words with one colour each, used the same way on
+   every screen, in the notifications and in the manual.
+5. **Same thing, same place.** The title top left; Back top left; an add
+   action as a + at the top right; the main action at the end of the
+   content; the tabs never move.
+6. **Nothing hidden.** No task needs a long-press, a swipe or a guess:
+   every action is visible on the screen it belongs to. A destructive
+   action asks once, in plain words, and says what will happen.
+7. **The main action fits on a phone.** On a 390×844 phone, each tab's
+   main action is on screen without scrolling (the sweep checks this).
+
+**A working prototype, on the web first.** The owner judges the design
+by using it, not from pictures: the branch's web build goes to a preview
+site (§8.6) as soon as the tabs and the first screens exist, and again
+after each round of feedback. The web is the same Expo code the phones
+run, so the layout and flow settle there; the phone builds follow once the
+owner is happy with it.
+
+## 6. The screens
+
+- **Today.** "Salaam, *name*" and today's hours at the top. Below it one
+  surface holding the clock: pick an activity and Clock in, or, when
+  clocked in, the raspberry clocked-in card with the activity, the time
+  since and Clock out; or, when the week is already in, a line saying so.
+  Then this week as one row with its status in words, opening the
+  Timesheet tab; then Add hours as a quiet button. The rejected-week
+  notice and the notifications nudge appear above the clock only when
+  they apply.
+- **Timesheet.** The week as the heading ("This week · 3–9 Nov") with
+  previous and next, its status and total beside it, and a way back to
+  this week when you have stepped away. The month's other weeks as a
+  compact strip with their status, for jumping. Then the days, each a
+  heading with its total and its entries as rows (activity, times,
+  note); overlaps flagged in words. At the end, the approver and the one
+  action the status allows: Submit, Withdraw, Resubmit, Copy last week's
+  hours on an empty draft, or Reopen for admins.
+- **Add hours / Edit entry.** One form: activity, date (Today and
+  Yesterday one tap away), from and to with the duration shown as you
+  type, an optional note; Save, and Delete on edit. "Adding hours for
+  *name*" when for someone else, still in their timezone.
+- **Needs attention.** Rejected weeks, each with the reason and who
+  rejected it; tapping one opens that week to fix.
+- **Approvals.** Weeks waiting for you as rows: name, week, total, when
+  it came in. For admins, "Assigned to me / All submitted" above. Empty:
+  "Nothing waiting for you."
+- **Review timesheet.** The person's name; the week with previous and
+  next; status and total; the days and entries as on the Timesheet.
+  Approve as the main action; Reject asks for the reason in a sheet, so
+  the reason box is not on screen until it is needed. Add hours for
+  *name*.
+- **Reports.** The filters in one row (period, person, activity, and
+  whether to count unapproved hours), then the total as a large number,
+  then by activity and by person as rows with their hours. Export CSV as
+  a quiet action. The printed statement is unchanged.
+- **Lifetime hours.** The large number, the activities, View timesheets
+  and Print.
+- **Activities.** An add field at the top; the activities as rows with
+  Archive; the archived ones folded away with Restore and, for admins,
+  Delete.
+- **People.** A list instead of today's grid of control-laden cards:
+  accounts waiting for approval first, with Approve on the row; then
+  everyone else with their role in words. Tapping a person opens their
+  page with approver, role, admin and active, each explained in a line
+  (a new `UserEdit` route). Managers see the same list and can change a
+  non-admin's approver, as now.
 - **Notifications, Report a problem.** Restyled; same states and copy,
   apart from the rules' "in More".
-- **Help.** The film list, then a film with an "On a phone / On a
-  computer" toggle that opens on the cut matching the screen.
+- **Help.** The film list in three groups, then a film with an "On a
+  phone / On a computer" toggle that opens on the cut matching the screen.
 - **Sign-in and the gates.** Already close to the siblings'; aligned to
   Kanban's sign-in card.
 
 The two brand slips found on the way (gold-as-text on the raspberry total
 cards, the teal switches) go with the screens that hold them.
 
-## 6. Help films
+## 7. Help films
 
 Draft list, in the order the Help screen shows them:
 
@@ -228,7 +278,7 @@ Seventeen films, each in a phone cut (390×844) and a computer cut
 - **Machine**: the TTS model peaks near 12 GB, so it never runs beside an
   emulator stack or the AVD.
 
-## 7. How this stays safe
+## 8. How this stays safe
 
 The app has no component tests; the browser suites and the Maestro flows
 are the net. So the net is strengthened first, on the current design,
@@ -241,8 +291,8 @@ and then carried across.
    design before any visual change. When the redesign changes a screen,
    the check is updated in the same pull request, so it proves the action
    still works rather than being written to fit.
-2. **One pull request per area**, each green on everything before the
-   next starts: lint, types, knip, unit, emulator, `test:e2e`,
+2. **One step per area**, each green on everything before the next
+   starts: lint, types, knip, unit, emulator, `test:e2e`,
    `test:e2e:push`, `test:screens` at all five widths, and the native
    Maestro flows on Android and iOS (already required on every pull
    request).
@@ -257,38 +307,50 @@ and then carried across.
 5. **Phone-only seams** on the AVD: the tab bar against the home
    indicator and keyboard, the More sheet, the film player, the back
    gesture. iOS through the simulator flows on CI.
-6. **The owner tries it before anyone else.** The release candidate goes
-   to a Firebase Hosting preview channel against production; the owner
-   alone uses it with their own account for a few days. Staff first see
-   the new design in the release. (To check: that Google sign-in accepts
-   the preview channel's domain.)
-7. **Rollback.** The web is rolled back by redeploying the previous
+6. **The owner tries it before anyone else, from the branch.** All of
+   this work stays on the `redesign` branch; nothing merges to main until
+   the owner has tried it and says so. The branch's web build is deployed
+   to a Firebase Hosting preview channel (`redesign`, a fixed address
+   that each deploy updates), against the production database, so the
+   owner signs in with their own account and sees real data. What they do
+   there is real, as on the live site. The live site is untouched. Staff
+   first see the new design in the release.
+7. **Usable, not just working.** Besides the owner's own use: each tab's
+   main action must be on screen without scrolling on a 390×844 phone
+   (asserted by the sweep); every top task per role (clock in, add
+   yesterday's hours, fix and resubmit a rejected week, approve a week,
+   export a report, approve an account) is walked through from its tab
+   with the taps counted; and a reviewer who has never seen the app is
+   given only screenshots and the tasks, and says where they would tap.
+   Any task they get wrong is a design bug.
+8. **Rollback.** The web is rolled back by redeploying the previous
    release. Phones keep their installed build until they update; a fix is
    a new release, as always. Nothing on the server changes, so old and new
    builds work side by side.
 
-## 8. The work, in order
+## 9. The work, in order
 
-| # | Pull request | Visible change |
+All on the `redesign` branch, in this order; each step is green on every
+suite in §8.2 before the next.
+
+| # | Step | The owner sees |
 |---|---|---|
-| 0 | E2E checks for the gaps in §7.1, on the current design | none |
-| 1 | Foundation: the ported primitives, a type scale, the icon font (`names.json` + `sabeel-ci icons`), the themed toggle | none yet |
-| 2 | Shell: tab bar, rail, More sheet, badges, stack-reset routing; Home's buttons leave for their tabs and More; rules wording | navigation |
-| 3 | Today, Timesheet, Add hours, Edit entry, Needs attention | member screens |
-| 4 | Approvals, Review timesheet | approver screens |
-| 5 | Reports, Lifetime hours | report screens |
-| 6 | Activities, People, Notifications, Report a problem | the rest |
-| 7 | Sign-in, gates, rules, update screen, error screen | gates |
-| 8 | `sabeel-ci films` in ci-tools | none (tooling) |
-| 9 | Help screen and player; catalogue; guide world and scripts | Help |
-| 10 | Manual: navigation sections rewritten, every image regenerated by a new `manual-shots` script, the PDF; PRODUCT_BRIEF, STORE-RELEASE, DEV-TOOLING, CLAUDE.md | docs |
+| 0 | E2E checks for the gaps in §8.1, on the current design | nothing |
+| 1 | Foundation: the ported primitives, a type scale, the icon font (`names.json` + `sabeel-ci icons`), the themed toggle | nothing yet |
+| 2 | Shell: tab bar, rail, More sheet, badges, stack-reset routing; Home's buttons leave for their tabs and More; rules wording | |
+| 3 | Today, Timesheet, Add hours, Edit entry, Needs attention | **first preview** |
+| 4 | Approvals, Review timesheet | preview |
+| 5 | Reports, Lifetime hours | preview |
+| 6 | Activities, People, Notifications, Report a problem | preview |
+| 7 | Sign-in, gates, rules, update screen, error screen | preview |
+| 8 | Rounds of the owner's feedback, until they are happy with the web | previews |
+| 9 | The phones: the AVD and the iOS simulator flows, the phone-only seams in §8.5 | |
+| 10 | `sabeel-ci films` in ci-tools; Help screen and player; catalogue; guide world and scripts; the owner reads the scripts; films rendered, checked, recorded and published | Help |
+| 11 | Manual: navigation sections rewritten, every image regenerated by a new `manual-shots` script, the PDF; PRODUCT_BRIEF, STORE-RELEASE, DEV-TOOLING, CLAUDE.md | docs |
 
-Between 9 and the release: the owner reviews the film scripts, the audio
-is rendered and checked, the films are recorded from the release candidate
-and published to the help site before the app that links to them ships.
+## 10. Release
 
-## 9. Release
-
-One release carries all of it, so the team relearns the app once: the
-owner tries the preview, then `sabeel-ci release`, Play internal testing,
-TestFlight and the web deploy, each on the owner's go-ahead as usual.
+When the owner says so, the branch merges to main and one release carries
+all of it, so the team relearns the app once: `sabeel-ci release`, Play
+internal testing, TestFlight and the web deploy, each on the owner's
+go-ahead as usual.
