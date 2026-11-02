@@ -9,7 +9,7 @@ import {
 } from 'react';
 import { ActivityIndicator, Platform, StyleSheet, View } from 'react-native';
 import { doc, updateDoc } from 'firebase/firestore';
-import { COLLECTIONS, deviceTimeZone, hasAcceptedRules } from '@sabeel/shared';
+import { APP_NAME, COLLECTIONS, deviceTimeZone, hasAcceptedRules } from '@sabeel/shared';
 import { db } from './src/firebase';
 import { registerPush, useNotifTaps } from './src/notify';
 import { setNotifRoutingSession, flushNotifRoute } from './src/notifRouting';
@@ -71,8 +71,13 @@ type RouteName = keyof RootStackParamList;
  */
 const HEADERLESS = new Set<RouteName>(['Home', 'Timesheet', 'Approvals', 'Reports']);
 
+/**
+ * A tab root also opens with no animation and no swipe-back: switching tabs is
+ * not going somewhere and coming back, though it is a stack reset underneath.
+ */
 function screenOptions(name: RouteName, title: string) {
-  return { title, headerShown: !HEADERLESS.has(name) } as const;
+  const root = HEADERLESS.has(name);
+  return { title, headerShown: !root, animation: root ? 'none' : 'default', gestureEnabled: !root } as const;
 }
 
 /**
@@ -180,6 +185,17 @@ export default function App() {
     setNotifRoutingSession(routingApprover);
   }, [routingApprover]);
 
+  // Inside the navigator the browser tab is named by the screen; anywhere else
+  // (signed out, a gate, the rules) it is the app, not the last screen shown.
+  const navigating =
+    !outdated &&
+    session.phase === 'signedIn' &&
+    session.claims.status === 'active' &&
+    hasAcceptedRules(session.profile);
+  useEffect(() => {
+    if (Platform.OS === 'web' && !navigating) document.title = APP_NAME;
+  }, [navigating]);
+
   let content;
   if (outdated) {
     content = <UpdateScreen signedIn={session.phase === 'signedIn'} />;
@@ -243,8 +259,8 @@ export default function App() {
             options={screenOptions('ManualEntry', 'Add hours')}
           >
             {({ route }) => {
-              const p = (route.params ?? {}) as { forUid?: string; forName?: string };
-              return <ManualEntryScreen uid={user.uid} forUid={p.forUid} forName={p.forName} />;
+              const p = (route.params ?? {}) as { forUid?: string; forName?: string; dayKey?: string };
+              return <ManualEntryScreen uid={user.uid} forUid={p.forUid} forName={p.forName} dayKey={p.dayKey} />;
             }}
           </Stack.Screen>
           <Stack.Screen
@@ -412,6 +428,8 @@ function Navigator({
       ref={navigationRef}
       theme={navTheme}
       linking={linking}
+      // The browser tab names the app as well as the screen.
+      documentTitle={{ formatter: (options, route) => `${options?.title ?? route?.name} · ${APP_NAME}` }}
       onReady={() => {
         onStateChange();
         flushNotifRoute();
@@ -487,6 +505,7 @@ function Shell({
         <MoreSheet
           visible={moreOpen}
           approver={approver}
+          admin={admin}
           pendingAccounts={pendingAccounts}
           onClose={() => setMoreOpen(false)}
           onNavigate={(name) => {

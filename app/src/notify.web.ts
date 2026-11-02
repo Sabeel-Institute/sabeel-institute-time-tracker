@@ -25,8 +25,11 @@ import { captureError } from './sentry';
  */
 export function useNotifTaps(): void {
   useEffect(() => {
+    // Only a notification's query, which always names a `screen`: the app's own
+    // addresses carry their params in the query too (a review's person and
+    // week), and stripping those on a reload would open the screen without them.
     const params = new URLSearchParams(window.location.search);
-    if ([...params.keys()].length) {
+    if (params.has('screen')) {
       const route = decodeNotifRoute(Object.fromEntries(params));
       window.history.replaceState({}, '', window.location.pathname);
       if (route) openNotifRoute(route);

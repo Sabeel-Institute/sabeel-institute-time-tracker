@@ -22,6 +22,11 @@ const t = getTheme();
 
 type Period = { fromKey: string; toKey: string };
 
+/** The day Add hours opens on from a week: today if the week holds it, else its first day. */
+export function dayIn(period: Period, todayKey: string): string {
+  return todayKey >= period.fromKey && todayKey <= period.toKey ? todayKey : period.fromKey;
+}
+
 /** The period before or after this one (periods are weeks clipped to months). */
 export function stepPeriod(period: Period, dir: 1 | -1): string {
   return periodRangeFor(dir === -1 ? addDays(period.fromKey, -1) : addDays(period.toKey, 1)).fromKey;
@@ -205,7 +210,8 @@ export function DayEntries({
   dayKey: string;
   entries: TimeEntry[];
   conflicts: Set<string>;
-  onOpen: (entryId: string) => void;
+  /** Opens an entry to edit; absent while the week is closed to this viewer. */
+  onOpen?: (entryId: string) => void;
 }) {
   const total = entries.reduce((sum, e) => sum + (e.durationMinutes ?? 0), 0);
   return (
@@ -221,7 +227,12 @@ export function DayEntries({
       ) : (
         <RowList>
           {entries.map((e) => (
-            <EntryRow key={e.id} entry={e} conflict={conflicts.has(e.id)} onPress={() => onOpen(e.id)} />
+            <EntryRow
+              key={e.id}
+              entry={e}
+              conflict={conflicts.has(e.id)}
+              onPress={onOpen ? () => onOpen(e.id) : undefined}
+            />
           ))}
         </RowList>
       )}

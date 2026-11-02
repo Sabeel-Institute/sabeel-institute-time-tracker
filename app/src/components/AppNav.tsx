@@ -124,7 +124,7 @@ export function AppNav({
       rail={rail}
       active={active === 'more'}
       badge={pendingAccounts}
-      badgeWord="accounts waiting"
+      badgeWord={pendingAccounts === 1 ? 'account waiting' : 'accounts waiting'}
       testID="tab-more"
       onPress={onOpenMore}
     />

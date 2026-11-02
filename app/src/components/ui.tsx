@@ -317,7 +317,11 @@ export function Row({
         {typeof detail === 'string' ? <Text style={styles.rowDetail}>{detail}</Text> : (detail ?? null)}
         {warn ? <Text style={styles.rowWarn}>{warn}</Text> : null}
       </View>
-      {value ? <Text style={styles.rowValue}>{value}</Text> : null}
+      {value ? (
+        <Text style={styles.rowValue} numberOfLines={1}>
+          {value}
+        </Text>
+      ) : null}
       {actions ? <View style={styles.rowActions}>{actions}</View> : null}
       {onPress ? <Icon name="chevron-right" size={22} color={t.text.muted} /> : null}
     </>
@@ -777,7 +781,8 @@ const styles = StyleSheet.create({
   rowLabel: { fontSize: 16, fontWeight: '600', color: t.text.primary },
   rowDetail: { fontSize: 13, color: t.text.secondary },
   rowWarn: { fontSize: 13, fontWeight: '600', color: t.text.danger },
-  rowValue: { fontSize: 15, fontWeight: '600', color: t.text.primary },
+  // A total never wraps ("5h / 30m"); the label beside it gives way instead.
+  rowValue: { fontSize: 15, fontWeight: '600', color: t.text.primary, flexShrink: 0 },
   rowActions: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'flex-end', gap: spacing(2), flexShrink: 0 },
   // A row with buttons WRAPS rather than squeezes: a long name keeps a readable
   // width and the buttons move under it, still at the right-hand end.

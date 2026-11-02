@@ -28,7 +28,7 @@ import {
 } from '../timesheets';
 import { setApprover, useApproverChoices } from '../users';
 import { SearchablePicker } from '../components/SearchablePicker';
-import { DayEntries, MonthWeeks, type WeekState } from '../components/WeekView';
+import { DayEntries, MonthWeeks, dayIn, type WeekState } from '../components/WeekView';
 import {
   Button,
   Empty,
@@ -130,7 +130,7 @@ export function TimesheetScreen({
           </View>
         ) : undefined
       }
-      actions={<IconButton icon="add" label="Add hours" onPress={() => nav.navigate('ManualEntry')} />}
+      actions={<IconButton icon="add" label="Add hours" onPress={() => nav.navigate('ManualEntry', { dayKey: dayIn(period, todayKey) })} />}
       width="read"
     >
       <MonthWeeks period={period} todayKey={todayKey} stateOf={stateOf} onPick={setAnchor} />
@@ -148,7 +148,9 @@ export function TimesheetScreen({
           dayKey={dayKey}
           entries={dayEntries}
           conflicts={conflicts}
-          onOpen={(entryId) => nav.navigate('EntryEdit', { entryId })}
+          // A submitted or approved week is closed to its owner: the rules
+          // refuse the edit, so the rows do not offer one.
+          onOpen={status === 'draft' || status === 'rejected' ? (entryId) => nav.navigate('EntryEdit', { entryId }) : undefined}
         />
       ))}
       {entries.length === 0 ? (
@@ -203,6 +205,9 @@ export function TimesheetScreen({
             placeholder="Choose who approves your hours"
             title="Timesheet approver"
           />
+          {!approverUid ? (
+            <Text style={styles.warn}>Choose who approves your hours above, then submit.</Text>
+          ) : null}
           {hasRunningInPeriod ? <Text style={styles.hint}>Clock out before you submit this week.</Text> : null}
           {conflicts.size > 0 ? (
             <Text style={styles.warn}>Some entries overlap. Fix the flagged times before you submit.</Text>
