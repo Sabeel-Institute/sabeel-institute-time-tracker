@@ -491,7 +491,7 @@ function Shell({
   const { isWide } = useLayout();
   // The same queries the screens behind the badges read, so a badge cannot
   // disagree with the screen it opens.
-  const waiting = useApprovalQueue(uid, { enabled: approver }).length;
+  const waiting = useApprovalQueue(uid, { enabled: approver })?.length ?? 0;
   const pendingAccounts = usePendingCount(admin);
   // The stack's route names, top first: the lit tab follows from it.
   const [stack, setStack] = useState<RouteName[]>(['Home']);

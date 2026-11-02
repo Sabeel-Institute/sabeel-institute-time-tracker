@@ -103,9 +103,12 @@ export function usePendingCount(enabled: boolean): number {
   );
 }
 
-/** Live list of all users — managers use it for report filters and person detail. */
-export function useUsers(): UserRow[] {
-  return useLiveQuery(
+/**
+ * Live list of all users — managers use it for report filters and person detail.
+ * undefined = still loading (or the listen failed, which the banner says).
+ */
+export function useUsers(): UserRow[] | undefined {
+  return useLiveQuery<UserRow[] | undefined>(
     () => query(collection(db, COLLECTIONS.users)),
     [],
     {
@@ -115,7 +118,7 @@ export function useUsers(): UserRow[] {
         list.sort((a, b) => a.displayName.localeCompare(b.displayName));
         return list;
       },
-      empty: [],
+      empty: undefined,
     },
   );
 }

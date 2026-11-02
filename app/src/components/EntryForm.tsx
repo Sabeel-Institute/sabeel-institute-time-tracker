@@ -30,7 +30,7 @@ export function EntryForm({
   onNote,
   noteLabel,
 }: {
-  activities: Activity[];
+  activities: Activity[] | undefined;
   activityId: string | null;
   onActivity: (id: string) => void;
   dateKey: string;

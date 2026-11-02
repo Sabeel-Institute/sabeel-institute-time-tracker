@@ -9,17 +9,17 @@ import {
   type Activity,
 } from '../activities';
 import { confirmAction } from '../confirm';
-import { Button, Collapsible, Empty, ErrorText, Row, RowList, Screen } from '../components/ui';
+import { Button, Collapsible, Empty, ErrorText, Row, RowList, Screen, Spinner } from '../components/ui';
 import { getTheme, spacing } from '../theme';
 
 const t = getTheme();
 
 export function ActivitiesScreen({ selfUid, claims }: { selfUid: string; claims: TokenClaims }) {
   const rows = useActivities({ includeArchived: true });
-  const active = rows.filter((a) => a.status === 'active');
+  const active = rows?.filter((a) => a.status === 'active') ?? [];
   // Archived activities stay reachable for Restore, below the list and closed,
   // so the ones people log against are the ones on screen.
-  const archived = rows.filter((a) => a.status === 'archived');
+  const archived = rows?.filter((a) => a.status === 'archived') ?? [];
   const [name, setName] = useState('');
   const [error, setError] = useState<string | null>(null);
 
@@ -93,8 +93,9 @@ export function ActivitiesScreen({ selfUid, claims }: { selfUid: string; claims:
       </View>
       <ErrorText error={error} />
 
+      {rows === undefined ? <Spinner label="Loading activities…" /> : null}
       {active.length > 0 ? <RowList>{active.map(row)}</RowList> : null}
-      {active.length === 0 ? (
+      {rows !== undefined && active.length === 0 ? (
         <Empty>{archived.length === 0 ? 'Nothing yet. Add the first one above.' : 'No active activities.'}</Empty>
       ) : null}
       {archived.length > 0 ? (

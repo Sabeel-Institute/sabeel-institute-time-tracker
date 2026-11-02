@@ -15,6 +15,7 @@ import {
   RowList,
   Screen,
   SectionTitle,
+  Spinner,
 } from '../components/ui';
 import { getTheme } from '../theme';
 
@@ -35,11 +36,11 @@ export function UsersScreen({ selfUid, claims }: { selfUid: string; claims: Toke
   const rows = useUsers();
   const [error, setError] = useState<string | null>(null);
   const isAdmin = claims.admin === true;
-  const nameOf = useMemo(() => new Map(rows.map((u) => [u.uid, u.displayName])), [rows]);
+  const nameOf = useMemo(() => new Map((rows ?? []).map((u) => [u.uid, u.displayName])), [rows]);
   const byName = (a: UserRow, b: UserRow) => a.displayName.localeCompare(b.displayName);
-  const pending = rows.filter((u) => u.status === 'pending').sort(byName);
-  const active = rows.filter((u) => u.status === 'active').sort(byName);
-  const disabled = rows.filter((u) => u.status === 'disabled').sort(byName);
+  const pending = (rows ?? []).filter((u) => u.status === 'pending').sort(byName);
+  const active = (rows ?? []).filter((u) => u.status === 'active').sort(byName);
+  const disabled = (rows ?? []).filter((u) => u.status === 'disabled').sort(byName);
 
   const open = (u: UserRow) => nav.navigate('UserEdit', { uid: u.uid });
   // A screen reader hears what the row shows, then what a tap does.
@@ -102,8 +103,14 @@ export function UsersScreen({ selfUid, claims }: { selfUid: string; claims: Toke
         </>
       ) : null}
 
-      <SectionTitle>Everyone ({active.length})</SectionTitle>
-      {active.length > 0 ? <RowList>{active.map(person)}</RowList> : <Empty>No one yet.</Empty>}
+      <SectionTitle>Everyone{rows ? ` (${active.length})` : ''}</SectionTitle>
+      {rows === undefined ? (
+        <Spinner label="Loading people…" />
+      ) : active.length > 0 ? (
+        <RowList>{active.map(person)}</RowList>
+      ) : (
+        <Empty>No one yet.</Empty>
+      )}
 
       {disabled.length > 0 ? (
         <Collapsible title="Disabled" count={disabled.length}>

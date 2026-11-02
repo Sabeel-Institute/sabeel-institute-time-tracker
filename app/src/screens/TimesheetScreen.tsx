@@ -37,6 +37,7 @@ import {
   Notice,
   Screen,
   SectionTitle,
+  Spinner,
   StatusChip,
   sheetStatus,
 } from '../components/ui';
@@ -81,7 +82,10 @@ export function TimesheetScreen({
   }, [initialPeriodKey]);
 
   const period = periodRangeFor(anchor);
-  const entries = useEntriesRange(uid, period.fromKey, period.toKey);
+  // undefined until the week's entries arrive: until then nothing here may say
+  // or act as if the week were empty.
+  const loaded = useEntriesRange(uid, period.fromKey, period.toKey);
+  const entries = useMemo(() => loaded ?? [], [loaded]);
   const sheet = useTimesheet(uid, period.fromKey);
   const status = sheet === undefined ? undefined : (sheet?.status ?? 'draft');
 
@@ -115,7 +119,7 @@ export function TimesheetScreen({
   const hasRunningInPeriod = entries.some((e) => e.end === null);
   const started = periodHasStarted(period.fromKey, todayKey);
   const conflicts = useMemo(() => overlappingEntryIds(entries), [entries]);
-  const blocked = !approverUid || hasRunningInPeriod || conflicts.size > 0;
+  const blocked = !loaded || !approverUid || hasRunningInPeriod || conflicts.size > 0;
 
   const act = async (fn: () => Promise<void>) => {
     setError(null);
@@ -134,7 +138,7 @@ export function TimesheetScreen({
         shown ? (
           <View style={styles.lede}>
             <StatusChip label={shown.label} tone={shown.tone} />
-            <Text style={styles.ledeText}>· {formatDuration(total)} logged</Text>
+            {loaded ? <Text style={styles.ledeText}>· {formatDuration(total)} logged</Text> : null}
           </View>
         ) : undefined
       }
@@ -171,7 +175,9 @@ export function TimesheetScreen({
           onOpen={status === 'draft' || status === 'rejected' ? (entryId) => nav.navigate('EntryEdit', { entryId }) : undefined}
         />
       ))}
-      {entries.length === 0 ? (
+      {!loaded ? (
+        <Spinner label="Loading this week…" />
+      ) : entries.length === 0 ? (
         <Empty>
           {started
             ? 'Nothing logged this week yet. Clock in on Today, or add hours with the + above.'
@@ -179,7 +185,7 @@ export function TimesheetScreen({
         </Empty>
       ) : null}
 
-      {status === 'draft' && started && entries.length === 0 ? (
+      {status === 'draft' && started && loaded?.length === 0 ? (
         <Button
           label="Copy last week's hours"
           kind="secondary"
@@ -228,7 +234,7 @@ export function TimesheetScreen({
             />
           ) : (
             <Button
-              label={total === 0 ? 'Submit timesheet (no hours)' : 'Submit timesheet'}
+              label={loaded && total === 0 ? 'Submit timesheet (no hours)' : 'Submit timesheet'}
               onPress={() => act(() => submitTimesheet(uid, period, approverUid!, entries))}
               disabled={blocked}
             />

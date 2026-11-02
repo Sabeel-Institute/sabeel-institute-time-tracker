@@ -407,8 +407,18 @@ Beyond the flows themselves, the harness encodes:
   appears when snapshots lag (see `POSTMORTEM-2026-07-16-stale-week.md`). The
   Timesheet tab is moved to another week (its chip, paging the month first
   when the week is in the previous one: `goToWeek`) while every Firestore
-  request is held for 2.5 s; the previous week's rows must be gone, and the
-  empty-week text drawn, inside 1.5 s.
+  request is held for 2.5 s; the previous week's rows must be gone, and "Loading
+  this week…" drawn, inside 1.5 s, and the empty-week text only once the new
+  week's entries have arrived.
+- **Proves no list says it is empty while it loads** (`loadsWithoutClaimingEmpty`):
+  Today's activities, Approvals, Needs attention, a week under review and
+  People are each opened with every Firestore request delayed 2.5 s, and every
+  frame is sampled until the screen's loading line has shown and gone. One
+  frame of the empty message ("No activities yet", "Nothing waiting for", …)
+  fails the suite, and so does a load that never showed its loading line. A
+  live list hook's `undefined` is that loading moment (`useActivities`,
+  `useEntriesRange`, `useApprovalQueue`, `useRejectedSheets`, `useUsers`),
+  never `[]`.
 - **Reaches screens the way a person does.** A tab is pressed by its test id
   (`tab-today`, `tab-timesheet`, `tab-approvals`, `tab-reports`, `tab-more`),
   never by its text, which includes the icon's glyph. A press resets the stack

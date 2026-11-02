@@ -12,7 +12,7 @@ import {
 import type { RootStackParamList } from '../nav';
 import { useApprovalQueue } from '../timesheets';
 import { useUsers } from '../users';
-import { Empty, Row, RowList, Screen, Segmented } from '../components/ui';
+import { Empty, Row, RowList, Screen, Segmented, Spinner } from '../components/ui';
 
 /** The approver's queue: timesheets submitted to me (admins may view all). */
 export function ApprovalsScreen({ uid, claims }: { uid: string; claims: TokenClaims }) {
@@ -20,14 +20,14 @@ export function ApprovalsScreen({ uid, claims }: { uid: string; claims: TokenCla
   const [scope, setScope] = useState<'mine' | 'all'>('mine');
   const queue = useApprovalQueue(uid, { all: claims.admin === true && scope === 'all' });
   const users = useUsers();
-  const nameOf = useMemo(() => new Map(users.map((u) => [u.uid, u.displayName])), [users]);
+  const nameOf = useMemo(() => new Map((users ?? []).map((u) => [u.uid, u.displayName])), [users]);
   const tz = deviceTimeZone();
 
   return (
     <Screen
       title="Approvals"
       subtitle={
-        queue.length === 0
+        !queue?.length
           ? undefined
           : queue.length === 1
             ? 'One timesheet is waiting for a decision.'
@@ -45,7 +45,9 @@ export function ApprovalsScreen({ uid, claims }: { uid: string; claims: TokenCla
           onChange={setScope}
         />
       ) : null}
-      {queue.length === 0 ? (
+      {queue === undefined ? (
+        <Spinner label="Loading timesheets…" />
+      ) : queue.length === 0 ? (
         <Empty>
           {scope === 'all'
             ? 'Nothing waiting for anyone. Submitted timesheets show up here.'

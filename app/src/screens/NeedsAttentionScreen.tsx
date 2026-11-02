@@ -6,7 +6,7 @@ import { dayKeyFor, dayLabel, deviceTimeZone, formatDuration, periodLabel } from
 import { tabState, type RootStackParamList } from '../nav';
 import { useRejectedSheets } from '../timesheets';
 import { useApproverChoices } from '../users';
-import { Empty, Row, RowList, Screen } from '../components/ui';
+import { Empty, Row, RowList, Screen, Spinner } from '../components/ui';
 import { getTheme } from '../theme';
 
 const t = getTheme();
@@ -27,7 +27,9 @@ export function NeedsAttentionScreen({ uid }: { uid: string }) {
 
   return (
     <Screen width="read">
-      {sheets.length === 0 ? (
+      {sheets === undefined ? (
+        <Spinner label="Loading timesheets…" />
+      ) : sheets.length === 0 ? (
         <Empty>Nothing needs your attention.</Empty>
       ) : (
         <>

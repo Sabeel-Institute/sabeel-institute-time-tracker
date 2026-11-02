@@ -200,6 +200,51 @@ async function holdFirestore(page) {
 }
 
 /**
+ * Open `address` with every Firestore request slowed, and prove the screen never
+ * says its list is empty (`empty`) while that list loads. Every frame is
+ * sampled from the first paint until `loading` has shown and gone, so a load
+ * too fast to have a loading moment fails rather than passing unseen.
+ * Localhost answers in the frame a screen first paints, which is how "No
+ * activities yet" reached people waiting on a real network.
+ */
+async function loadsWithoutClaimingEmpty(page, address, { empty, loading }) {
+  const path = new URL(address).pathname;
+  const key = `__frames${Math.random().toString(36).slice(2)}`;
+  await page.addInitScript(
+    ({ key, empty, loading }) => {
+      // An init script runs on every later load of the page too: sample this
+      // one load only.
+      if (sessionStorage.getItem(key)) return;
+      sessionStorage.setItem(key, '1');
+      const frames = (window[key] = { empty: 0, seenLoading: false, done: false });
+      const until = Date.now() + 30000;
+      const tick = () => {
+        const text = document.body?.innerText ?? '';
+        if (text.includes(loading)) frames.seenLoading = true;
+        else if (frames.seenLoading) frames.done = true;
+        if (!frames.done && text.includes(empty)) frames.empty += 1;
+        if (!frames.done && Date.now() < until) requestAnimationFrame(tick);
+      };
+      requestAnimationFrame(tick);
+    },
+    { key, empty, loading },
+  );
+  const url = `http://${EMULATOR_HOSTS.firestore}/**`;
+  const slow = async (route) => {
+    await new Promise((r) => setTimeout(r, 2500));
+    await route.continue().catch(() => {});
+  };
+  await page.context().route(url, slow);
+  await page.goto(address);
+  await page.waitForFunction((k) => window[k]?.done, key, { timeout: 30000 }).catch(() => {});
+  await page.context().unroute(url, slow);
+  const frames = await page.evaluate((k) => window[k], key);
+  if (frames.empty !== 0) throw new Error(`${path}: ${frames.empty} frame(s) said "${empty}" while it loaded`);
+  if (!frames.seenLoading) throw new Error(`${path}: never said "${loading}" while it loaded`);
+  if (!frames.done) throw new Error(`${path}: still "${loading}" after 30 s`);
+}
+
+/**
  * Tap something that raises a window.confirm, answer it, and return what it
  * asked. Playwright dismisses a dialog nobody listens for, which would make
  * Cancel and "never asked" look the same, so the listener goes in BEFORE the
@@ -581,6 +626,9 @@ async function main() {
   // Members don't get the manager entry points (More's Activities and People).
   await expectMemberTools(vol, 'a volunteer');
 
+  console.log('▸ on a slow network, no list says it is empty while it loads: Today\'s activities…');
+  await loadsWithoutClaimingEmpty(vol, baseUrl + '/', { empty: 'No activities yet', loading: 'Loading activities…' });
+
   console.log('▸ Phase 3: volunteer clocks in, clocks out, adds manual hours…');
   // Tutoring is the only active activity (Food Drive was archived above).
   await pickFromModal(vol, 'Pick an activity', 'Tutoring');
@@ -722,8 +770,12 @@ async function main() {
   }, shared.periodLabel(thisWeek));
   await goToWeek(vol, shared.periodLabel(otherWeek));
   await expectWeekShown(vol, shared.periodLabel(otherWeek));
-  // Old rows must vanish at once — long before the stalled snapshot can land.
-  await onScreen(vol.getByText(EMPTY_WEEK)).waitFor({ timeout: 1500 });
+  // Old rows must vanish at once — long before the stalled snapshot can land —
+  // and the week says it is loading until then, not that it is empty.
+  await onScreen(vol.getByText('Loading this week…', { exact: true })).waitFor({ timeout: 1500 });
+  if ((await onScreen(vol.getByText(EMPTY_WEEK)).count()) !== 0)
+    throw new Error('the week says nothing is logged before its entries have arrived');
+  await onScreen(vol.getByText(EMPTY_WEEK)).waitFor({ timeout: 30000 });
   if ((await vol.getByText('Math tutoring with the kids').count()) !== 0)
     throw new Error("stale entries visible under a different week's timesheet");
   const staleFrames = await vol.evaluate(() => {
@@ -753,6 +805,10 @@ async function main() {
 
   console.log('▸ Phase 7: approver rejects with a reason → volunteer sees it live…');
   const mgr = admin;
+  await loadsWithoutClaimingEmpty(mgr, baseUrl + '/approvals', {
+    empty: 'Nothing waiting for',
+    loading: 'Loading timesheets…',
+  });
   await mgr.goto(baseUrl + '/');
   await mgr.getByText('Salaam,', { exact: false }).waitFor({ timeout: 45000 });
   // The Approvals tab carries the number waiting.
@@ -789,6 +845,10 @@ async function main() {
   await rejectButton.click();
   await mgr.getByText('Nothing waiting for you.', { exact: false }).waitFor();
 
+  await loadsWithoutClaimingEmpty(vol, baseUrl + '/needs-attention', {
+    empty: 'Nothing needs your attention',
+    loading: 'Loading timesheets…',
+  });
   // Today shows the rejection banner live; the reason shows on the sheet.
   await vol.goto(baseUrl + '/');
   await vol.getByRole('button', { name: /A timesheet was rejected/ }).waitFor({ timeout: 30000 });
@@ -1142,6 +1202,10 @@ async function main() {
   await vol.getByText('What are you working on?').waitFor({ timeout: 30000 });
   if ((await vol.getByText('closed for new hours', { exact: false }).count()) !== 0)
     throw new Error('the volunteer’s Today is still locked after the reopen');
+
+  console.log('▸ on a slow network: a week under review never says a day has no hours before it loads, nor People that there is no one…');
+  await loadsWithoutClaimingEmpty(mgr, mgr.url(), { empty: 'No hours.', loading: 'Loading this week…' });
+  await loadsWithoutClaimingEmpty(mgr, baseUrl + '/people', { empty: 'No one yet', loading: 'Loading people…' });
 
   console.log('▸ People: role, admin and active each ask first, and a reload keeps the answer…');
   const VOL = 'volunteer@oursabeel.com';

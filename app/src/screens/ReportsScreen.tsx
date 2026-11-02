@@ -83,8 +83,8 @@ export function ReportsScreen() {
   };
 
   const periodWords = PERIODS.find((p) => p.value === window)!.words;
-  const who = personUid ? (users.find((u) => u.uid === personUid)?.displayName ?? 'one person') : 'everyone';
-  const what = activityId ? (activities.find((a) => a.id === activityId)?.name ?? 'one activity') : 'all activities';
+  const who = personUid ? (users?.find((u) => u.uid === personUid)?.displayName ?? 'one person') : 'everyone';
+  const what = activityId ? (activities?.find((a) => a.id === activityId)?.name ?? 'one activity') : 'all activities';
   return (
     <Screen
       title="Reports"
@@ -101,7 +101,7 @@ export function ReportsScreen() {
           <SearchablePicker
             items={[
               { id: '', label: 'Everyone' },
-              ...users
+              ...(users ?? [])
                 .filter((u) => u.status === 'active')
                 .map((u) => ({ id: u.uid, label: u.displayName, sublabel: u.email })),
             ]}
@@ -117,8 +117,8 @@ export function ReportsScreen() {
             items={[
               { id: '', label: 'All activities' },
               // Archived ones still have hours to report, after the active ones.
-              ...activities.filter((a) => a.status === 'active').map((a) => ({ id: a.id, label: a.name })),
-              ...activities
+              ...(activities ?? []).filter((a) => a.status === 'active').map((a) => ({ id: a.id, label: a.name })),
+              ...(activities ?? [])
                 .filter((a) => a.status === 'archived')
                 .map((a) => ({ id: a.id, label: `${a.name} (archived)` })),
             ]}

@@ -5,9 +5,12 @@ import { useLiveQuery } from './liveQuery';
 
 export type Activity = ActivityDoc & { id: string };
 
-/** Live list of activities; active-only for pickers, everything for management. */
-export function useActivities(opts: { includeArchived: boolean }): Activity[] {
-  return useLiveQuery(
+/**
+ * Live list of activities; active-only for pickers, everything for management.
+ * undefined = still loading (or the listen failed, which the banner says).
+ */
+export function useActivities(opts: { includeArchived: boolean }): Activity[] | undefined {
+  return useLiveQuery<Activity[] | undefined>(
     () => {
       const base = collection(db, COLLECTIONS.activities);
       return opts.includeArchived
@@ -18,7 +21,7 @@ export function useActivities(opts: { includeArchived: boolean }): Activity[] {
     {
       label: 'useActivities',
       map: (snap) => snap.docs.map((d) => ({ id: d.id, ...(d.data() as ActivityDoc) })),
-      empty: [],
+      empty: undefined,
     },
   );
 }
