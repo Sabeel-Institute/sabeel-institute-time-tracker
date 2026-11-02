@@ -402,6 +402,50 @@ Beyond the flows themselves, the harness encodes:
 - **Injects latency** around week switching — the stale-week bug class only
   appears when snapshots lag (see `POSTMORTEM-2026-07-16-stale-week.md`).
 
+Actions that have a check of their own, so that a change to how a screen looks
+can be shown not to have changed what its controls do:
+
+- **Copy last week's hours** on an empty started week: declined copies nothing,
+  accepted copies every entry a week on (days, times, notes) and leaves the
+  source week alone.
+- **Reopen (admin)** on the admin's own approved week (the only screen that
+  has the button): one press, no question, and the week is a draft that saves
+  an edit again.
+- **Manage users**: Role, Admin and Active each ask first; declined changes
+  neither the card nor the server, accepted changes the server and the
+  person's own session, and a fresh page still shows it. An admin's own card
+  has all three disabled, and pressing them anyway asks nothing.
+- **Account disabled**: the disabled person's open session shows the screen
+  with Sign out, signing in again meets it from the profile alone, and
+  re-activating un-gates the same session with no rules to accept again.
+- **Sign in with email**: an unknown address and a wrong password both get the
+  one refusal sentence; the password account signs in, accepts the rules and
+  is only a member.
+- **Enable notifications / Not now** on Home's nudge.
+
+The mechanics behind them:
+
+- **Every `window.confirm` is answered on purpose** (`tapAndAnswer`).
+  Playwright dismisses a dialog nobody listens for, which makes Cancel and
+  "never asked" the same thing. The listener goes in before the tap, so a tap
+  that asks nothing fails and the question asked is asserted.
+  `confirmsRaisedBy` is the converse, for a press that must ask nothing.
+- **The server's copy is read, not just the screen** (`storedAccess`,
+  `storedEntries`, over the Firestore emulator's REST API), because "declining
+  changed nothing" has to mean the database, and an optimistic screen can
+  agree with itself.
+- **The nudge is pressed against a stand-in permission** (`askableNotifications`).
+  Headless Chromium reports notification permission as `denied`, a full
+  browser as `default`, and the nudge is drawn only for `default`; an init
+  script reports `default`, counts `requestPermission` and answers granted.
+  Under the emulators no push token is minted, so the card then says the
+  device cannot show notifications.
+- **The password account is made with the Admin SDK** (`adminAuth`), as
+  production's was: the sign-up gate refuses every public sign-up. Its
+  password is an emulator-only constant. Auth answers each refused sign-in
+  with a 400, which Chromium logs as a console error; it is excused for that
+  page and that Auth URL, like the set-up checks' own.
+
 Two races in it were fixed on 2026-08-27, both **reproduced on clean `HEAD`** —
 they predate the `e2e-stack` extraction and had been failing this suite roughly
 one run in two. Both are stack behaviour, so the *why* lives in the

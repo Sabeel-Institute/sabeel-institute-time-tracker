@@ -16,6 +16,8 @@
 // chromium`).
 import { mkdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { getApps, initializeApp } from 'firebase-admin/app';
+import { getAuth } from 'firebase-admin/auth';
 import {
   ROOT as root,
   EMULATOR_HOSTS,
@@ -43,6 +45,9 @@ const WATCHED_EMULATORS = Object.entries({ functions: 400, firestore: 200, auth:
   ([name, keep]) => ({ name, keep, origin: `http://${EMULATOR_HOSTS[name]}/` }),
 );
 
+// The Firestore emulator's REST root, read as the owner by the helpers below.
+const FIRESTORE_DOCS = `http://${EMULATOR_HOSTS.firestore}/v1/projects/${PROJECT}/databases/(default)/documents`;
+
 /** A recorded console error, as printed: who saw it, what it said, and where. */
 const describe = (e) => `[${e.label}] ${e.text} (${e.url || 'no url'})`;
 mkdirSync(shots, { recursive: true });
@@ -52,13 +57,72 @@ process.on('SIGINT', () => cleanup(130));
 /** Look up a uid the way a notification payload would have it: server-side. */
 async function uidByEmail(email) {
   const res = await fetch(
-    `http://${EMULATOR_HOSTS.firestore}/v1/projects/${PROJECT}/databases/(default)/documents/users`,
+    `${FIRESTORE_DOCS}/users`,
     { headers: { Authorization: 'Bearer owner' } },
   );
   const body = await res.json();
   const hit = (body.documents ?? []).find((d) => d.fields?.email?.stringValue === email);
   if (!hit) throw new Error(`no user doc for ${email}`);
   return hit.name.split('/').pop();
+}
+
+/** What the server holds about one person's access: the fields the Users screen edits. */
+async function storedAccess(uid) {
+  const res = await fetch(`${FIRESTORE_DOCS}/users/${uid}`, { headers: { Authorization: 'Bearer owner' } });
+  const f = (await res.json()).fields;
+  return { status: f.status.stringValue, role: f.role.stringValue, admin: f.admin.booleanValue };
+}
+
+/** The server's entries for one person with a day in [fromKey, toKey], in day order. */
+async function storedEntries(uid, fromKey, toKey) {
+  const res = await fetch(`${FIRESTORE_DOCS}/timeEntries?pageSize=300`, {
+    headers: { Authorization: 'Bearer owner' },
+  });
+  return ((await res.json()).documents ?? [])
+    .map((d) => d.fields)
+    .filter((f) => f.uid.stringValue === uid && f.dayKey.stringValue >= fromKey && f.dayKey.stringValue <= toKey)
+    .map((f) => ({ dayKey: f.dayKey.stringValue, note: f.note?.stringValue ?? '' }))
+    .sort((a, b) => a.dayKey.localeCompare(b.dayKey));
+}
+
+/** The status the server holds for one person's week: null while it is a draft, which has no document. */
+async function storedSheetStatus(uid, periodKey) {
+  const res = await fetch(`${FIRESTORE_DOCS}/timesheets/${uid}_${periodKey}`, {
+    headers: { Authorization: 'Bearer owner' },
+  });
+  return res.ok ? (await res.json()).fields.status.stringValue : null;
+}
+
+/**
+ * The Admin SDK's Auth, reaching the Auth emulator the way scripts/grant-admin.mjs
+ * does. Only an administrator's path may make the one password account: the
+ * public sign-up is refused by the sign-in gate.
+ */
+function adminAuth() {
+  process.env.FIREBASE_AUTH_EMULATOR_HOST ??= EMULATOR_HOSTS.auth;
+  if (getApps().length === 0) initializeApp({ projectId: PROJECT });
+  return getAuth();
+}
+
+// Emulator-only: the Auth emulator holds no real account, so this guards nothing.
+const EMULATOR_PASSWORD = 'emulator-only-password-for-e2e';
+
+/**
+ * Stand-in for a browser that has not been asked about notifications yet.
+ * Headless Chromium reports permission as 'denied' (a full browser: 'default'),
+ * and the nudge on Home is only drawn for 'default', so the button it exists
+ * for could not be pressed. requestPermission is counted and says yes, so a
+ * press that never asks is seen. Runs in the page, before the app loads.
+ */
+function askableNotifications() {
+  let permission = 'default';
+  window.__permissionAsks = 0;
+  Object.defineProperty(Notification, 'permission', { get: () => permission, configurable: true });
+  Notification.requestPermission = () => {
+    window.__permissionAsks += 1;
+    permission = 'granted';
+    return Promise.resolve('granted');
+  };
 }
 
 /**
@@ -127,6 +191,83 @@ async function holdFirestore(page) {
 const firstOnScreen = (locator) => locator.filter({ visible: true }).first();
 const lastOnScreen = (locator) => locator.filter({ visible: true }).last();
 
+/**
+ * Tap something that raises a window.confirm, answer it, and return what it
+ * asked. Playwright dismisses a dialog nobody listens for, which would make
+ * Cancel and "never asked" look the same, so the listener goes in BEFORE the
+ * tap and a tap that raises none fails here after 10 s. The tap cannot finish
+ * until the dialog is answered, so the answer is wired to the event itself.
+ */
+async function tapAndAnswer(page, tap, accept) {
+  const asked = page.waitForEvent('dialog', { timeout: 10000 }).then(async (dialog) => {
+    const message = dialog.message();
+    await (accept ? dialog.accept() : dialog.dismiss());
+    return message;
+  });
+  await tap();
+  return asked;
+}
+
+/** The window.confirm texts a tap raised (each dismissed): [] when it asked nothing. */
+async function confirmsRaisedBy(page, tap) {
+  const raised = [];
+  const onDialog = (dialog) => {
+    raised.push(dialog.message());
+    void dialog.dismiss();
+  };
+  page.on('dialog', onDialog);
+  try {
+    await tap();
+    await page.waitForTimeout(500);
+  } finally {
+    page.off('dialog', onDialog);
+  }
+  return raised;
+}
+
+/** Poll `read` until `ok` accepts what it returns; fail naming `what` and the last answer. */
+async function eventually(page, what, read, ok, timeoutMs = 15000) {
+  for (let waited = 0; ; waited += 250) {
+    const got = await read();
+    if (ok(got)) return got;
+    if (waited >= timeoutMs) throw new Error(`${what}: still ${JSON.stringify(got)} after ${timeoutMs}ms`);
+    await page.waitForTimeout(250);
+  }
+}
+
+/**
+ * A card on the Users screen. The innermost element holding both the address
+ * and a Role row is the card; every ancestor matches too, and the card is the
+ * last of them in the DOM. A pending card has no Role row, so it is not found.
+ */
+const userCard = (page, email) =>
+  lastOnScreen(
+    page
+      .locator('div')
+      .filter({ has: page.getByText(email, { exact: true }) })
+      .filter({ has: page.getByText('Role', { exact: true }) }),
+  );
+const roleOption = (card, role) =>
+  card.getByText('Role', { exact: true }).locator('xpath=..').getByText(role, { exact: true });
+// The card's two switches, in the order it draws them: Admin, then Active.
+const adminSwitch = (card) => firstOnScreen(card.locator('[role="switch"]'));
+const activeSwitch = (card) => lastOnScreen(card.locator('[role="switch"]'));
+
+/** What a card says about its person under the address: status, role and, once granted, "admin". */
+async function badgesOf(card, email) {
+  const lines = (await card.innerText()).split('\n').map((l) => l.trim());
+  const rest = lines.slice(lines.indexOf(email) + 1);
+  return rest.slice(0, rest.findIndex((l) => l === 'Approver' || l === 'Role'));
+}
+
+/** Everything a card shows about access, to compare before and after a declined change. */
+const cardState = async (card, email) =>
+  JSON.stringify({
+    badges: await badgesOf(card, email),
+    admin: await adminSwitch(card).isChecked(),
+    active: await activeSwitch(card).isChecked(),
+  });
+
 async function main() {
   // 1. Build functions + export the web bundle in emulator mode.
   console.log('▸ building functions and web bundle (emulator mode)…');
@@ -155,11 +296,13 @@ async function main() {
   // find it.
   const emulatorFailures = [];
   const pages = new Map();
-  async function newPage(label) {
+  async function newPage(label, { init } = {}) {
     const ctx = await browser.newContext({
       viewport: { width: 420, height: 860 },
       acceptDownloads: true,
     });
+    // A script run in every page of this context before the app's own.
+    if (init) await ctx.addInitScript(init);
     const page = await ctx.newPage();
     pages.set(label, page);
     page.on('console', (m) => {
@@ -606,7 +749,7 @@ async function main() {
   }, undefined, { timeout: 15000 });
   const reminderStored = async () => {
     const res = await fetch(
-      `http://${EMULATOR_HOSTS.firestore}/v1/projects/${PROJECT}/databases/(default)/documents/users/${volUid}`,
+      `${FIRESTORE_DOCS}/users/${volUid}`,
       { headers: { Authorization: 'Bearer owner' } },
     );
     return (await res.json()).fields?.notifPrefs?.mapValue?.fields?.reminder?.booleanValue;
@@ -656,7 +799,7 @@ async function main() {
   // Exactly one report, the volunteer's, kept by the server; under the
   // emulator the email is skipped, never sent.
   const reportsRes = await fetch(
-    `http://${EMULATOR_HOSTS.firestore}/v1/projects/${PROJECT}/databases/(default)/documents/reports`,
+    `${FIRESTORE_DOCS}/reports`,
     { headers: { Authorization: 'Bearer owner' } },
   );
   const reports = ((await reportsRes.json()).documents ?? []).map((d) => d.fields);
@@ -669,6 +812,297 @@ async function main() {
     kept.platform?.stringValue === 'web' &&
     kept.mail?.mapValue?.fields?.status?.stringValue === 'skipped';
   if (!keptOk) throw new Error('the stored report is not the one sent: ' + JSON.stringify(kept).slice(0, 400));
+
+  console.log('▸ copy last week’s hours: declining copies nothing, accepting fills the empty week…');
+  // Two full weeks of the previous month, which always has them: a harness that
+  // needs a particular day of the month fails on the others for reasons that are
+  // not the app's (see the sweep). The admin keeps these hours, so none of the
+  // volunteer's weeks, which the checks above and below read, move.
+  const adminUid = await uidByEmail('admin@oursabeel.com');
+  const [, copyFrom, copyTo] = shared.periodsOfMonth(
+    shared.addDays(shared.monthRange(todayKey).fromKey, -1),
+  );
+  const copyHours = [
+    { day: shared.addDays(copyFrom.fromKey, 1), from: '09:00', to: '10:00', note: 'Copy check A' },
+    { day: shared.addDays(copyFrom.fromKey, 3), from: '13:00', to: '14:30', note: 'Copy check B' },
+  ];
+  for (const h of copyHours) {
+    await mgr.goto(baseUrl + '/');
+    await mgr.getByText('Salaam,', { exact: false }).waitFor({ timeout: 45000 });
+    await mgr.getByText('Add hours manually').click();
+    await pickFromModal(mgr, 'Pick an activity', 'Tutoring');
+    const fields = mgr.locator('input');
+    await fields.nth(0).fill(h.day); // the date
+    await fields.nth(1).fill(h.from);
+    await fields.nth(2).fill(h.to);
+    await mgr.locator('textarea').fill(h.note);
+    await mgr.getByText('Save hours', { exact: true }).click();
+    // Saved: the form closes onto Home.
+    await firstOnScreen(mgr.getByText('Salaam,', { exact: false })).waitFor();
+  }
+  if ((await storedEntries(adminUid, copyFrom.fromKey, copyFrom.toKey)).length !== 2)
+    throw new Error('the two hours to copy were not saved');
+
+  await mgr.goto(`${baseUrl}/?screen=Timesheet&periodKey=${copyTo.fromKey}`);
+  await mgr.getByText('No hours in this week.').waitFor({ timeout: 45000 });
+  const copyButton = mgr.getByText("Copy last week's hours", { exact: true });
+  // Declined: the confirmation names the week it would copy from, and nothing is copied.
+  const declined = await tapAndAnswer(mgr, () => copyButton.click(), false);
+  if (!declined.startsWith('Copy last week?') || !declined.includes(shared.periodLabel(copyFrom)))
+    throw new Error('the copy asked something else: ' + declined);
+  await mgr.waitForTimeout(1500);
+  if ((await storedEntries(adminUid, copyTo.fromKey, copyTo.toKey)).length !== 0)
+    throw new Error('a declined copy copied entries');
+  await mgr.getByText('No hours in this week.').waitFor({ timeout: 1000 });
+  // Accepted: every entry arrives a week later, same times and notes; the
+  // source week keeps its own.
+  await tapAndAnswer(mgr, () => copyButton.click(), true);
+  await mgr.getByText('Week total: 2h 30m', { exact: true }).waitFor({ timeout: 15000 });
+  for (const h of copyHours) await mgr.getByText(h.note, { exact: true }).waitFor();
+  if ((await copyButton.count()) !== 0) throw new Error('Copy last week is still offered on a week with hours');
+  // The screen shows a write the moment it is made; the server holds it once it
+  // has answered, so it is the server that is waited for.
+  const copied = await eventually(
+    mgr,
+    'the copied entries on the server',
+    () => storedEntries(adminUid, copyTo.fromKey, copyTo.toKey),
+    (got) => got.length === copyHours.length,
+  );
+  const wanted = copyHours.map((h) => ({ dayKey: shared.addDays(h.day, 7), note: h.note }));
+  if (JSON.stringify(copied) !== JSON.stringify(wanted))
+    throw new Error('the copied entries are not last week’s, a week on: ' + JSON.stringify(copied));
+  if ((await storedEntries(adminUid, copyFrom.fromKey, copyFrom.toKey)).length !== 2)
+    throw new Error('copying changed the week it copied from');
+  await mgr.screenshot({ path: join(shots, '19a-copied-week.png'), animations: 'disabled', timeout: 8000 }).catch(() => {});
+
+  console.log('▸ an admin reopens an approved week: it is a draft again, and editable…');
+  // The Reopen button is on My timesheet, so the admin's own week is the one it
+  // can be pressed on: submitted to themself (an admin is their own approver by
+  // default), approved on the review screen, then back here.
+  const copySheet = (status) =>
+    eventually(mgr, `the week's status on the server`, () => storedSheetStatus(adminUid, copyTo.fromKey), (got) => got === status);
+  await mgr.getByText('Submit timesheet', { exact: true }).click();
+  await firstOnScreen(mgr.getByText('Submitted', { exact: true })).waitFor();
+  // Each write is waited for on the SERVER before the page moves on: the screen
+  // reflects a write the moment it is made, and a navigation can overtake it.
+  await copySheet('submitted');
+  await mgr.goto(
+    `${baseUrl}/?screen=TimesheetReview&uid=${adminUid}&displayName=Admin&periodKey=${copyTo.fromKey}`,
+  );
+  await mgr.getByText('Total: 2h 30m', { exact: false }).waitFor({ timeout: 45000 });
+  await mgr.getByText('Approve timesheet', { exact: true }).click();
+  await copySheet('approved');
+  await mgr.goto(`${baseUrl}/?screen=Timesheet&periodKey=${copyTo.fromKey}`);
+  await firstOnScreen(mgr.getByText('Approved', { exact: true })).waitFor({ timeout: 45000 });
+  await mgr.getByText('this week is locked', { exact: false }).waitFor();
+  if ((await mgr.getByText('Submit timesheet', { exact: true }).count()) !== 0)
+    throw new Error('an approved week still offers Submit to its admin');
+  await mgr.screenshot({ path: join(shots, '19b-admin-approved.png'), animations: 'disabled', timeout: 8000 }).catch(() => {});
+  // One press: Reopen asks nothing. A question appearing would be a change worth seeing here.
+  const reopenAsked = await confirmsRaisedBy(mgr, () =>
+    mgr.getByText('Reopen (admin)', { exact: true }).click(),
+  );
+  if (reopenAsked.length !== 0) throw new Error('Reopen now asks first: ' + reopenAsked.join(' | '));
+  // A draft as the app shows one: Submit again, no status chip, no lock, no
+  // Reopen, and no sheet left on the server.
+  await firstOnScreen(mgr.getByText('Submit timesheet', { exact: true })).waitFor({ timeout: 15000 });
+  await copySheet(null);
+  for (const gone of ['Approved', 'Reopen (admin)'])
+    if ((await mgr.getByText(gone, { exact: true }).count()) !== 0)
+      throw new Error(`"${gone}" is still shown after the week was reopened`);
+  if ((await mgr.getByText('this week is locked', { exact: false }).count()) !== 0)
+    throw new Error('the lock notice outlived the reopen');
+  // Editable: the entry the lock refused to touch saves.
+  await mgr.getByText('Copy check B', { exact: true }).click();
+  await mgr.locator('input').nth(2).fill('15:00');
+  await mgr.getByText('Save changes', { exact: true }).click();
+  await mgr.getByText('Week total: 3h 00m', { exact: true }).waitFor({ timeout: 15000 });
+
+  console.log('▸ Manage users: role, admin and active each ask first, and a reload keeps the answer…');
+  const VOL = 'volunteer@oursabeel.com';
+  const volAccess = () => storedAccess(volUid);
+  const sameAccess = (a, b) => a.status === b.status && a.role === b.role && a.admin === b.admin;
+  const access = (status, role, admin) => ({ status, role, admin });
+  async function openUsers() {
+    await mgr.goto(baseUrl + '/');
+    await mgr.getByText('Salaam,', { exact: false }).waitFor({ timeout: 45000 });
+    await mgr.getByText('Manage users').click();
+    await userCard(mgr, VOL).waitFor();
+  }
+  /**
+   * One change to the volunteer's access, made the way an admin makes it twice:
+   * declined (the screen and the server both stay as they were), then accepted
+   * (the server holds it, and a fresh page, which has only Firestore to go on,
+   * still shows it).
+   */
+  async function changeVolunteer({ tap, asks, from, to, shows }) {
+    const card = () => userCard(mgr, VOL);
+    const before = await cardState(card(), VOL);
+    const declined = await tapAndAnswer(mgr, () => tap(card()), false);
+    if (!declined.startsWith(asks)) throw new Error(`expected "${asks}", it asked: ${declined}`);
+    await mgr.waitForTimeout(1500);
+    const kept = await volAccess();
+    if (!sameAccess(kept, from)) throw new Error(`a declined "${asks}" changed ${JSON.stringify(kept)}`);
+    if ((await cardState(card(), VOL)) !== before) throw new Error(`a declined "${asks}" moved the card`);
+    await tapAndAnswer(mgr, () => tap(card()), true);
+    await eventually(mgr, `"${asks}" accepted`, volAccess, (a) => sameAccess(a, to));
+    await openUsers();
+    await eventually(mgr, `"${asks}" after a reload`, () => badgesOf(card(), VOL), shows);
+  }
+  /** Put the volunteer's access back; it asks again, in its own words. */
+  async function restoreVolunteer({ tap, asks, to }) {
+    const asked = await tapAndAnswer(mgr, () => tap(userCard(mgr, VOL)), true);
+    if (!asked.startsWith(asks)) throw new Error(`expected "${asks}", it asked: ${asked}`);
+    await eventually(mgr, `"${asks}" accepted`, volAccess, (a) => sameAccess(a, to));
+  }
+  const memberAccess = access('active', 'member', false);
+  const volIdle = () => vol.goto(baseUrl + '/').then(() =>
+    vol.getByText('Salaam,', { exact: false }).waitFor({ timeout: 45000 }),
+  );
+  await volIdle();
+  await openUsers();
+  await mgr.screenshot({ path: join(shots, '19c-users-controls.png'), animations: 'disabled', timeout: 8000 }).catch(() => {});
+
+  // Role member -> manager: the person's own Home grows the manager entry point.
+  await changeVolunteer({
+    tap: (card) => roleOption(card, 'manager').click(),
+    asks: 'Change role to manager?',
+    from: memberAccess,
+    to: access('active', 'manager', false),
+    shows: (badges) => badges.includes('manager'),
+  });
+  await firstOnScreen(vol.getByText('Activities', { exact: true })).waitFor({ timeout: 30000 });
+  await restoreVolunteer({
+    tap: (card) => roleOption(card, 'member').click(),
+    asks: 'Change role to member?',
+    to: memberAccess,
+  });
+  await eventually(vol, 'the volunteer losing Activities', () => vol.getByText('Activities', { exact: true }).count(), (n) => n === 0, 30000);
+
+  // The Admin switch: the person's Home grows Manage users.
+  await changeVolunteer({
+    tap: (card) => adminSwitch(card).click(),
+    asks: 'Grant admin access?',
+    from: memberAccess,
+    to: access('active', 'member', true),
+    shows: (badges) => badges.includes('admin'),
+  });
+  await firstOnScreen(vol.getByText('Manage users', { exact: true })).waitFor({ timeout: 30000 });
+  await restoreVolunteer({
+    tap: (card) => adminSwitch(card).click(),
+    asks: 'Remove admin?',
+    to: memberAccess,
+  });
+  await eventually(vol, 'the volunteer losing Manage users', () => vol.getByText('Manage users', { exact: true }).count(), (n) => n === 0, 30000);
+
+  // Nobody can demote, un-admin or disable themself: the controls on the
+  // admin's own card are disabled, and pressing them anyway asks nothing.
+  await openUsers();
+  const adminCard = userCard(mgr, 'admin@oursabeel.com');
+  const adminBefore = await storedAccess(adminUid);
+  if (!(await adminSwitch(adminCard).isDisabled())) throw new Error('an admin can press their own Admin switch');
+  if (!(await activeSwitch(adminCard).isDisabled())) throw new Error('an admin can press their own Active switch');
+  // They hold manager, so the Role option they could press is member.
+  if ((await roleOption(adminCard, 'member').locator('xpath=..').getAttribute('aria-disabled')) !== 'true')
+    throw new Error('an admin can press member on their own Role');
+  const selfAsked = await confirmsRaisedBy(mgr, async () => {
+    await roleOption(adminCard, 'member').click({ force: true });
+    await adminSwitch(adminCard).click({ force: true });
+    await activeSwitch(adminCard).click({ force: true });
+  });
+  if (selfAsked.length !== 0) throw new Error('pressing their own access controls asked: ' + selfAsked.join(' | '));
+  if (!sameAccess(await storedAccess(adminUid), adminBefore)) throw new Error('an admin changed their own access');
+
+  console.log('▸ disabling an account: that session shows "Account disabled" with Sign out, live…');
+  await changeVolunteer({
+    tap: (card) => activeSwitch(card).click(),
+    asks: 'Disable account?',
+    from: memberAccess,
+    to: access('disabled', 'member', false),
+    shows: (badges) => badges.includes('disabled'),
+  });
+  await vol.getByText('Account disabled', { exact: true }).waitFor({ timeout: 30000 });
+  await vol.getByText(VOL, { exact: true }).waitFor();
+  await vol.screenshot({ path: join(shots, '19d-account-disabled.png'), animations: 'disabled', timeout: 8000 }).catch(() => {});
+  await expectNoHome(vol, 'a disabled account');
+  // Sign out leaves; signing in again meets the same screen, from the profile alone.
+  await vol.getByText('Sign out', { exact: true }).click();
+  await vol.getByText('Time Tracker', { exact: true }).waitFor({ timeout: 30000 });
+  await devSignIn(vol, VOL);
+  await vol.getByText('Account disabled', { exact: true }).waitFor({ timeout: 45000 });
+  // Re-activated, the same session un-gates by itself, with no rules to accept again.
+  await restoreVolunteer({
+    tap: (card) => activeSwitch(card).click(),
+    asks: 'Re-activate account?',
+    to: memberAccess,
+  });
+  await vol.getByText('Salaam,', { exact: false }).waitFor({ timeout: 45000 });
+  if ((await vol.getByText('Before you continue', { exact: true }).count()) !== 0)
+    throw new Error('the rules came back after a re-activation');
+
+  console.log('▸ the email door: a refused address says so, the one account signs in…');
+  // Made the way production made it: by an administrator, with the Admin SDK
+  // (the sign-up gate refuses every public sign-up); pending until approved on
+  // the Users screen like anyone else.
+  await adminAuth().createUser({
+    email: shared.PASSWORD_ACCOUNT_EMAIL,
+    password: EMULATOR_PASSWORD,
+    emailVerified: true,
+  });
+  await mgr.getByText(shared.PASSWORD_ACCOUNT_EMAIL, { exact: true }).waitFor({ timeout: 30000 });
+  await firstOnScreen(mgr.getByText('Approve', { exact: true })).click();
+  await userCard(mgr, shared.PASSWORD_ACCOUNT_EMAIL).waitFor();
+  const email = await newPage('email');
+  await email.getByText('Sign in with email', { exact: true }).click();
+  const emailField = email.getByPlaceholder('Email', { exact: true });
+  const passwordField = email.getByPlaceholder('Password', { exact: true });
+  const NO_MATCH = 'That email and password do not match an account.';
+  // An address with no password account, then the right address and a wrong password.
+  await emailField.fill('someone.else@oursabeel.com');
+  await passwordField.fill(EMULATOR_PASSWORD);
+  await email.getByText('Sign in', { exact: true }).click();
+  await email.getByText(NO_MATCH, { exact: true }).waitFor({ timeout: 15000 });
+  await emailField.fill(shared.PASSWORD_ACCOUNT_EMAIL);
+  await passwordField.fill('not-the-password');
+  await email.getByText('Sign in', { exact: true }).click();
+  await email.getByText(NO_MATCH, { exact: true }).waitFor({ timeout: 15000 });
+  await email.screenshot({ path: join(shots, '19e-email-refused.png'), animations: 'disabled', timeout: 8000 }).catch(() => {});
+  // The account itself: signed in, past the rules once, and only a member.
+  await passwordField.fill(EMULATOR_PASSWORD);
+  await email.getByText('Sign in', { exact: true }).click();
+  await email.getByText('Before you continue', { exact: true }).waitFor({ timeout: 45000 });
+  await email.getByText('I agree', { exact: true }).click();
+  await email.getByText('Salaam,', { exact: false }).waitFor({ timeout: 45000 });
+  for (const text of ['Manage users', 'Activities', 'Reports'])
+    if ((await email.getByText(text, { exact: true }).count()) !== 0)
+      throw new Error(`the password account sees "${text}"`);
+  await email.getByText('Sign out', { exact: true }).click();
+  await email.getByText('Time Tracker', { exact: true }).waitFor({ timeout: 30000 });
+
+  console.log('▸ the notification nudge: Enable notifications asks from the press, Not now stays gone…');
+  const nudge = await newPage('nudge', { init: askableNotifications });
+  await devSignIn(nudge, VOL);
+  await nudge.getByText('Salaam,', { exact: false }).waitFor({ timeout: 45000 });
+  await nudge.getByText('Notifications are not enabled on this device.', { exact: true }).waitFor();
+  await nudge.screenshot({ path: join(shots, '19f-notification-nudge.png'), animations: 'disabled', timeout: 8000 }).catch(() => {});
+  await firstOnScreen(nudge.getByText('Enable notifications', { exact: true })).click();
+  // Allowed, but the emulators mint no push token: the card says this device
+  // cannot, and offers no second press that would do the same nothing.
+  await nudge.getByText('This device can’t show notifications.', { exact: true }).waitFor({ timeout: 15000 });
+  if ((await nudge.evaluate(() => window.__permissionAsks)) !== 1)
+    throw new Error('Enable notifications did not ask for permission exactly once');
+  if ((await nudge.getByText('Enable notifications', { exact: true }).count()) !== 0)
+    throw new Error('Enable notifications is offered again after it failed');
+  await firstOnScreen(nudge.getByText('Not now', { exact: true })).click();
+  if ((await nudge.getByText('This device can’t show notifications.', { exact: true }).count()) !== 0)
+    throw new Error('the nudge stayed after Not now');
+  // Dismissed for this person on this browser: the stand-in is still unasked
+  // on the reload, so a nudge that came back would be drawn.
+  await nudge.goto(baseUrl + '/');
+  await nudge.getByText('Salaam,', { exact: false }).waitFor({ timeout: 45000 });
+  await nudge.waitForTimeout(2000);
+  if ((await nudge.getByText('Notifications are not enabled on this device.', { exact: true }).count()) !== 0)
+    throw new Error('the nudge came back after Not now');
 
   console.log('▸ a slow account set-up is waited for, never refused…');
   // Every Firestore answer to this page held for 15 s: the profile arrives
@@ -716,10 +1150,15 @@ async function main() {
   await browser.close();
 
   // The set-up checks provoke two on purpose: a held connection (Firestore
-  // says it cannot reach the backend) and Auth's 400 for a deleted account.
+  // says it cannot reach the backend) and Auth's 400 for a deleted account;
+  // the email form's refusals provoke a third.
   const provoked = (e) =>
-    /^(slow|stuck|outsider)$/.test(e.label) &&
-    /Could not reach Cloud Firestore backend|status of 400/.test(e.text);
+    (/^(slow|stuck|outsider)$/.test(e.label) &&
+      /Could not reach Cloud Firestore backend|status of 400/.test(e.text)) ||
+    // The email form's refusals: Auth answers a sign-in it will not make with a 400.
+    (e.label === 'email' &&
+      /status of 400/.test(e.text) &&
+      e.url.startsWith(`http://${EMULATOR_HOSTS.auth}/`));
   // Any page, any time: a request on a Firestore Listen or Write channel whose
   // session the emulator has already closed is answered 400 "Unknown SID", and
   // the SDK reconnects on its own (the same routine churn as the
