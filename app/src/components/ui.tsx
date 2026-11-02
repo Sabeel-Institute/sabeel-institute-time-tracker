@@ -1,4 +1,4 @@
-import { Children, createContext, type ReactNode, useContext, useState } from 'react';
+import { Children, createContext, type ReactNode, useContext, useRef, useState } from 'react';
 import { ActivityIndicator, Linking, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -159,12 +159,19 @@ export function Button({
   block?: boolean;
 }) {
   const [busy, setBusy] = useState(false);
+  // ONE AT A TIME, decided synchronously. `busy` disables the button a render
+  // late, and two taps inside that frame both ran: Save hours saved the same
+  // entry twice. The ref turns the second tap away before anything renders.
+  const running = useRef(false);
   const { isWide } = useLayout();
   const handle = async () => {
+    if (running.current) return;
+    running.current = true;
     setBusy(true);
     try {
       await onPress();
     } finally {
+      running.current = false;
       setBusy(false);
     }
   };

@@ -488,6 +488,10 @@ function Shell({
   }, []);
 
   const [moreOpen, setMoreOpen] = useState(false);
+  // A screen changing under the sheet — the browser's Back, a notification —
+  // takes the sheet with it rather than leaving it over a screen it was not
+  // opened from.
+  useEffect(() => setMoreOpen(false), [stack]);
   const nav = (
     <AppNav
       approver={approver}
