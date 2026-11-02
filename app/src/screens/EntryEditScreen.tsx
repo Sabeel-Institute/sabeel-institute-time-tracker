@@ -52,7 +52,7 @@ export function EntryEditScreen({ entryId, editorUid }: { entryId: string; edito
     loaded && entry.end !== null
       ? editedEntryTimes({ ...entry, end: entry.end }, { dateKey, from, to })
       : null;
-  const activity = activities.find((a) => a.id === activityId) ?? null;
+  const activity = activities?.find((a) => a.id === activityId) ?? null;
   const valid = times !== null && entryTimesValid(times);
   const endKey = times ? dayKeyFor(times.end, entry.timeZone) : null;
 

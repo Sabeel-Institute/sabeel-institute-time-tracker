@@ -131,13 +131,16 @@ export function useEntry(entryId: string | null): TimeEntry | null {
   );
 }
 
-/** Live list of a user's entries in an inclusive dayKey range, newest first. */
+/**
+ * Live list of a user's entries in an inclusive dayKey range, newest first.
+ * undefined = still loading (or the listen failed, which the banner says).
+ */
 export function useEntriesRange(
   uid: string,
   fromKey: string,
   toKey: string,
-): TimeEntry[] {
-  return useLiveQuery(
+): TimeEntry[] | undefined {
+  return useLiveQuery<TimeEntry[] | undefined>(
     () =>
       query(
         collection(db, COLLECTIONS.timeEntries),
@@ -153,7 +156,7 @@ export function useEntriesRange(
         list.sort((a, b) => b.dayKey.localeCompare(a.dayKey) || b.start - a.start);
         return list;
       },
-      empty: [],
+      empty: undefined,
     },
   );
 }

@@ -190,11 +190,15 @@ export function useMyTimesheetsRange(
  * Live approval queue: sheets submitted to me — or every submitted sheet when
  * `all` (admin view). Oldest submissions first. `enabled: false` subscribes to
  * nothing: a member has no queue, and the shell asks for every account.
+ * undefined = still loading, failed, or not subscribed.
  */
-export function useApprovalQueue(approverUid: string, opts?: { all?: boolean; enabled?: boolean }): Timesheet[] {
+export function useApprovalQueue(
+  approverUid: string,
+  opts?: { all?: boolean; enabled?: boolean },
+): Timesheet[] | undefined {
   const all = opts?.all ?? false;
   const enabled = opts?.enabled ?? true;
-  return useLiveQuery(
+  return useLiveQuery<Timesheet[] | undefined>(
     () => {
       if (!enabled) return null;
       const base = collection(db, COLLECTIONS.timesheets);
@@ -210,14 +214,17 @@ export function useApprovalQueue(approverUid: string, opts?: { all?: boolean; en
         list.sort((a, b) => a.submittedAt - b.submittedAt);
         return list;
       },
-      empty: [],
+      empty: undefined,
     },
   );
 }
 
-/** Live list of my rejected timesheets, oldest first (the resolution backlog). */
-export function useRejectedSheets(uid: string): Timesheet[] {
-  return useLiveQuery(
+/**
+ * Live list of my rejected timesheets, oldest first (the resolution backlog).
+ * undefined = still loading (or the listen failed, which the banner says).
+ */
+export function useRejectedSheets(uid: string): Timesheet[] | undefined {
+  return useLiveQuery<Timesheet[] | undefined>(
     () =>
       query(
         collection(db, COLLECTIONS.timesheets),
@@ -232,7 +239,7 @@ export function useRejectedSheets(uid: string): Timesheet[] {
         list.sort((a, b) => a.periodKey.localeCompare(b.periodKey));
         return list;
       },
-      empty: [],
+      empty: undefined,
     },
   );
 }

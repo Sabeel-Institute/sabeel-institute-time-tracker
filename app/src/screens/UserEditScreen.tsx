@@ -35,12 +35,12 @@ const STATUS = {
  */
 export function UserEditScreen({ uid, selfUid, claims }: { uid: string; selfUid: string; claims: TokenClaims }) {
   const rows = useUsers();
-  const u = rows.find((r) => r.uid === uid);
-  const approvers = useMemo(() => approverChoices(rows), [rows]);
+  const u = rows?.find((r) => r.uid === uid);
+  const approvers = useMemo(() => approverChoices(rows ?? []), [rows]);
   const [error, setError] = useState<string | null>(null);
   const isAdmin = claims.admin === true;
 
-  if (!u) return <Screen width="read">{rows.length ? <Empty>This account no longer exists.</Empty> : null}</Screen>;
+  if (!u) return <Screen width="read">{rows ? <Empty>This account no longer exists.</Empty> : null}</Screen>;
 
   const change = async (input: Parameters<typeof setUserAccess>[0]) => {
     setError(null);

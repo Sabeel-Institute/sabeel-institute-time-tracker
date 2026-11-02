@@ -15,7 +15,7 @@ import { useEntriesRange } from '../entries';
 import { approveTimesheet, rejectTimesheet, reopenTimesheet, useTimesheet } from '../timesheets';
 import { DayEntries, WeekStepper, openingDay, stepPeriod } from '../components/WeekView';
 import { Sheet } from '../components/Sheet';
-import { Button, ErrorText, Field, Notice, Screen, StatusChip, sheetStatus } from '../components/ui';
+import { Button, ErrorText, Field, Notice, Screen, Spinner, StatusChip, sheetStatus } from '../components/ui';
 import { getTheme, spacing } from '../theme';
 
 const t = getTheme();
@@ -47,7 +47,10 @@ export function TimesheetReviewScreen({
   const period = periodRangeFor(anchor);
   const sheet = useTimesheet(uid, period.fromKey);
   const status = sheet === undefined ? undefined : (sheet?.status ?? 'draft');
-  const entries = useEntriesRange(uid, period.fromKey, period.toKey);
+  // undefined until the week's entries arrive: until then no day says it has
+  // no hours, and the week cannot be approved on an empty list.
+  const loaded = useEntriesRange(uid, period.fromKey, period.toKey);
+  const entries = useMemo(() => loaded ?? [], [loaded]);
   const [rejecting, setRejecting] = useState(false);
   const [reason, setReason] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -96,7 +99,7 @@ export function TimesheetReviewScreen({
         shown ? (
           <View style={styles.lede}>
             <StatusChip label={shown.label} tone={shown.tone} />
-            <Text style={styles.ledeText}>· {formatDuration(total)} logged</Text>
+            {loaded ? <Text style={styles.ledeText}>· {formatDuration(total)} logged</Text> : null}
           </View>
         ) : undefined
       }
@@ -120,7 +123,11 @@ export function TimesheetReviewScreen({
           <Text style={styles.hint}>
             Check the days below, then approve the week, or reject it with a reason {displayName} will see.
           </Text>
-          <Button label="Approve timesheet" onPress={() => decide(() => approveTimesheet(sheet, reviewerUid, entries))} />
+          <Button
+            label="Approve timesheet"
+            onPress={() => decide(() => approveTimesheet(sheet, reviewerUid, entries))}
+            disabled={!loaded}
+          />
           <Button
             label="Reject timesheet…"
             kind="secondary"
@@ -153,7 +160,8 @@ export function TimesheetReviewScreen({
       {/* Under the buttons it answers, not below the whole week. */}
       <ErrorText error={error} />
 
-      {days.map((dayKey) => (
+      {!loaded ? <Spinner label="Loading this week…" /> : null}
+      {(loaded ? days : []).map((dayKey) => (
         <DayEntries
           key={dayKey}
           dayKey={dayKey}

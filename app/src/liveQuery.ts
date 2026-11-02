@@ -77,7 +77,11 @@ interface LiveOptions<S, T> {
   /** Names the listener in the error banner and in Sentry. */
   label: string;
   map: (snap: S) => T;
-  /** The value while loading, on error, and when `make` returns null. */
+  /**
+   * The value while loading, on error, and when `make` returns null. A list a
+   * screen may call empty takes `undefined` here, never `[]`: "none" shown
+   * while loading told people there were no activities.
+   */
   empty: T;
 }
 

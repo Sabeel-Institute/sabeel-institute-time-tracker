@@ -78,13 +78,13 @@ export function HomeScreen({ uid, profile }: { uid: string; profile: UserDoc }) 
   // This week's timesheet: clocking in is closed once it is submitted/approved.
   const week = periodRangeFor(todayKey);
   const weekEntries = useEntriesRange(uid, week.fromKey, week.toKey);
-  const weekMinutes = weekEntries.reduce((sum, e) => sum + (e.durationMinutes ?? 0), 0);
+  const weekMinutes = (weekEntries ?? []).reduce((sum, e) => sum + (e.durationMinutes ?? 0), 0);
   const sheet = useTimesheet(uid, periodKeyFor(todayKey));
   const weekStatus = sheetStatus(sheet?.status ?? 'draft');
   const weekLocked = sheet != null && (sheet.status === 'submitted' || sheet.status === 'approved');
-  const rejectedCount = useRejectedSheets(uid).length;
+  const rejectedCount = useRejectedSheets(uid)?.length ?? 0;
 
-  const selected = activities.find((a) => a.id === selectedId) ?? null;
+  const selected = activities?.find((a) => a.id === selectedId) ?? null;
 
   const lastClockPress = useRef(0);
   const clockSettled = () => {

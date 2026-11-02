@@ -52,7 +52,7 @@ export function ManualEntryScreen({
   const [note, setNote] = useState('');
   const [error, setError] = useState<string | null>(null);
 
-  const activity = activities.find((a) => a.id === activityId) ?? null;
+  const activity = activities?.find((a) => a.id === activityId) ?? null;
   // Read in the timezone the WORK happened in, which is not the writer's when a
   // manager logs hours on someone else's behalf.
   const start = formInstant(dateKey, from, tz);

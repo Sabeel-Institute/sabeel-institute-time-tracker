@@ -622,6 +622,19 @@ export function Empty({ children }: { children: ReactNode }) {
 }
 
 /**
+ * Where a list stands until its first answer: never the empty message, which
+ * would tell people there is nothing when nobody knows yet.
+ */
+export function Spinner({ label }: { label: string }) {
+  return (
+    <View style={styles.spinner}>
+      <ActivityIndicator color={t.accent.base} />
+      <Text style={styles.spinnerLabel}>{label}</Text>
+    </View>
+  );
+}
+
+/**
  * A low-emphasis link out of the app (the privacy policy). Underlined accent
  * text with a 44pt touch target, the shape of PushNudge's "Not now". On the web
  * Linking opens a new tab; on a phone, the browser.
@@ -825,6 +838,8 @@ const styles = StyleSheet.create({
   noticeLink: { flexDirection: 'row', alignItems: 'center', gap: spacing(2) },
   noticeText: { flex: 1, fontSize: 14 },
   empty: { fontSize: 14, color: t.text.secondary, paddingVertical: spacing(2) },
+  spinner: { flexDirection: 'row', alignItems: 'center', gap: spacing(1), paddingVertical: spacing(2) },
+  spinnerLabel: { fontSize: 14, color: t.text.secondary },
   pills: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing(2) },
   pill: {
     minHeight: 44,
