@@ -126,10 +126,12 @@ export function Button({
   /**
    * Weight follows consequence. `primary` (raspberry) is the screen's one main
    * action; `secondary` (sage) an ordinary one; `quiet` (outlined) a way out or
-   * an occasional action that should not compete; `danger` deletes; `inverse`
+   * an occasional action that should not compete; `danger` deletes something
+   * that matters in one press; `remove` is the quiet, outlined form of it for a
+   * delete that asks first (an entry, an archived activity); `inverse`
    * is the primary drawn ON a raspberry card (ivory, with raspberry text).
    */
-  kind?: 'primary' | 'secondary' | 'quiet' | 'danger' | 'inverse';
+  kind?: 'primary' | 'secondary' | 'quiet' | 'danger' | 'remove' | 'inverse';
   disabled?: boolean;
   /**
    * Force full-width in the container even on a wide screen. For buttons inside
@@ -164,6 +166,7 @@ export function Button({
         kind === 'secondary' && styles.btnSecondary,
         kind === 'quiet' && styles.btnQuiet,
         kind === 'danger' && styles.btnDanger,
+        kind === 'remove' && styles.btnQuiet,
         kind === 'inverse' && styles.btnInverse,
         pressed && !off && styles.btnPressed,
         // Neutral rather than a faded brand fill: a washed-out raspberry block
@@ -189,6 +192,7 @@ export function Button({
             kind === 'secondary' && styles.btnLabelSecondary,
             kind === 'quiet' && styles.btnLabelQuiet,
             kind === 'inverse' && styles.btnLabelInverse,
+            kind === 'remove' && styles.btnLabelRemove,
             disabled && styles.btnLabelDisabled,
           ]}
           numberOfLines={2}
@@ -320,7 +324,7 @@ export function Row({
   );
   if (!onPress) {
     return (
-      <View testID={testID} style={[styles.row, warn ? styles.rowWarnFill : null]}>
+      <View testID={testID} style={[styles.row, actions ? styles.rowWithActions : null, warn ? styles.rowWarnFill : null]}>
         {body}
       </View>
     );
@@ -702,6 +706,7 @@ const styles = StyleSheet.create({
   btnLabelSecondary: { color: t.text.primary },
   btnLabelQuiet: { color: t.text.secondary },
   btnLabelInverse: { color: t.accent.base },
+  btnLabelRemove: { color: t.text.danger },
   // Secondary, not muted: a disabled primary is what a person reads to find out
   // what the form is FOR, so its label still has to be readable.
   btnLabelDisabled: { color: t.text.secondary },
@@ -763,12 +768,15 @@ const styles = StyleSheet.create({
   },
   rowPressed: { backgroundColor: t.bg.inset },
   rowWarnFill: { backgroundColor: t.bg.dangerSoft },
-  rowText: { flex: 1, minWidth: 0, gap: 2 },
+  rowText: { flexGrow: 1, flexShrink: 1, flexBasis: 160, minWidth: 0, gap: 2 },
   rowLabel: { fontSize: 16, fontWeight: '600', color: t.text.primary },
   rowDetail: { fontSize: 13, color: t.text.secondary },
   rowWarn: { fontSize: 13, fontWeight: '600', color: t.text.danger },
   rowValue: { fontSize: 15, fontWeight: '600', color: t.text.primary },
   rowActions: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'flex-end', gap: spacing(2), flexShrink: 0 },
+  // A row with buttons WRAPS rather than squeezes: a long name keeps a readable
+  // width and the buttons move under it, still at the right-hand end.
+  rowWithActions: { flexWrap: 'wrap' },
   chip: { flexDirection: 'row', alignItems: 'center', gap: spacing(1.5) },
   chipDot: { width: 8, height: 8, borderRadius: 4 },
   chipText: { fontSize: 13, color: t.text.secondary },
@@ -778,7 +786,7 @@ const styles = StyleSheet.create({
   empty: { fontSize: 14, color: t.text.secondary, paddingVertical: spacing(2) },
   pills: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing(2) },
   pill: {
-    minHeight: 40,
+    minHeight: 44,
     justifyContent: 'center',
     paddingHorizontal: spacing(4),
     borderRadius: 999,

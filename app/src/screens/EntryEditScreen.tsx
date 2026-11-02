@@ -125,7 +125,7 @@ export function EntryEditScreen({ entryId, editorUid }: { entryId: string; edito
       {/* Apart from Save, so a destructive button is never the one you hit by
           habit; and it asks once. */}
       <View style={styles.dangerZone}>
-        <Button label="Delete entry" kind="danger" onPress={confirmRemove} />
+        <Button label="Delete entry" kind="remove" onPress={confirmRemove} />
       </View>
     </Screen>
   );
