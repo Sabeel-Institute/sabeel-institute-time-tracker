@@ -542,9 +542,12 @@ contractions, "you", whole sentences, never a label read out. A reworded line
 is rendered again; `record` refuses a WAV of other words. The narration model
 and the speech check are heavy (near 12 GB and 3 GB), so neither runs beside
 an emulator stack or the AVD; recording runs in real time against the
-emulators. Record in working hours: the clock card shows the real time of day,
-so a film made at night says "Since 01:17". The same holds for the manual's
-`clocked-in` screenshot.
+emulators. The clock card shows the real time of day, so outside working
+hours run `record` and `manual:shots` under a `TZ` where it is daytime (`TZ=UTC
+npx sabeel-ci films record …`): Node, which writes the guide world, and
+Chromium both take it, so every time is real and every entry agrees, and the
+card says "Since 11:33" rather than "Since 01:17". Pick a zone whose date is
+still today's, or the world's weeks move.
 
 **A film follows the screen.** A change to a screen a film shows changes its
 script in the same pull request, and the films are recorded and published
