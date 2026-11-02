@@ -44,6 +44,7 @@ import { NeedsAttentionScreen } from './src/screens/NeedsAttentionScreen';
 import { NotificationSettingsScreen } from './src/screens/NotificationSettingsScreen';
 import { ReportProblemScreen } from './src/screens/ReportProblemScreen';
 import { RulesScreen } from './src/screens/RulesScreen';
+import { HelpFilmScreen, HelpScreen } from './src/screens/HelpScreen';
 import { navigationRef, tabState, type RootStackParamList } from './src/nav';
 import { AppNav, activeTab } from './src/components/AppNav';
 import { MoreSheet } from './src/components/MoreSheet';
@@ -98,6 +99,8 @@ const MEMBER_PATHS = {
   NeedsAttention: 'needs-attention',
   NotificationSettings: 'notifications',
   ReportProblem: 'report-a-problem',
+  Help: 'help',
+  HelpFilm: 'help/:id',
 } as const;
 const APPROVER_PATHS = {
   ...MEMBER_PATHS,
@@ -308,6 +311,12 @@ export default function App() {
                 editorUid={user.uid}
               />
             )}
+          </Stack.Screen>
+          <Stack.Screen name="Help" options={screenOptions('Help', 'Help')}>
+            {() => <HelpScreen />}
+          </Stack.Screen>
+          <Stack.Screen name="HelpFilm" options={screenOptions('HelpFilm', 'Help')}>
+            {({ route }) => <HelpFilmScreen id={(route.params as { id: string }).id} />}
           </Stack.Screen>
           {isApprover ? (
             <Stack.Screen

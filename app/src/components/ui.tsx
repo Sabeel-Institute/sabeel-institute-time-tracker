@@ -33,6 +33,7 @@ export function Screen({
   subtitle,
   actions,
   width = 'content',
+  fill = false,
 }: {
   children: ReactNode;
   /** The page's name. A pushed screen's header names it already, so leave it out there. */
@@ -51,6 +52,12 @@ export function Screen({
    *  - `full`    no cap.
    */
   width?: 'read' | 'content' | 'list' | 'full';
+  /**
+   * Held still: no scrolling, and the content fills the screen, so a child with
+   * `flex: 1` is exactly the room left under the heading. For a screen that
+   * sizes one thing to the window: a help film has to fit, controls and all.
+   */
+  fill?: boolean;
 }) {
   // Live-data failures surface on every screen — a silently broken listener
   // must never look like "there's just no data" (see the 2026-07-16 postmortem).
@@ -77,38 +84,49 @@ export function Screen({
   // bottom input like the reject reason stayed hidden behind the keyboard.
   // bottomOffset keeps the focused field clear of the keyboard. The bottom inset
   // is the navigation bar's to pay, not the content's.
+  const padding = [
+    styles.body,
+    isWide ? styles.bodyWide : null,
+    ownsTopInset ? { paddingTop: insets.top + spacing(isWide ? 8 : 6) } : null,
+  ];
+  const column = (
+    <View style={[styles.bodyColumn, capStyle, fill ? styles.bodyColumnFill : null]}>
+      {title || subtitle || actions ? (
+        <View style={styles.headRow}>
+          <View style={styles.headText}>
+            {title ? (
+              <Text style={styles.h1} role="heading" aria-level={1}>
+                {title}
+              </Text>
+            ) : null}
+            {typeof subtitle === 'string' ? <Text style={styles.lede}>{subtitle}</Text> : (subtitle ?? null)}
+          </View>
+          {actions ? <View style={styles.headActions}>{actions}</View> : null}
+        </View>
+      ) : null}
+      {listenerError ? (
+        <View style={styles.listenerError} role="alert">
+          <Text style={styles.listenerErrorText}>{listenerError}</Text>
+        </View>
+      ) : null}
+      {children}
+    </View>
+  );
+  if (fill) {
+    return (
+      <View style={styles.screen}>
+        <View style={[padding, styles.bodyFill]}>{column}</View>
+      </View>
+    );
+  }
   return (
     <View style={styles.screen}>
       <KeyboardAwareScrollView
-        contentContainerStyle={[
-          styles.body,
-          isWide ? styles.bodyWide : null,
-          ownsTopInset ? { paddingTop: insets.top + spacing(isWide ? 8 : 6) } : null,
-        ]}
+        contentContainerStyle={padding}
         keyboardShouldPersistTaps="handled"
         bottomOffset={spacing(6)}
       >
-        <View style={[styles.bodyColumn, capStyle]}>
-          {title || subtitle || actions ? (
-            <View style={styles.headRow}>
-              <View style={styles.headText}>
-                {title ? (
-                  <Text style={styles.h1} role="heading" aria-level={1}>
-                    {title}
-                  </Text>
-                ) : null}
-                {typeof subtitle === 'string' ? <Text style={styles.lede}>{subtitle}</Text> : (subtitle ?? null)}
-              </View>
-              {actions ? <View style={styles.headActions}>{actions}</View> : null}
-            </View>
-          ) : null}
-          {listenerError ? (
-            <View style={styles.listenerError} role="alert">
-              <Text style={styles.listenerErrorText}>{listenerError}</Text>
-            </View>
-          ) : null}
-          {children}
-        </View>
+        {column}
       </KeyboardAwareScrollView>
     </View>
   );
@@ -671,6 +689,10 @@ const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: t.bg.canvas },
   body: { padding: spacing(5), paddingBottom: spacing(10) },
   bodyWide: { paddingHorizontal: spacing(8), paddingTop: spacing(7) },
+  // Held still, the content is the screen's height, and its foot needs only a
+  // margin: the room a scrolling page leaves at its end is not wanted.
+  bodyFill: { flex: 1, paddingBottom: spacing(5) },
+  bodyColumnFill: { flex: 1 },
   // Ivory chrome: the title sits on the canvas, never on a raspberry bar
   // (brand chrome-vs-content rule).
   headRow: {

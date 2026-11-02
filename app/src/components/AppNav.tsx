@@ -38,6 +38,8 @@ const MORE_ROUTES: ReadonlySet<RouteName> = new Set<RouteName>([
   'UserEdit',
   'NotificationSettings',
   'ReportProblem',
+  'Help',
+  'HelpFilm',
 ]);
 
 /**

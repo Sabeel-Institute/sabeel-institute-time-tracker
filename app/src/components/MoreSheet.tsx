@@ -65,6 +65,12 @@ export function MoreSheet({
         testID="more-notifications"
         onPress={() => onNavigate('NotificationSettings')}
       />
+      <SheetOption
+        label="Help"
+        detail="Short films of how to use the app"
+        testID="more-help"
+        onPress={() => onNavigate('Help')}
+      />
       {/* Where the institute's rules say it is: the one way to tell the
           administrators about something or someone in the app. */}
       <SheetOption

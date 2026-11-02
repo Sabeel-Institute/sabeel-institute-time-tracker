@@ -867,7 +867,7 @@ const gridLayout = (page) =>
 
 // ---- The tour ---------------------------------------------------------------
 const ADMIN_SCREENS = 21;
-const MEMBER_SCREENS = 4;
+const MEMBER_SCREENS = 6;
 const MANAGER_SCREENS = 3;
 const PENDING_SCREENS = 1;
 const UNACCEPTED_SCREENS = 1;
@@ -1272,6 +1272,36 @@ async function tourMember(tag, width) {
     await tap(page, periodLabel(DECIDED));
     await vis(page.getByText('this week is closed', { exact: false })).waitFor({ timeout: 20000 });
   });
+
+  /** Help: the list of films, then one film, which must fit the screen WHOLE. */
+  await visit('help', async () => {
+    await more(page, 'Help');
+    await vis(page.getByText('Clocking in and out', { exact: true })).waitFor({ timeout: 20000 });
+  });
+  await visit('help-film', async () => {
+    await vis(page.getByTestId('help-film-clocking')).click();
+    await vis(page.getByRole('tab', { name: 'On a phone' })).waitFor({ timeout: 20000 });
+    await page.waitForTimeout(1200);
+  });
+  {
+    // A standing film drawn at the column's width is taller than a phone: the
+    // frame is fitted to the room under the heading, so all of it is on screen.
+    const frame = await page.evaluate(() => {
+      const e = [...document.querySelectorAll('[data-testid="help-film"]')].find((x) => x.getBoundingClientRect().width > 0);
+      if (!e) return null;
+      const r = e.getBoundingClientRect();
+      return { bottom: Math.round(r.bottom), right: Math.round(r.right), h: innerHeight, w: innerWidth };
+    });
+    const unplayable = await page.getByText('This film could not be played', { exact: false }).filter({ visible: true }).count();
+    check(
+      `${tag} / the help film fits the screen whole, or says it cannot play`,
+      frame ? frame.bottom <= frame.h && frame.right <= frame.w : unplayable > 0,
+      JSON.stringify({ frame, unplayable }),
+    );
+  }
+  await page.goBack();
+  await page.goBack();
+  await page.waitForTimeout(600);
 
   /**
    * THE BROWSER'S BACK walks the app's screens rather than leaving the site:

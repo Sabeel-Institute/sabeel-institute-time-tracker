@@ -3,6 +3,8 @@ import { createNavigationContainerRef, type NavigationState } from '@react-navig
 export type RootStackParamList = {
   Home: undefined;
   Users: undefined;
+  Help: undefined;
+  HelpFilm: { id: string };
   /** One person's account: approver, role and access. */
   UserEdit: { uid: string };
   Activities: undefined;
