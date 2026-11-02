@@ -13,7 +13,7 @@ import {
   timeOfDayFor,
   type UserDoc,
 } from '@sabeel/shared';
-import type { RootStackParamList } from '../nav';
+import { tabState, type RootStackParamList } from '../nav';
 import { useActivities } from '../activities';
 import {
   clockIn,
@@ -154,7 +154,7 @@ export function HomeScreen({ uid, profile }: { uid: string; profile: UserDoc }) 
           detail={<StatusChip label={weekStatus.label} tone={weekStatus.tone} />}
           value={formatDuration(weekMinutes)}
           accessibilityLabel={`This week, ${weekStatus.label}, ${formatDuration(weekMinutes)}. Open the timesheet.`}
-          onPress={() => nav.reset({ index: 0, routes: [{ name: 'Timesheet' }] })}
+          onPress={() => nav.reset(tabState('Timesheet'))}
         />
       </RowList>
     </Screen>

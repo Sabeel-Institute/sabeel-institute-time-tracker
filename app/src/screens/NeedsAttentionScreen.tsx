@@ -3,7 +3,7 @@ import { StyleSheet, Text } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { dayKeyFor, dayLabel, deviceTimeZone, formatDuration, periodLabel } from '@sabeel/shared';
-import type { RootStackParamList } from '../nav';
+import { tabState, type RootStackParamList } from '../nav';
 import { useRejectedSheets } from '../timesheets';
 import { useApproverChoices } from '../users';
 import { Empty, Row, RowList, Screen } from '../components/ui';
@@ -56,9 +56,7 @@ export function NeedsAttentionScreen({ uid }: { uid: string }) {
                 }
                 value={formatDuration(ts.totalMinutes)}
                 accessibilityLabel={`Fix the timesheet for ${periodLabel({ fromKey: ts.periodKey, toKey: ts.toKey })}`}
-                onPress={() =>
-                  nav.reset({ index: 0, routes: [{ name: 'Timesheet', params: { initialPeriodKey: ts.periodKey } }] })
-                }
+                onPress={() => nav.reset(tabState('Timesheet', { initialPeriodKey: ts.periodKey }))}
               />
             ))}
           </RowList>

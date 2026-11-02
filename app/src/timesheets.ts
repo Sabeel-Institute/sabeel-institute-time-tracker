@@ -130,6 +130,33 @@ export function useTimesheet(uid: string, periodKey: string): Timesheet | null |
   );
 }
 
+/** Live list of a user's timesheets whose periodKey falls in an inclusive range. */
+export function useMyTimesheetsRange(
+  uid: string,
+  fromKey: string,
+  toKey: string,
+): Timesheet[] {
+  return useLiveQuery(
+    () =>
+      query(
+        collection(db, COLLECTIONS.timesheets),
+        where('uid', '==', uid),
+        where('periodKey', '>=', fromKey),
+        where('periodKey', '<=', toKey),
+      ),
+    [uid, fromKey, toKey],
+    {
+      label: 'useMyTimesheetsRange',
+      map: (snap) => {
+        const list = snap.docs.map((d) => ({ id: d.id, ...(d.data() as TimesheetDoc) }));
+        list.sort((a, b) => a.periodKey.localeCompare(b.periodKey));
+        return list;
+      },
+      empty: [],
+    },
+  );
+}
+
 /**
  * Live approval queue: sheets submitted to me — or every submitted sheet when
  * `all` (admin view). Oldest submissions first.

@@ -3,7 +3,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Icon, type IconName } from '../icons';
 import { getTheme, spacing } from '../theme';
 import { RAIL_WIDTH } from '../theme/layout';
-import type { RootStackParamList } from '../nav';
+import type { RootStackParamList, TabRoute } from '../nav';
 
 const t = getTheme();
 type RouteName = keyof RootStackParamList;
@@ -13,7 +13,7 @@ interface Tab {
   label: string;
   icon: IconName;
   /** The tab's own screen: a tab press resets the stack to it. */
-  route: RouteName;
+  route: TabRoute;
 }
 
 /**
@@ -97,7 +97,7 @@ export function AppNav({
   waiting: number;
   /** Accounts waiting for approval, for an admin: a badge on More. */
   pendingAccounts: number;
-  onTab: (route: RouteName) => void;
+  onTab: (route: TabRoute) => void;
   onOpenMore: () => void;
 }) {
   const insets = useSafeAreaInsets();

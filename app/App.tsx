@@ -13,7 +13,7 @@ import { COLLECTIONS, deviceTimeZone, hasAcceptedRules } from '@sabeel/shared';
 import { db } from './src/firebase';
 import { registerPush, useNotifTaps } from './src/notify';
 import { setNotifRoutingSession, flushNotifRoute } from './src/notifRouting';
-import { NavigationContainer } from '@react-navigation/native';
+import { NavigationContainer, type LinkingOptions } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { KeyboardProvider } from 'react-native-keyboard-controller';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
@@ -44,7 +44,7 @@ import { NeedsAttentionScreen } from './src/screens/NeedsAttentionScreen';
 import { NotificationSettingsScreen } from './src/screens/NotificationSettingsScreen';
 import { ReportProblemScreen } from './src/screens/ReportProblemScreen';
 import { RulesScreen } from './src/screens/RulesScreen';
-import { navigationRef, type RootStackParamList } from './src/nav';
+import { navigationRef, tabState, type RootStackParamList } from './src/nav';
 import { AppNav, activeTab } from './src/components/AppNav';
 import { MoreSheet } from './src/components/MoreSheet';
 import { ScreenOwnsTopInset } from './src/components/ui';
@@ -74,6 +74,41 @@ const HEADERLESS = new Set<RouteName>(['Home', 'Timesheet', 'Approvals', 'Report
 function screenOptions(name: RouteName, title: string) {
   return { title, headerShown: !HEADERLESS.has(name) } as const;
 }
+
+/**
+ * ADDRESSES, ON THE WEB, so the browser's Back and Forward walk the screens
+ * rather than leaving the site, and a reload stays where it was. Hosting answers
+ * every path with the app. Params a path does not name ride in the query.
+ *
+ * Per role, because a manager's screens are not in a member's navigator: a path
+ * the navigator has no screen for falls back to Today instead of naming one
+ * that does not exist. Native gets none — Android's back button is the stack's
+ * own, and the app opens no links.
+ */
+const MEMBER_PATHS = {
+  Home: '',
+  Timesheet: 'timesheet',
+  ManualEntry: 'add-hours',
+  EntryEdit: 'entry/:entryId',
+  NeedsAttention: 'needs-attention',
+  NotificationSettings: 'notifications',
+  ReportProblem: 'report-a-problem',
+} as const;
+const APPROVER_PATHS = {
+  ...MEMBER_PATHS,
+  Approvals: 'approvals',
+  TimesheetReview: 'approvals/review',
+  Reports: 'reports',
+  PersonDetail: 'reports/person',
+  Activities: 'activities',
+  Users: 'people',
+  UserEdit: 'people/:uid',
+} as const;
+const linkingFor = (screens: Record<string, string>): LinkingOptions<RootStackParamList> | undefined =>
+  Platform.OS === 'web' ? { prefixes: [], config: { screens } } : undefined;
+// Built once, not per render: the container treats `linking` as an input.
+const MEMBER_LINKING = linkingFor(MEMBER_PATHS);
+const APPROVER_LINKING = linkingFor(APPROVER_PATHS);
 
 // Chrome is ivory with a dark title, deliberately not a raspberry app bar.
 const navTheme = {
@@ -181,7 +216,7 @@ export default function App() {
     const { profile, claims, user } = session;
     content = (
       <Shell uid={user.uid} approver={isApprover} admin={claims.admin === true}>
-        <Navigator>
+        <Navigator linking={isApprover ? APPROVER_LINKING : MEMBER_LINKING}>
         <Stack.Navigator
           screenOptions={{
             headerTintColor: t.text.primary,
@@ -362,12 +397,19 @@ const NavStateContext = createContext<() => void>(() => {});
  * The container, split out only so it can read the Shell's callback out of
  * context — a provider cannot consume its own value.
  */
-function Navigator({ children }: { children: ReactNode }) {
+function Navigator({
+  linking,
+  children,
+}: {
+  linking: LinkingOptions<RootStackParamList> | undefined;
+  children: ReactNode;
+}) {
   const onStateChange = useContext(NavStateContext);
   return (
     <NavigationContainer
       ref={navigationRef}
       theme={navTheme}
+      linking={linking}
       onReady={() => {
         onStateChange();
         flushNotifRoute();
@@ -387,9 +429,11 @@ function Navigator({ children }: { children: ReactNode }) {
  * LMS: a tab navigator draws its bar inside each screen, so it can never become
  * a left column, and the rail has to be a SIBLING of the whole stack.
  *
- * TABS RESET, MORE ITEMS PUSH. A tab is a root: switching sections replaces the
- * stack, or Back from Reports would walk through every tab visited before it. A
- * More destination is somewhere you go and come back from, so it is pushed.
+ * TABS RESET, MORE ITEMS PUSH. Switching tabs replaces the stack, or Back from
+ * Reports would walk through every tab visited before it — but onto Today, as a
+ * phone's tabs do: Back from any tab returns to Today, and only Back from Today
+ * leaves. A More destination is somewhere you go and come back from, so it is
+ * pushed.
  */
 function Shell({
   uid,
@@ -423,7 +467,7 @@ function Shell({
       waiting={approver ? waiting : 0}
       pendingAccounts={pendingAccounts}
       onTab={(name) => {
-        if (navigationRef.isReady()) navigationRef.reset({ index: 0, routes: [{ name }] });
+        if (navigationRef.isReady()) navigationRef.reset(tabState(name));
       }}
       onOpenMore={() => setMoreOpen(true)}
     />

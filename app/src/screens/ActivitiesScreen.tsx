@@ -69,7 +69,7 @@ export function ActivitiesScreen({ selfUid, claims }: { selfUid: string; claims:
         ) : (
           <>
             <Button label="Restore" kind="secondary" onPress={() => flip(a.id, 'active')} />
-            {claims.admin === true ? <Button label="Delete" kind="danger" onPress={() => remove(a)} /> : null}
+            {claims.admin === true ? <Button label="Delete" kind="remove" onPress={() => remove(a)} /> : null}
           </>
         )
       }
@@ -110,7 +110,7 @@ const styles = StyleSheet.create({
   add: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: spacing(2) },
   input: {
     flexGrow: 1,
-    flexBasis: 200,
+    flexBasis: 160,
     backgroundColor: t.bg.inset,
     borderRadius: 8,
     borderWidth: 1,
