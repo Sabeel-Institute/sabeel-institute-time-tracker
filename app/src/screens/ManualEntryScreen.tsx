@@ -22,12 +22,15 @@ export function ManualEntryScreen({
   uid,
   forUid,
   forName,
+  dayKey,
 }: {
   /** The signed-in user (the writer). */
   uid: string;
   /** When set, hours are logged on this user's behalf (manager/approver flow). */
   forUid?: string;
   forName?: string;
+  /** The day to open on; today when absent. */
+  dayKey?: string;
 }) {
   const nav = useNavigation();
   const activities = useActivities({ includeArchived: false });
@@ -42,7 +45,7 @@ export function ManualEntryScreen({
   const todayKey = dayKeyFor(Date.now(), tz);
 
   const [activityId, setActivityId] = useState<string | null>(null);
-  const [dateKey, setDateKey] = useState(todayKey);
+  const [dateKey, setDateKey] = useState(dayKey ?? todayKey);
   const [from, setFrom] = useState('09:00');
   const [to, setTo] = useState('17:00');
   const [note, setNote] = useState('');

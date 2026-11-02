@@ -259,8 +259,8 @@ export default function App() {
             options={screenOptions('ManualEntry', 'Add hours')}
           >
             {({ route }) => {
-              const p = (route.params ?? {}) as { forUid?: string; forName?: string };
-              return <ManualEntryScreen uid={user.uid} forUid={p.forUid} forName={p.forName} />;
+              const p = (route.params ?? {}) as { forUid?: string; forName?: string; dayKey?: string };
+              return <ManualEntryScreen uid={user.uid} forUid={p.forUid} forName={p.forName} dayKey={p.dayKey} />;
             }}
           </Stack.Screen>
           <Stack.Screen

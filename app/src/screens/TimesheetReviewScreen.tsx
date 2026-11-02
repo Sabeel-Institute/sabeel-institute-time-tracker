@@ -13,7 +13,7 @@ import {
 import type { RootStackParamList } from '../nav';
 import { useEntriesRange } from '../entries';
 import { approveTimesheet, rejectTimesheet, reopenTimesheet, useTimesheet } from '../timesheets';
-import { DayEntries, WeekStepper, stepPeriod } from '../components/WeekView';
+import { DayEntries, WeekStepper, dayIn, stepPeriod } from '../components/WeekView';
 import { Sheet } from '../components/Sheet';
 import { Button, ErrorText, Field, Notice, Screen, StatusChip, sheetStatus } from '../components/ui';
 import { getTheme, spacing } from '../theme';
@@ -147,7 +147,9 @@ export function TimesheetReviewScreen({
         <Button
           label={`Add hours for ${displayName}`}
           kind="quiet"
-          onPress={() => nav.navigate('ManualEntry', { forUid: uid, forName: displayName })}
+          onPress={() =>
+            nav.navigate('ManualEntry', { forUid: uid, forName: displayName, dayKey: dayIn(period, todayKey) })
+          }
         />
       )}
       <ErrorText error={error} />

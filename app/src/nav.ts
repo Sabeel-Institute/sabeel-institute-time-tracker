@@ -7,7 +7,8 @@ export type RootStackParamList = {
   UserEdit: { uid: string };
   Activities: undefined;
   /** forUid/forName: log hours on someone else's behalf (manager/approver flow). */
-  ManualEntry: { forUid?: string; forName?: string } | undefined;
+  /** dayKey: the day the form opens on, when added from a week other than this one. */
+  ManualEntry: { forUid?: string; forName?: string; dayKey?: string } | undefined;
   /** initialPeriodKey: open anchored at a specific week (rejection resolution). */
   Timesheet: { initialPeriodKey?: string } | undefined;
   /** Rejected timesheets awaiting the owner's fix — any month, one list. */

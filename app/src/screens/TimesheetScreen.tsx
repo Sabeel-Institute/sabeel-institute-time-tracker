@@ -28,7 +28,7 @@ import {
 } from '../timesheets';
 import { setApprover, useApproverChoices } from '../users';
 import { SearchablePicker } from '../components/SearchablePicker';
-import { DayEntries, MonthWeeks, type WeekState } from '../components/WeekView';
+import { DayEntries, MonthWeeks, dayIn, type WeekState } from '../components/WeekView';
 import {
   Button,
   Empty,
@@ -130,7 +130,7 @@ export function TimesheetScreen({
           </View>
         ) : undefined
       }
-      actions={<IconButton icon="add" label="Add hours" onPress={() => nav.navigate('ManualEntry')} />}
+      actions={<IconButton icon="add" label="Add hours" onPress={() => nav.navigate('ManualEntry', { dayKey: dayIn(period, todayKey) })} />}
       width="read"
     >
       <MonthWeeks period={period} todayKey={todayKey} stateOf={stateOf} onPick={setAnchor} />

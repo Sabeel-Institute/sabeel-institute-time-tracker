@@ -22,6 +22,11 @@ const t = getTheme();
 
 type Period = { fromKey: string; toKey: string };
 
+/** The day Add hours opens on from a week: today if the week holds it, else its first day. */
+export function dayIn(period: Period, todayKey: string): string {
+  return todayKey >= period.fromKey && todayKey <= period.toKey ? todayKey : period.fromKey;
+}
+
 /** The period before or after this one (periods are weeks clipped to months). */
 export function stepPeriod(period: Period, dir: 1 | -1): string {
   return periodRangeFor(dir === -1 ? addDays(period.fromKey, -1) : addDays(period.toKey, 1)).fromKey;
