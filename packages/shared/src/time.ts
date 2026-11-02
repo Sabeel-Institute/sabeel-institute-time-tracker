@@ -47,6 +47,16 @@ export function parseDayKey(dayKey: string): { y: number; m: number; d: number }
   return { y, m, d };
 }
 
+/**
+ * A real calendar day written YYYY-MM-DD, the only shape the helpers here
+ * accept: anything else turns into NaN keys, and periodsOfMonth never ends on
+ * them. A key from outside — a link, a notification — is checked with this
+ * before it reaches them.
+ */
+export function isDayKey(s: unknown): s is string {
+  return typeof s === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(s) && addDays(s, 0) === s;
+}
+
 /** The dayKey n days after the given one (calendar arithmetic, tz-independent). */
 export function addDays(dayKey: string, n: number): string {
   const { y, m, d } = parseDayKey(dayKey);

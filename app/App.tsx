@@ -9,7 +9,7 @@ import {
 } from 'react';
 import { ActivityIndicator, Platform, StyleSheet, View } from 'react-native';
 import { doc, updateDoc } from 'firebase/firestore';
-import { APP_NAME, COLLECTIONS, deviceTimeZone, hasAcceptedRules } from '@sabeel/shared';
+import { APP_NAME, COLLECTIONS, dayKeyFor, deviceTimeZone, hasAcceptedRules, isDayKey } from '@sabeel/shared';
 import { db } from './src/firebase';
 import { registerPush, useNotifTaps } from './src/notify';
 import { setNotifRoutingSession, flushNotifRoute } from './src/notifRouting';
@@ -48,7 +48,7 @@ import { HelpFilmScreen, HelpScreen } from './src/screens/HelpScreen';
 import { navigationRef, tabState, type RootStackParamList } from './src/nav';
 import { AppNav, activeTab } from './src/components/AppNav';
 import { MoreSheet } from './src/components/MoreSheet';
-import { ScreenOwnsTopInset } from './src/components/ui';
+import { Empty, Screen, ScreenOwnsTopInset } from './src/components/ui';
 import { useApprovalQueue } from './src/timesheets';
 import { usePendingCount } from './src/users';
 import { useLayout } from './src/theme/layout';
@@ -76,6 +76,21 @@ const HEADERLESS = new Set<RouteName>(['Home', 'Timesheet', 'Approvals', 'Report
  * A tab root also opens with no animation and no swipe-back: switching tabs is
  * not going somewhere and coming back, though it is a stack reset underneath.
  */
+/**
+ * A route's params come from links as well as from the app: a day must be a real
+ * one (a malformed key hangs the week views) and a person must be named. Out of
+ * shape, a day falls back to the screen's own default and a person-less screen
+ * says so.
+ */
+const linkDay = (v: unknown): string | undefined => (isDayKey(v) ? v : undefined);
+function NoSuchPerson() {
+  return (
+    <Screen width="read">
+      <Empty>There is no such person.</Empty>
+    </Screen>
+  );
+}
+
 function screenOptions(name: RouteName, title: string) {
   const root = HEADERLESS.has(name);
   return { title, headerShown: !root, animation: root ? 'none' : 'default', gestureEnabled: !root } as const;
@@ -263,7 +278,9 @@ export default function App() {
           >
             {({ route }) => {
               const p = (route.params ?? {}) as { forUid?: string; forName?: string; dayKey?: string };
-              return <ManualEntryScreen uid={user.uid} forUid={p.forUid} forName={p.forName} dayKey={p.dayKey} />;
+              return (
+                <ManualEntryScreen uid={user.uid} forUid={p.forUid} forName={p.forName} dayKey={linkDay(p.dayKey)} />
+              );
             }}
           </Stack.Screen>
           <Stack.Screen
@@ -275,9 +292,7 @@ export default function App() {
                 uid={user.uid}
                 profile={profile}
                 claims={claims}
-                initialPeriodKey={
-                  (route.params as { initialPeriodKey?: string } | undefined)?.initialPeriodKey
-                }
+                initialPeriodKey={linkDay((route.params as { initialPeriodKey?: string } | undefined)?.initialPeriodKey)}
               />
             )}
           </Stack.Screen>
@@ -332,8 +347,9 @@ export default function App() {
               options={screenOptions('PersonDetail', 'Lifetime hours')}
             >
               {({ route }) => {
-                const p = route.params as { uid: string; displayName: string };
-                return <PersonDetailScreen uid={p.uid} displayName={p.displayName} />;
+                const p = (route.params ?? {}) as { uid?: string; displayName?: string };
+                if (!p.uid) return <NoSuchPerson />;
+                return <PersonDetailScreen uid={p.uid} displayName={p.displayName ?? ''} />;
               }}
             </Stack.Screen>
           ) : null}
@@ -359,18 +375,15 @@ export default function App() {
               options={screenOptions('TimesheetReview', 'Review timesheet')}
             >
               {({ route }) => {
-                const p = route.params as {
-                  uid: string;
-                  displayName: string;
-                  periodKey: string;
-                };
+                const p = (route.params ?? {}) as { uid?: string; displayName?: string; periodKey?: string };
+                if (!p.uid) return <NoSuchPerson />;
                 return (
                   <TimesheetReviewScreen
                     reviewerUid={user.uid}
                     admin={claims.admin === true}
                     uid={p.uid}
-                    displayName={p.displayName}
-                    periodKey={p.periodKey}
+                    displayName={p.displayName ?? ''}
+                    periodKey={linkDay(p.periodKey) ?? dayKeyFor(Date.now(), deviceTimeZone())}
                   />
                 );
               }}

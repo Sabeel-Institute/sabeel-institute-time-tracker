@@ -4,6 +4,7 @@
 // (app/public/firebase-messaging-sw.js) posts the same keys to an open tab, or
 // opens a new one with them as the URL query. One encoder, one decoder, every
 // surface.
+import { isDayKey } from './time';
 
 export type NotifRoute =
   /** Pending account requests (admins). */
@@ -30,17 +31,21 @@ export function decodeNotifRoute(data: unknown): NotifRoute | null {
     const v = d[key];
     return typeof v === 'string' && v.length > 0 ? v : null;
   };
+  const day = (key: string): string | null => {
+    const v = d[key];
+    return isDayKey(v) ? v : null;
+  };
   switch (d.screen) {
     case 'Users':
       return { screen: 'Users' };
     case 'Timesheet': {
-      const periodKey = str('periodKey');
+      const periodKey = day('periodKey');
       return periodKey ? { screen: 'Timesheet', periodKey } : null;
     }
     case 'TimesheetReview': {
       const uid = str('uid');
       const displayName = str('displayName');
-      const periodKey = str('periodKey');
+      const periodKey = day('periodKey');
       return uid && displayName && periodKey
         ? { screen: 'TimesheetReview', uid, displayName, periodKey }
         : null;

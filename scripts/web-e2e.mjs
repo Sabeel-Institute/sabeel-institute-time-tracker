@@ -881,6 +881,17 @@ async function main() {
   // Garbage in the query must leave you on Today rather than crash the app.
   await mgr.goto(`${baseUrl}/?screen=Timesheet`);
   await mgr.getByText('Salaam,', { exact: false }).waitFor({ timeout: 45000 });
+  // So must a week that is no date (the week views' month loop never ends on
+  // one): the notification opens Today, a link its screen at this week, and a
+  // person's screen whose link names nobody says so.
+  await mgr.goto(`${baseUrl}/?screen=Timesheet&periodKey=garbage`);
+  await mgr.getByText('Salaam,', { exact: false }).waitFor({ timeout: 45000 });
+  await mgr.goto(`${baseUrl}/timesheet?initialPeriodKey=garbage`);
+  await expectWeekShown(mgr, shared.periodLabel(thisWeek));
+  await mgr.goto(`${baseUrl}/approvals/review?uid=${volUid}&displayName=Volunteer&periodKey=garbage`);
+  await logged(mgr, '3h 00m').waitFor({ timeout: 45000 });
+  await mgr.goto(`${baseUrl}/reports/person`);
+  await firstOnScreen(mgr.getByText('There is no such person.', { exact: true })).waitFor({ timeout: 45000 });
 
   console.log('▸ notification settings: reminder toggle flips and persists…');
   await vol.goto(baseUrl + '/');
