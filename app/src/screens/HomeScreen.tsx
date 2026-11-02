@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -43,6 +43,15 @@ import { getTheme, spacing } from '../theme';
 const t = getTheme();
 
 /**
+ * Clock in and Clock out take each other's place the moment the write lands
+ * locally, before the server answers, so the second press of a double tap would
+ * land on the other button: a double Clock in would clock straight out again,
+ * and a double Clock out would start a new session. A clock press this soon
+ * after the last one is dropped.
+ */
+const CLOCK_SETTLE_MS = 1000;
+
+/**
  * Today: am I clocked in? The one main action is the clock — Clock in, or
  * Clock out — and everything else here is what follows from it: hours you forgot
  * to clock, and how today and this week stand.
@@ -77,8 +86,16 @@ export function HomeScreen({ uid, profile }: { uid: string; profile: UserDoc }) 
 
   const selected = activities.find((a) => a.id === selectedId) ?? null;
 
+  const lastClockPress = useRef(0);
+  const clockSettled = () => {
+    const now = Date.now();
+    if (now - lastClockPress.current < CLOCK_SETTLE_MS) return false;
+    lastClockPress.current = now;
+    return true;
+  };
+
   const onClockIn = async () => {
-    if (!selected) return;
+    if (!selected || !clockSettled()) return;
     setError(null);
     try {
       await clockIn(uid, selected);
@@ -87,7 +104,7 @@ export function HomeScreen({ uid, profile }: { uid: string; profile: UserDoc }) 
     }
   };
   const onClockOut = async () => {
-    if (!running) return;
+    if (!running || !clockSettled()) return;
     setError(null);
     try {
       await clockOut(uid, running);

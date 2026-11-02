@@ -584,12 +584,26 @@ async function main() {
   console.log('▸ Phase 3: volunteer clocks in, clocks out, adds manual hours…');
   // Tutoring is the only active activity (Food Drive was archived above).
   await pickFromModal(vol, 'Pick an activity', 'Tutoring');
-  await vol.getByRole('button', { name: 'Clock in', exact: true }).click();
+  // Each clock button takes the other's place as soon as its write lands
+  // locally, so a double tap's second press hits the other one: Today drops a
+  // clock press within a second of the last. Both are double-tapped here, and
+  // each must count once.
+  const doubleTap = async (button) => {
+    const b = await button.boundingBox();
+    await vol.mouse.click(b.x + b.width / 2, b.y + b.height / 2);
+    await vol.waitForTimeout(150);
+    await vol.mouse.click(b.x + b.width / 2, b.y + b.height / 2);
+  };
+  await doubleTap(vol.getByRole('button', { name: 'Clock in', exact: true }));
   await vol.getByText('CLOCKED IN').waitFor();
+  await vol.waitForTimeout(1500);
+  if ((await vol.getByText('CLOCKED IN').count()) === 0) throw new Error('a double tap on Clock in clocked straight out');
   await vol.screenshot({ path: join(shots, '7-clocked-in.png'), animations: 'disabled', timeout: 8000 }).catch(() => {});
 
-  await vol.getByRole('button', { name: 'Clock out', exact: true }).click();
+  await doubleTap(vol.getByRole('button', { name: 'Clock out', exact: true }));
   await vol.getByText('What are you working on?').waitFor();
+  await vol.waitForTimeout(1500);
+  if ((await vol.getByText('CLOCKED IN').count()) !== 0) throw new Error('a double tap on Clock out clocked in again');
   // The 1-minute floor on clock sessions must show up in today's total.
   await soFarRow(vol, 'Today', '1m').waitFor();
 
