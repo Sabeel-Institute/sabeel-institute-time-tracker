@@ -304,6 +304,29 @@ async function pickFromModal(page, fieldText, itemText) {
   await picker.waitFor({ state: 'hidden' });
 }
 
+/**
+ * The Timesheet tab pages a month at a time and picks a week by its chip: a
+ * radio named "<periodLabel>", then ", <state>" once the week has one. The week
+ * shown is the checked chip. (Review timesheet steps weeks with its own arrows.)
+ */
+const weekChip = (page, label) =>
+  onScreen(page.getByRole('radio', { name: new RegExp(`^${escapeRe(label)}(,|$)`) }));
+async function expectWeekShown(page, label) {
+  const chip = weekChip(page, label);
+  await chip.waitFor();
+  await eventually(page, `the ${label} chip being the checked one`, () => chip.getAttribute('aria-checked'), (v) => v === 'true');
+}
+/** Show the week labelled `label`: page back through the months until its chip is drawn, then pick it. */
+async function goToWeek(page, label) {
+  const chip = weekChip(page, label);
+  for (let i = 0; i < 6 && (await chip.count()) === 0; i += 1) {
+    await onScreen(page.getByRole('button', { name: 'Previous month', exact: true })).click();
+    await chip.waitFor({ timeout: 1000 }).catch(() => {});
+  }
+  // Paging back may land on it (a month's last week is where the arrow puts you).
+  if ((await chip.getAttribute('aria-checked')) !== 'true') await chip.click();
+}
+
 /** The Add hours / Edit entry form's native inputs. The note is a textbox of its own. */
 const formFields = (page) => ({
   date: onScreen(page.locator('input[type="date"]')),
@@ -499,7 +522,7 @@ async function main() {
   await vol.getByText('I agree', { exact: true }).click();
   // Accepted: the waiting route opens the week it named.
   await onScreen(vol.getByText(EMPTY_WEEK)).waitFor({ timeout: 30000 });
-  await onScreen(vol.getByRole('heading', { name: shared.periodLabel(thisWeek), exact: true })).waitFor();
+  await expectWeekShown(vol, shared.periodLabel(thisWeek));
 
   console.log('▸ accepted once: never again — not on reload, not after signing out and in…');
   await vol.goto(baseUrl + '/');
@@ -633,6 +656,8 @@ async function main() {
   await overlapFields.from.fill('10:00');
   await overlapFields.to.fill('10:45');
   await vol.getByRole('button', { name: 'Save hours', exact: true }).click();
+  // Saved: the form closes onto Today, and only then is another tab pressed.
+  await soFarRow(vol, 'Today', '2h 45m').waitFor({ timeout: 15000 });
   await tab(vol, 'timesheet');
   const flagged = onScreen(vol.getByText('Overlaps another entry', { exact: true }));
   await flagged.first().waitFor();
@@ -664,8 +689,8 @@ async function main() {
     await route.continue().catch(() => {});
   };
   await vol.context().route(`http://${EMULATOR_HOSTS.firestore}/**`, stall);
-  await onScreen(vol.getByRole('button', { name: 'Previous week', exact: true })).click();
-  await onScreen(vol.getByRole('heading', { name: shared.periodLabel(otherWeek), exact: true })).waitFor();
+  await goToWeek(vol, shared.periodLabel(otherWeek));
+  await expectWeekShown(vol, shared.periodLabel(otherWeek));
   // Old rows must vanish at once — long before the stalled snapshot can land.
   await onScreen(vol.getByText(EMPTY_WEEK)).waitFor({ timeout: 1500 });
   if ((await vol.getByText('Math tutoring with the kids').count()) !== 0)
@@ -676,9 +701,11 @@ async function main() {
 
   console.log('▸ Phase 7: volunteer picks an approver and submits the week…');
   // Submit is gated until an approver is chosen (rules require the stamp): the
-  // week offers the Approver picker with nobody chosen, and Submit is dead.
+  // week offers the Approver picker with nobody chosen, says to choose one, and
+  // Submit is dead.
   const submit = vol.getByRole('button', { name: 'Submit timesheet', exact: true });
   await onScreen(vol.getByText('Choose who approves your hours', { exact: true })).waitFor();
+  await onScreen(vol.getByText('Choose who approves your hours above, then submit.', { exact: true })).waitFor();
   if (!(await submit.isDisabled())) throw new Error('Submit is offered before an approver is chosen');
   await pickFromModal(vol, 'Choose who approves your hours', 'Admin');
   // The field echoes the selection once the profile listener catches up — wait
@@ -792,10 +819,14 @@ async function main() {
   await vol.goto(`${baseUrl}/?screen=Timesheet&periodKey=${otherWeek.fromKey}`);
   // Right screen AND right week: that week is the empty one used above.
   await onScreen(vol.getByText(EMPTY_WEEK)).waitFor({ timeout: 45000 });
-  await onScreen(vol.getByRole('heading', { name: shared.periodLabel(otherWeek), exact: true })).waitFor();
-  // The route must be stripped, or a reload would navigate all over again.
-  if (new URL(vol.url()).search !== '')
-    throw new Error('notification route left in the URL: ' + vol.url());
+  await expectWeekShown(vol, shared.periodLabel(otherWeek));
+  // The route must be consumed, or a reload would replay the notification: the
+  // address that remains is the Timesheet's own, and a reload stays on that week.
+  const landed = new URL(vol.url());
+  if (landed.searchParams.has('screen') || landed.pathname !== '/timesheet')
+    throw new Error('the notification route is not replaced by the screen’s own address: ' + vol.url());
+  await vol.reload();
+  await expectWeekShown(vol, shared.periodLabel(otherWeek));
 
   // A member has no People screen; navigating to a name the navigator doesn't
   // have would throw, so an out-of-reach route must be dropped, not attempted:
@@ -994,11 +1025,11 @@ async function main() {
   // Reopen, and no sheet left on the server.
   await mgr.getByRole('button', { name: 'Submit timesheet', exact: true }).waitFor({ timeout: 15000 });
   await copySheet(null);
-  if ((await mgr.getByText('Approved', { exact: true }).count()) !== 0)
+  if ((await onScreen(mgr.getByText('Approved', { exact: true })).count()) !== 0)
     throw new Error('"Approved" is still shown after the week was reopened');
   if ((await mgr.getByRole('button', { name: 'Reopen (admin)', exact: true }).count()) !== 0)
     throw new Error('"Reopen (admin)" is still shown after the week was reopened');
-  if ((await mgr.getByText('Approved, so this week is closed', { exact: false }).count()) !== 0)
+  if ((await onScreen(mgr.getByText('Approved, so this week is closed', { exact: false })).count()) !== 0)
     throw new Error('the lock notice outlived the reopen');
   // Editable: the entry the lock refused to touch saves.
   await entryRow(mgr, mgr.getByText('Copy check B', { exact: true })).click();
@@ -1035,7 +1066,7 @@ async function main() {
   await mgr.getByRole('button', { name: 'Add hours for Volunteer', exact: true }).waitFor({ timeout: 15000 });
   await firstOnScreen(mgr.getByText('Not submitted', { exact: true })).waitFor();
   await logged(mgr, '3h 00m').waitFor();
-  if ((await mgr.getByText('Approved', { exact: true }).count()) !== 0)
+  if ((await onScreen(mgr.getByText('Approved', { exact: true })).count()) !== 0)
     throw new Error('"Approved" is still shown after the volunteer’s week was reopened');
   if ((await mgr.getByRole('button', { name: 'Reopen (admin)', exact: true }).count()) !== 0)
     throw new Error('"Reopen (admin)" is still shown after the volunteer’s week was reopened');

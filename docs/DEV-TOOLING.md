@@ -401,21 +401,28 @@ Beyond the flows themselves, the harness encodes:
   reconnects. Every other 400 fails the suite, now with its URL.
 - **Injects latency** around week switching — the stale-week bug class only
   appears when snapshots lag (see `POSTMORTEM-2026-07-16-stale-week.md`). The
-  week is stepped with the Timesheet's Previous week button while every
-  Firestore request is held for 2.5 s; the previous week's rows must be gone,
-  and the empty-week text drawn, inside 1.5 s.
+  Timesheet tab is moved to another week (its chip, paging the month first
+  when the week is in the previous one: `goToWeek`) while every Firestore
+  request is held for 2.5 s; the previous week's rows must be gone, and the
+  empty-week text drawn, inside 1.5 s.
 - **Reaches screens the way a person does.** A tab is pressed by its test id
   (`tab-today`, `tab-timesheet`, `tab-approvals`, `tab-reports`, `tab-more`),
-  never by its text, which includes the icon's glyph. A press resets the stack,
-  so the suite never walks back through tabs. More, and every picker, is a
-  `role="dialog"`, and a More row is pressed inside it (`more`). A week's
-  entries are the buttons named "<activity>, <times>. Edit this entry."
-  (`entryRow`), and the Reports total and the Lifetime hours figure are read
-  together with the words under them (`statTile`). A direct URL
-  (`?screen=Timesheet&periodKey=…`) is the notification's route, which the
-  checks of that route exercise, and it is also how a check reaches a past
-  week, or the admin's own week for review, in one step; the reopen check on
-  someone else's week clicks its way there.
+  never by its text, which includes the icon's glyph. A press resets the stack
+  (to Today under the tab), so the suite never walks back through tabs. The
+  Timesheet tab's week is the checked radio chip named by its period
+  (`expectWeekShown`); Review timesheet steps weeks with its own arrows. More,
+  and every picker, is a `role="dialog"`, and a More row is pressed inside it
+  (`more`). A week's entries are the buttons named "<activity>, <times>. Edit
+  this entry." (`entryRow`), and the Reports total and the Lifetime hours
+  figure are read together with the words under them (`statTile`). A tab is
+  pressed once the screen that saved has closed onto what it saves to, as a
+  person does. The notification route
+  (`/?screen=Timesheet&periodKey=…`) is what the checks of that route load,
+  and it is also how a check reaches a past week, or the admin's own week for
+  review, in one step; the reopen check on someone else's week clicks its way
+  there. Once the app has acted on the route the address is the screen's own
+  (`/timesheet?initialPeriodKey=…`), with the route's keys gone, and a reload
+  stays on that week.
 
 Actions that have a check of their own, so that a change to how a screen looks
 can be shown not to have changed what its controls do:
@@ -433,9 +440,9 @@ can be shown not to have changed what its controls do:
   screen and on the server; accepted, it is gone from both. Deleting an
   archived activity asks too, naming the activity.
 - **Submit is gated on an approver**: with none chosen the Timesheet's
-  Approver picker shows its placeholder and Submit timesheet is disabled; a
-  rejection needs a reason, so Reject timesheet in the reject sheet is
-  disabled until one is typed.
+  Approver picker shows its placeholder, the screen says to choose one, and
+  Submit timesheet is disabled; a rejection needs a reason, so Reject
+  timesheet in the reject sheet is disabled until one is typed.
 - **People**: Role, Admin and Active each ask first, on a person's page;
   declined changes neither the page nor the server, accepted changes the
   server and the person's own session (the manager tabs and More's rows grow
