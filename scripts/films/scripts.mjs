@@ -714,7 +714,7 @@ export const FILMS = [
     start: '',
     steps: [
       {
-        say: "Open More, then People, and tap someone to see their page. Here's Yusuf's.",
+        say: "In More, tap People, then tap someone to see their page. Here's Yusuf's.",
         do: async (t) => {
           await openMore(t, 'People');
           await t.tap(t.btn('Yusuf Khan. Open their account.'));
