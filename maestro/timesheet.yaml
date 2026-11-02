@@ -105,7 +105,7 @@ name: Rules, clock in and out, and the tabs
     file: ci-tools/tap-until.yaml
     env:
       TARGET: "Timesheet"
-      EXPECT: "This week"
+      EXPECT: "in progress"
       SECONDS: 30
 - assertVisible: "[\\s\\S]*– [\\s\\S]*"
 - takeScreenshot: 03-timesheet
