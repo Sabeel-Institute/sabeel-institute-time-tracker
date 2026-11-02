@@ -9,7 +9,7 @@ import {
 } from 'react';
 import { ActivityIndicator, Platform, StyleSheet, View } from 'react-native';
 import { doc, updateDoc } from 'firebase/firestore';
-import { COLLECTIONS, deviceTimeZone, hasAcceptedRules } from '@sabeel/shared';
+import { APP_NAME, COLLECTIONS, deviceTimeZone, hasAcceptedRules } from '@sabeel/shared';
 import { db } from './src/firebase';
 import { registerPush, useNotifTaps } from './src/notify';
 import { setNotifRoutingSession, flushNotifRoute } from './src/notifRouting';
@@ -71,8 +71,13 @@ type RouteName = keyof RootStackParamList;
  */
 const HEADERLESS = new Set<RouteName>(['Home', 'Timesheet', 'Approvals', 'Reports']);
 
+/**
+ * A tab root also opens with no animation and no swipe-back: switching tabs is
+ * not going somewhere and coming back, though it is a stack reset underneath.
+ */
 function screenOptions(name: RouteName, title: string) {
-  return { title, headerShown: !HEADERLESS.has(name) } as const;
+  const root = HEADERLESS.has(name);
+  return { title, headerShown: !root, animation: root ? 'none' : 'default', gestureEnabled: !root } as const;
 }
 
 /**
@@ -412,6 +417,8 @@ function Navigator({
       ref={navigationRef}
       theme={navTheme}
       linking={linking}
+      // The browser tab names the app as well as the screen.
+      documentTitle={{ formatter: (options, route) => `${options?.title ?? route?.name} · ${APP_NAME}` }}
       onReady={() => {
         onStateChange();
         flushNotifRoute();

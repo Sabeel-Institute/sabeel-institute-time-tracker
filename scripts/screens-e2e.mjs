@@ -510,6 +510,16 @@ console.log(
     `decided ${periodLabel(DECIDED)} · empty ${periodLabel(EMPTY_WEEK)}\n`,
 );
 
+/**
+ * `SWEEP_EXPLORE=1` stops here, with the world seeded and the stack up, for a
+ * person (or an agent with a browser) to explore by hand: sign in through the
+ * dev row as any of the accounts above. Ctrl-C ends it and stops the stack.
+ */
+if (process.env.SWEEP_EXPLORE) {
+  console.log(`▸ exploring: ${baseUrl}  (dev sign-in as ${[ADMIN, MEMBER, MANAGER, PENDING, UNACCEPTED].map((a) => a.email).join(', ')})`);
+  await new Promise(() => {});
+}
+
 // ---- Assertions -------------------------------------------------------------
 /**
  * react-native-web renders every `Pressable` as a `<div tabindex="0">` (or
