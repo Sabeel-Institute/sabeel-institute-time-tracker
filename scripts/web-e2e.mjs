@@ -280,7 +280,7 @@ async function moreRows(page) {
   return names.filter((n) => n !== 'Close').map((n) => n.replace(/, \d+ waiting$/, ''));
 }
 
-const MEMBER_MORE = ['Notifications', 'Report a problem', 'Privacy policy', 'Sign out'];
+const MEMBER_MORE = ['Notifications', 'Help', 'Report a problem', 'Privacy policy', 'Sign out'];
 const APPROVER_MORE = ['People', 'Activities', ...MEMBER_MORE];
 
 /** A member has no manager tab and nothing of the institute's tools in More. */
