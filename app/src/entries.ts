@@ -244,6 +244,29 @@ export async function copyPeriodEntries(
   return { copied, skipped };
 }
 
+/**
+ * Live set of periodKeys (in an inclusive dayKey range) that have ANY entries —
+ * lets the week navigator distinguish "hours logged, not submitted" from
+ * "empty week" without loading every entry's fields.
+ */
+export function useEntryPeriods(uid: string, fromKey: string, toKey: string): Set<string> {
+  return useLiveQuery(
+    () =>
+      query(
+        collection(db, COLLECTIONS.timeEntries),
+        where('uid', '==', uid),
+        where('dayKey', '>=', fromKey),
+        where('dayKey', '<=', toKey),
+      ),
+    [uid, fromKey, toKey],
+    {
+      label: 'useEntryPeriods',
+      map: (snap) => new Set(snap.docs.map((d) => (d.data() as TimeEntryDoc).periodKey)),
+      empty: new Set<string>(),
+    },
+  );
+}
+
 /** Live closed-minutes total for one of my local days (running session excluded). */
 export function useDayMinutes(uid: string, dayKey: string): number {
   return useLiveQuery(

@@ -899,19 +899,10 @@ const more = async (page, label) => {
   await tapInSheet(page, label);
   await page.waitForTimeout(400);
 };
-/**
- * Step the week shown (Timesheet, Review timesheet) until its heading is the
- * week labelled `label`. Bounded: a week the arrows never reach is a failure,
- * not an endless walk.
- */
-const stepTo = async (page, label, dir = 'Previous week') => {
-  const heading = page.getByRole('heading', { name: label, exact: true }).filter({ visible: true });
-  for (let i = 0; i < 12; i += 1) {
-    if ((await heading.count()) > 0) return;
-    await vis(page.getByRole('button', { name: dir, exact: true })).click();
-    await page.waitForTimeout(500);
-  }
-  await heading.first().waitFor({ timeout: 5000 });
+/** Page the Timesheet tab back a month. */
+const previousMonth = async (page) => {
+  await vis(page.getByRole('button', { name: 'Previous month', exact: true })).click();
+  await page.waitForTimeout(500);
 };
 
 /**
@@ -1052,7 +1043,7 @@ async function tourAdmin(tag, width) {
 
   await visit('timesheet', async () => {
     await tab(page, 'timesheet');
-    await vis(page.getByText('This week', { exact: true })).waitFor({ timeout: 20000 });
+    await vis(page.getByText('in progress', { exact: true })).waitFor({ timeout: 20000 });
   });
 
   /**
@@ -1070,21 +1061,22 @@ async function tourAdmin(tag, width) {
 
   /**
    * REJECTED, which has rows this screen has in no other state: the reason,
-   * the approver and Resubmit. Reached by stepping back through the weeks.
+   * the approver and Resubmit. Reached by paging back a month to its chip.
    */
   await visit('timesheet-rejected', async () => {
-    await stepTo(page, periodLabel(DECIDED));
+    await previousMonth(page);
+    await tap(page, periodLabel(DECIDED));
     await vis(page.getByText('Fix the entries below', { exact: false })).waitFor({ timeout: 20000 });
   });
 
   /** An EMPTY week: the state with nothing to lay out, which lays out badly too. */
   await visit('timesheet-empty', async () => {
-    await stepTo(page, periodLabel(EMPTY_WEEK));
+    await tap(page, periodLabel(EMPTY_WEEK));
     await vis(page.getByText('Nothing logged this week yet', { exact: false })).waitFor({ timeout: 20000 });
   });
 
   await visit('entry-edit', async () => {
-    await stepTo(page, periodLabel(DECIDED), 'Next week');
+    await tap(page, periodLabel(DECIDED));
     await vis(page.getByText('Coordinating the volunteer rota for the term.')).click();
     await vis(page.getByText('Save changes')).waitFor({ timeout: 20000 });
   });
@@ -1266,9 +1258,26 @@ async function tourMember(tag, width) {
 
   /** APPROVED: the locked week, where the submit controls are replaced by a notice. */
   await visit('member-timesheet-locked', async () => {
-    await stepTo(page, periodLabel(DECIDED));
+    await previousMonth(page);
+    await tap(page, periodLabel(DECIDED));
     await vis(page.getByText('this week is closed', { exact: false })).waitFor({ timeout: 20000 });
   });
+
+  /**
+   * THE BROWSER'S BACK walks the app's screens rather than leaving the site:
+   * from a tab it returns to Today, and from a More destination to where More
+   * was opened. Until the web had addresses, Back from anywhere left the app.
+   */
+  await page.goBack();
+  await page.waitForTimeout(600);
+  const backToToday = await vis(page.getByText('What are you working on?')).isVisible().catch(() => false);
+  check(`${tag} / Back from a tab returns to Today`, backToToday, `on ${page.url()}`);
+  await more(page, 'Notifications');
+  await vis(page.getByText('Weekly submit reminder')).waitFor({ timeout: 20000 });
+  await page.goBack();
+  await page.waitForTimeout(600);
+  const backFromMore = await vis(page.getByText('What are you working on?')).isVisible().catch(() => false);
+  check(`${tag} / Back from a More screen returns to it`, backFromMore, `on ${page.url()}`);
 
   check(
     `${tag} / member reached every screen`,

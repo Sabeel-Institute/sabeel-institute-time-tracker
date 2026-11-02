@@ -11,22 +11,24 @@ import {
   periodHasStarted,
   periodLabel,
   periodRangeFor,
+  periodsOfMonth,
   type TokenClaims,
   type UserDoc,
 } from '@sabeel/shared';
 import type { RootStackParamList } from '../nav';
 import { confirmAction } from '../confirm';
-import { copyPeriodEntries, useEntriesRange, type TimeEntry } from '../entries';
+import { copyPeriodEntries, useEntriesRange, useEntryPeriods, type TimeEntry } from '../entries';
 import {
   submitTimesheet,
   resubmitTimesheet,
   withdrawTimesheet,
   reopenTimesheet,
+  useMyTimesheetsRange,
   useTimesheet,
 } from '../timesheets';
 import { setApprover, useApproverChoices } from '../users';
 import { SearchablePicker } from '../components/SearchablePicker';
-import { DayEntries, WeekStepper, stepPeriod } from '../components/WeekView';
+import { DayEntries, MonthWeeks, type WeekState } from '../components/WeekView';
 import {
   Button,
   Empty,
@@ -71,10 +73,23 @@ export function TimesheetScreen({
   }, [initialPeriodKey]);
 
   const period = periodRangeFor(anchor);
-  const current = periodRangeFor(todayKey).fromKey === period.fromKey;
   const entries = useEntriesRange(uid, period.fromKey, period.toKey);
   const sheet = useTimesheet(uid, period.fromKey);
   const status = sheet === undefined ? undefined : (sheet?.status ?? 'draft');
+
+  // The month around this week, for its chips: each week's sheet, and which
+  // weeks have hours at all (the "in progress, not submitted" dot).
+  const month = useMemo(() => periodsOfMonth(anchor), [anchor]);
+  const monthSheets = useMyTimesheetsRange(uid, month[0].fromKey, month[month.length - 1].fromKey);
+  const withHours = useEntryPeriods(uid, month[0].fromKey, month[month.length - 1].toKey);
+  const stateOf = (periodKey: string): WeekState => {
+    // The week on screen reads its own live sheet, which lands first.
+    const st =
+      periodKey === period.fromKey && sheet !== undefined
+        ? sheet?.status
+        : monthSheets.find((m) => m.periodKey === periodKey)?.status;
+    return st ?? (withHours.has(periodKey) ? 'inProgress' : 'empty');
+  };
 
   const total = useMemo(() => entries.reduce((s, e) => s + (e.durationMinutes ?? 0), 0), [entries]);
   const byDay = useMemo(() => {
@@ -118,12 +133,7 @@ export function TimesheetScreen({
       actions={<IconButton icon="add" label="Add hours" onPress={() => nav.navigate('ManualEntry')} />}
       width="read"
     >
-      <WeekStepper
-        period={period}
-        current={current}
-        onStep={(dir) => setAnchor(stepPeriod(period, dir))}
-        onCurrent={() => setAnchor(todayKey)}
-      />
+      <MonthWeeks period={period} todayKey={todayKey} stateOf={stateOf} onPick={setAnchor} />
 
       {sheet?.status === 'rejected' ? (
         <Notice tone="error">

@@ -355,6 +355,11 @@ const TONE_COLOUR: Record<Tone, string> = {
   none: t.text.muted,
 };
 
+/** The colour a tone is drawn in: for a dot that stands beside a word. */
+export function toneColour(tone: Tone): string {
+  return TONE_COLOUR[tone];
+}
+
 /** A timesheet's state, in the same words and colours on every screen. */
 export function sheetStatus(status: 'draft' | 'submitted' | 'approved' | 'rejected'): { label: string; tone: Tone } {
   return {
