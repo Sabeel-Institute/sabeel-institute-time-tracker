@@ -12,7 +12,7 @@ import {
 } from '@sabeel/shared';
 import type { RootStackParamList } from '../nav';
 import { useEntriesRange } from '../entries';
-import { approveTimesheet, rejectTimesheet, useTimesheet } from '../timesheets';
+import { approveTimesheet, rejectTimesheet, reopenTimesheet, useTimesheet } from '../timesheets';
 import { DayEntries, WeekStepper, stepPeriod } from '../components/WeekView';
 import { Sheet } from '../components/Sheet';
 import { Button, ErrorText, Field, Notice, Screen, StatusChip, sheetStatus } from '../components/ui';
@@ -28,11 +28,14 @@ const t = getTheme();
  */
 export function TimesheetReviewScreen({
   reviewerUid,
+  admin,
   uid,
   displayName,
   periodKey,
 }: {
   reviewerUid: string;
+  /** An admin may reopen an approved week, anyone's, as on their own timesheet. */
+  admin: boolean;
   uid: string;
   displayName: string;
   /** Initial week; the screen steps freely from here. */
@@ -116,8 +119,24 @@ export function TimesheetReviewScreen({
           <Button label="Reject timesheet…" kind="secondary" onPress={() => setRejecting(true)} />
         </View>
       ) : null}
-      {status === 'approved' ? (
-        <Text style={styles.hint}>Approved, so this week is closed. Only an admin can reopen it.</Text>
+      {status === 'approved' && sheet ? (
+        <>
+          <Text style={styles.hint}>Approved, so this week is closed. Only an admin can reopen it.</Text>
+          {admin ? (
+            <Button
+              label="Reopen (admin)"
+              kind="quiet"
+              onPress={async () => {
+                setError(null);
+                try {
+                  await reopenTimesheet(sheet);
+                } catch (e) {
+                  setError((e as Error).message);
+                }
+              }}
+            />
+          ) : null}
+        </>
       ) : (
         <Button
           label={`Add hours for ${displayName}`}

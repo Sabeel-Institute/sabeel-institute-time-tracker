@@ -305,6 +305,7 @@ export default function App() {
                 return (
                   <TimesheetReviewScreen
                     reviewerUid={user.uid}
+                    admin={claims.admin === true}
                     uid={p.uid}
                     displayName={p.displayName}
                     periodKey={p.periodKey}
