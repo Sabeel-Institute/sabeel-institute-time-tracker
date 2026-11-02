@@ -41,7 +41,7 @@
     "@sabeel-institute/ci-tools": "github:Sabeel-Institute/ci-tools#ba3679b892023b6a6f3922acd072b41398212fbf",
     "@sabeel/shared": "*",
     "@types/node": "^22.20.5",
-    "eslint": "^9.39.0",
+    "eslint": "^10.14.0",
     "eslint-plugin-react-hooks": "^7.1.1",
     "globals": "^17.13.0",
     "knip": "^5.88.1",
