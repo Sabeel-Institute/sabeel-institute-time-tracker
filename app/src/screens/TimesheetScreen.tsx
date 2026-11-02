@@ -203,6 +203,9 @@ export function TimesheetScreen({
             placeholder="Choose who approves your hours"
             title="Timesheet approver"
           />
+          {!approverUid ? (
+            <Text style={styles.warn}>Choose who approves your hours above, then submit.</Text>
+          ) : null}
           {hasRunningInPeriod ? <Text style={styles.hint}>Clock out before you submit this week.</Text> : null}
           {conflicts.size > 0 ? (
             <Text style={styles.warn}>Some entries overlap. Fix the flagged times before you submit.</Text>

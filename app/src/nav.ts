@@ -31,7 +31,7 @@ export type TabRoute = 'Home' | 'Timesheet' | 'Approvals' | 'Reports';
  * leaves the app.
  *
  * The SAME stack, not a new one: the reset keeps the stack's key and Today's
- * route. On the web the browser's history follows the stack only while its key
+ * route, which takes a complete state. On the web the browser's history follows the stack only while its key
  * holds (a new key reads as a page replaced, so Back left the site), and Today
  * keeps its route so its live data is not torn down and fetched again on every
  * tab press.
@@ -41,10 +41,19 @@ export function tabState<K extends TabRoute>(
   name: K,
   params?: RootStackParamList[K],
 ) {
+  const fresh = (route: string, routeParams?: object) => ({
+    key: `${route}-${Math.random().toString(36).slice(2, 10)}`,
+    name: route,
+    params: routeParams,
+  });
   const bottom = current?.routes[0];
-  const home = bottom?.name === 'Home' ? bottom : { name: 'Home' as const };
-  const routes = name === 'Home' ? [home] : [home, { name, params }];
-  return { ...(current ? { key: current.key } : {}), index: routes.length - 1, routes } as never;
+  const home = bottom?.name === 'Home' ? bottom : fresh('Home');
+  const routes = name === 'Home' ? [home] : [home, fresh(name, params)];
+  // A COMPLETE state (`stale: false`, every route keyed): a partial one is
+  // rehydrated by the router, which gives the stack a new key.
+  return (current
+    ? { ...current, stale: false, index: routes.length - 1, routes }
+    : { index: routes.length - 1, routes }) as never;
 }
 
 /**
