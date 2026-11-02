@@ -38,6 +38,17 @@ const onRow = (t, label, name) =>
     .last()
     .getByRole('button', { name, exact: true });
 
+/**
+ * A week's pill tapped, a month back first only when the week is not in the
+ * month shown: right whatever day the film is recorded on.
+ */
+async function openWeek(t, week) {
+  const label = periodLabel(week).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const pill = t.radio(new RegExp(`^${label}(,|$)`));
+  if (!(await pill.isVisible())) await t.tap(t.btn('Previous month'));
+  await t.tap(pill);
+}
+
 /** The way back that every pushed screen's header carries: "<screen>, back". */
 const back = (t) => t.link(/,\s*back$/i);
 
@@ -302,8 +313,8 @@ export const FILMS = [
         do: (t) => t.highlight(legend(t)),
       },
       {
-        say: "To look further back, use the arrows beside the month. Previous month takes you back to last month.",
-        do: (t) => t.tap(t.btn('Previous month')),
+        say: "To look further back, tap an earlier week. The arrows beside the month go back a whole month at a time.",
+        do: (t) => openWeek(t, t.world.weeks.PREV),
       },
       {
         say: "Your approver sent this week back, which is why it has a red dot. The reason is shown right at the top.",
@@ -311,7 +322,7 @@ export const FILMS = [
       },
       {
         say: "Tap another pill to open that week. This one has a green dot, which means it's approved.",
-        do: (t) => t.tap(t.radio(`${periodLabel(t.world.weeks.PREV2)}, approved`)),
+        do: (t) => openWeek(t, t.world.weeks.PREV2),
       },
       {
         say: "An approved week is closed, so its entries can't be changed. Only an administrator can reopen it.",
@@ -548,7 +559,7 @@ export const FILMS = [
         do: (t) => pick(t, t.text('Pick an activity'), 'Tutoring'),
       },
       {
-        say: "The date starts on a day in his week. Change it if you need to, then set the times.",
+        say: "The date starts on a day in Yusuf's week. Change it if you need to, then set the times.",
         do: async (t) => {
           await t.highlight(dateBox(t));
           await t.fill(timeBox(t, 0), '10:00');
@@ -556,14 +567,14 @@ export const FILMS = [
         },
       },
       {
-        say: "Add a note so he knows what it was for, then tap Save hours.",
+        say: "Add a note so Yusuf knows what it was for, then tap Save hours.",
         do: async (t) => {
           await t.type(t.label('What did you work on? (optional)'), 'Covered the morning group.');
           await t.tap(t.btn('Save hours'));
         },
       },
       {
-        say: "And there it is in his week, marked as added by hand. The total has gone up to match.",
+        say: "And there it is in Yusuf's week, marked as added by hand. The total has gone up to match.",
         do: async (t) => {
           await t.highlight(t.entryRow('Tutoring'));
           await t.highlight(t.text(/logged$/));
@@ -605,14 +616,14 @@ export const FILMS = [
         },
       },
       {
-        say: "From there, Print statement makes a tidy summary you can print or save as a PDF, if someone needs proof of their hours.",
+        say: "On the website, Print statement makes a tidy summary you can print or save as a PDF, for anyone who needs proof of their hours.",
         do: async (t) => {
           await t.tap(t.btn('Print statement'));
           await t.wait(800);
         },
       },
       {
-        say: "Back on Reports, the Person and Activity boxes narrow things down. Pick Sara, and every figure becomes hers.",
+        say: "Back on Reports, the Person and Activity boxes narrow things down. Pick Sara, and every figure is just Sara's.",
         do: async (t) => {
           await t.tap(back(t));
           await pick(t, t.text('Everyone'), 'Sara Malik');
@@ -684,7 +695,7 @@ export const FILMS = [
         },
       },
       {
-        say: "If you recognise them, tap Approve. They can sign in straight away.",
+        say: "If you recognise them, tap Approve, and they're let in straight away.",
         do: (t) => t.tap(t.btn('Approve')),
       },
       {
@@ -692,7 +703,7 @@ export const FILMS = [
         do: (t) => t.highlight(t.text(/^Everyone \(/)),
       },
       {
-        say: "Their row says approver: none yet. Open their page and choose one, because they can't submit a week without an approver.",
+        say: "Their row says approver: none yet. Open their page and choose one now, or they'll be asked to pick one before they first submit.",
         do: (t) => t.highlight(t.text(/approver: none yet/)),
       },
     ],
@@ -726,7 +737,7 @@ export const FILMS = [
         do: (t) => t.highlight(t.switch('Admin')),
       },
       {
-        say: "Active is the account's on switch. Turn it off, and the person is signed out and can't log hours, though their past hours stay.",
+        say: "Active is the account's on switch. Turn it off, and the person is locked out at once and can't log hours, though their past hours stay.",
         do: (t) => t.highlight(t.switch('Active')),
       },
     ],
