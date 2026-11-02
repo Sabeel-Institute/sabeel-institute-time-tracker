@@ -93,13 +93,14 @@ export default tseslint.config(
     },
   },
   {
-    // The `page.evaluate` callbacks in the browser suites run IN THE BROWSER,
-    // where `document` and `getComputedStyle` exist. eslint parses each file as
-    // one program and cannot tell the two contexts apart, so the browser globals
-    // are declared for the whole file. The alternative — and what these files
-    // carried before the layout sweep arrived with sixteen more measurements —
-    // is a `no-undef` disable comment above every single one.
-    files: ['scripts/*-e2e.mjs'],
+    // The `page.evaluate` callbacks in the browser suites and the manual's
+    // screenshots run IN THE BROWSER, where `document` and `getComputedStyle`
+    // exist. eslint parses each file as one program and cannot tell the two
+    // contexts apart, so the browser globals are declared for the whole file.
+    // The alternative — and what these files carried before the layout sweep
+    // arrived with sixteen more measurements — is a `no-undef` disable comment
+    // above every single one.
+    files: ['scripts/*-e2e.mjs', 'scripts/manual-shots.mjs'],
     languageOptions: {
       globals: {
         ...globals.node,

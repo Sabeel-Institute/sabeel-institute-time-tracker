@@ -15,8 +15,10 @@ the shared `Sabeel-Institute/ci-tools` package, pinned to a commit in
 every command and every `ci-tools.json` key, and `ci-tools.json` says what
 differs for this app. Only this app's own tools live in `scripts/`: the two
 browser suites and their shared bring-up (`web-e2e.mjs`, `screens-e2e.mjs`,
-`lib/e2e-stack.mjs`), the native flows' seed (`seed-emulators.mjs`) and the
-first-admin bootstrap (`grant-admin.mjs`). The entries below keep the reasons
+`push-e2e.mjs`, `lib/e2e-stack.mjs`), the help films' module, scripts and
+world (`films/`), the manual's screenshots (`manual-shots.mjs`), the native
+flows' seed (`seed-emulators.mjs`) and the first-admin bootstrap
+(`grant-admin.mjs`). The entries below keep the reasons
 for both.
 
 ## Commands
@@ -33,6 +35,8 @@ for both.
 | `npm run test:screens` | every screen at five widths, asserted — the LAYOUT sweep (in CI) |
 | `npm run test:e2e:push` | every kind of notification, delivered to the real service worker and tapped, opens its screen (in CI) |
 | `npm run knip` | dead-code audit |
+| `npm run manual:shots [-- <name> …]` | the user manual's screenshots, in the help films' world (below); then `npx sabeel-ci render-manual` |
+| `npx sabeel-ci films lines\|tts\|asr\|record\|publish` | the help films: narration, the speech check, recording, and the help site (below) |
 | `npm run emulators:free` | stop this checkout's leftovers on its emulator ports (`sabeel-ci free-emulator-ports`) |
 | `npx sabeel-ci check-app` | what ci-tools assumes of this repo: `ci-tools.json`, the rendered workflows, the ports, the version and its deploy-log entry, `.gitignore` (in CI) |
 | `npx sabeel-ci native-e2e [--ios]` | the Maestro flows on the emulator, or an iPhone simulator (below) |
@@ -507,6 +511,57 @@ block or outside this checkout. With shared ports and a sweep that killed
 whatever held them, a run in one repo SIGTERMed the other's Firestore (`exited
 with code: 143`) — or, worse, silently cost it a write. See **"Emulator ports
 are this checkout's own"** below.
+
+## The help films
+
+**More → Help** lists the films in `HELP_VIDEOS` (`packages/shared/src/help.ts`):
+who each is for (everyone, managers, admins), and the two cuts of each, a phone
+and a computer. The app plays them from the help site,
+`https://sabeel-time-tracker-help.web.app`, never from its own bundle, so a film
+changes without a release and the app's deploys never carry video.
+
+ci-tools makes them (`sabeel-ci films`, its README, "Help films"); this repo
+holds what is particular to the app, named by `films.module` in
+`ci-tools.json`:
+
+| File | What it holds |
+|---|---|
+| `scripts/films/films.mjs` | the module ci-tools reads: the catalogue, the stack (the emulators and the web build the browser suites use), the off-camera sign-in through the dev row, the screen a film starts on, the app's own moves (`tabOf`, `moreRow`, `inSheet`, `entryRow`), and what the camera must not see (the dev row, the build stamp) |
+| `scripts/films/scripts.mjs` | one script per film, in the catalogue's order: each step a line of narration and what happens on screen while it is said |
+| `scripts/films/world.mjs` | the guide world: made-up people (an admin, a manager, two members, one account waiting), activities and weeks, built fresh for every film so no film inherits what the last one did |
+
+```bash
+npx sabeel-ci films tts --wav <dir>                 # the narration, one WAV a line (resumes)
+npx sabeel-ci films asr --wav <dir>                 # transcribe it and compare with the script
+npx sabeel-ci films record --wav <dir> --out <dir>  # every film, both cuts (--only a,b; --variant phone)
+npx sabeel-ci films publish --from <dir>            # the whole set to the help site
+```
+
+The narration is written as a colleague talking someone through the screen:
+contractions, "you", whole sentences, never a label read out. A reworded line
+is rendered again; `record` refuses a WAV of other words. The narration model
+and the speech check are heavy (near 12 GB and 3 GB), so neither runs beside
+an emulator stack or the AVD; recording runs in real time against the
+emulators. Record in working hours: the clock card shows the real time of day,
+so a film made at night says "Since 01:17". The same holds for the manual's
+`clocked-in` screenshot.
+
+**A film follows the screen.** A change to a screen a film shows changes its
+script in the same pull request, and the films are recorded and published
+again with the release that ships it; a step that cannot find what it names
+fails the recording, with a screenshot of what the page showed beside the
+films.
+
+## `scripts/manual-shots.mjs` — the manual's screenshots
+
+`npm run manual:shots`, or `npm run manual:shots -- today review` for some.
+Every image in `docs/manual/img/`, taken on the web build at 420x860 in the
+films' guide world, so the manual shows the same made-up people as the films
+and never anyone's real hours. Each screenshot gets a world of its own and
+waits for what proves its screen is the right one; one that does not show it
+fails the run instead of landing in the manual. It brings up the films' stack,
+so nothing else heavy runs beside it. Then `npx sabeel-ci render-manual` for
+the PDF.
 
 ## `sabeel-ci native-e2e` — Maestro flows on the Android emulator
 
