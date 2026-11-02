@@ -23,6 +23,12 @@ headed `### <YYYY-MM-DD> — <summary> — vX.Y.Z`: `npx sabeel-ci release` take
 the release's title and notes from it (`docs/DEPLOY.md`). Deploys that shipped
 no app version carry no version in their heading.
 
+### 2026-11-02 — The current Sabeel logo — v0.32.1
+
+- Sign-in, the printed statement and the user manual's cover show the
+  institute's current logo: the calligraphy in raspberry and gold above
+  SABEEL INSTITUTE.
+
 ### 2026-11-02 — A new look, tabs, and help films — v0.32.0
 
 - **The app looks like the institute's other apps.** The same colours,
