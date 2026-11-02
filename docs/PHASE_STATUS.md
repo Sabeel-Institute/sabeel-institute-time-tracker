@@ -29,6 +29,13 @@ no app version carry no version in their heading.
   institute's current logo: the calligraphy in raspberry and gold above
   SABEEL INSTITUTE.
 
+No rules or functions deploy: the release changes neither. **v0.32.1**
+released, tag `v0.32.1` at `b7ecfab`: GitHub release; Play internal
+testing 0.32.1 (32001), whose universal APK booted five times in a row
+with `v0.32.1 · b7ecfab`; TestFlight 0.32.1 build 32001 from the tag;
+hosting from the Web workflow's artifact through Deploy Web, serving
+`0.32.1` and `b7ecfab`.
+
 ### 2026-11-02 — A new look, tabs, and help films — v0.32.0
 
 - **The app looks like the institute's other apps.** The same colours,
