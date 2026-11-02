@@ -400,7 +400,22 @@ Beyond the flows themselves, the harness encodes:
   a session it has already closed with 400 "Unknown SID", and the SDK
   reconnects. Every other 400 fails the suite, now with its URL.
 - **Injects latency** around week switching — the stale-week bug class only
-  appears when snapshots lag (see `POSTMORTEM-2026-07-16-stale-week.md`).
+  appears when snapshots lag (see `POSTMORTEM-2026-07-16-stale-week.md`). The
+  week is stepped with the Timesheet's Previous week button while every
+  Firestore request is held for 2.5 s; the previous week's rows must be gone,
+  and the empty-week text drawn, inside 1.5 s.
+- **Reaches screens the way a person does.** A tab is pressed by its test id
+  (`tab-today`, `tab-timesheet`, `tab-approvals`, `tab-reports`, `tab-more`),
+  never by its text, which includes the icon's glyph. A press resets the stack,
+  so the suite never walks back through tabs. More, and every picker, is a
+  `role="dialog"`, and a More row is pressed inside it (`more`). A week's
+  entries are the buttons named "<activity>, <times>. Edit this entry."
+  (`entryRow`), and the Reports total and the Lifetime hours figure are read
+  together with the words under them (`statTile`). A direct URL
+  (`?screen=Timesheet&periodKey=…`) is the notification's route, which the
+  checks of that route exercise, and it is also how a check reaches a past
+  week, or the admin's own week for review, in one step; the reopen check on
+  someone else's week clicks its way there.
 
 Actions that have a check of their own, so that a change to how a screen looks
 can be shown not to have changed what its controls do:
@@ -408,20 +423,33 @@ can be shown not to have changed what its controls do:
 - **Copy last week's hours** on an empty started week: declined copies nothing,
   accepted copies every entry a week on (days, times, notes) and leaves the
   source week alone.
-- **Reopen (admin)** on the admin's own approved week (the only screen that
-  has the button): one press, no question, and the week is a draft that saves
-  an edit again.
-- **Manage users**: Role, Admin and Active each ask first; declined changes
-  neither the card nor the server, accepted changes the server and the
-  person's own session, and a fresh page still shows it. An admin's own card
-  has all three disabled, and pressing them anyway asks nothing.
+- **Reopen (admin)** on two screens. On the admin's own approved week (the
+  Timesheet tab): one press, no question, and the week is a draft that saves
+  an edit again. On another person's approved week, reached the way an admin
+  does (Reports, By person, View timesheets, Review timesheet): one press, no
+  question, no sheet left on the server, the hours untouched, Add hours for
+  them offered again, and the person's own Today no longer locked.
+- **Delete entry** asks first: declined, the entry is still there on the
+  screen and on the server; accepted, it is gone from both. Deleting an
+  archived activity asks too, naming the activity.
+- **Submit is gated on an approver**: with none chosen the Timesheet's
+  Approver picker shows its placeholder and Submit timesheet is disabled; a
+  rejection needs a reason, so Reject timesheet in the reject sheet is
+  disabled until one is typed.
+- **People**: Role, Admin and Active each ask first, on a person's page;
+  declined changes neither the page nor the server, accepted changes the
+  server and the person's own session (the manager tabs and More's rows grow
+  and shrink live), and a fresh page still shows it. An admin's own page has
+  all three disabled, and pressing them anyway asks nothing. A disabled
+  person waits in the list's closed Disabled section.
 - **Account disabled**: the disabled person's open session shows the screen
   with Sign out, signing in again meets it from the profile alone, and
   re-activating un-gates the same session with no rules to accept again.
 - **Sign in with email**: an unknown address and a wrong password both get the
   one refusal sentence; the password account signs in, accepts the rules and
-  is only a member.
-- **Enable notifications / Not now** on Home's nudge.
+  is only a member, with no manager tab and nothing of People or Activities in
+  More (`expectMemberTools`, which every member is held to).
+- **Enable notifications / Not now** on Today's nudge.
 
 The mechanics behind them:
 
