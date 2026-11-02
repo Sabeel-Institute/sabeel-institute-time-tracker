@@ -23,6 +23,35 @@ headed `### <YYYY-MM-DD> — <summary> — vX.Y.Z`: `npx sabeel-ci release` take
 the release's title and notes from it (`docs/DEPLOY.md`). Deploys that shipped
 no app version carry no version in their heading.
 
+### 2026-11-02 — A new look, tabs, and help films — v0.32.0
+
+- **The app looks like the institute's other apps.** The same colours,
+  type and controls as Kanban and the LMS, on every screen.
+- **Tabs take you everywhere.** Today, Timesheet and More for everyone;
+  Approvals and Reports as well for managers and admins. Approvals shows
+  how many weeks are waiting, and More how many accounts are, for admins.
+  On a computer the tabs sit down the left side.
+- **More holds the rest:** People and Activities for managers and admins,
+  then Notifications, Help, Report a problem, the privacy policy and
+  Sign out.
+- **Help films.** More → Help has short narrated films of the app at
+  work, each on a phone and on a computer, with captions: signing in,
+  getting around, clocking, adding and fixing hours, the timesheet,
+  submitting, a week sent back, notifications and reporting a problem,
+  and for managers and admins approving, adding hours for someone,
+  reports, activities, new accounts, roles and reopening a week.
+- **Timesheet** shows the month with a pill for each week, coloured by
+  where it stands, and a key underneath.
+- A double tap on Clock in or Clock out counts once; the second tap
+  could clock straight out again, or start a new session.
+- When two people act on the same week at once, the second is told so in
+  words, beside the button they pressed.
+- Switching weeks never shows a moment of the previous week's hours.
+- A link with a malformed date opens the current week instead of
+  stopping the page.
+- On a phone, the rules screen's heading clears the status bar.
+- The user manual follows the tabs, with new screenshots.
+
 ### 2026-10-28 — Archived activities; notes on clocked hours — v0.31.0
 
 - **A note can be added to clocked hours.** Editing an entry keeps any
