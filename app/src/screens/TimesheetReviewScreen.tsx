@@ -100,27 +100,20 @@ export function TimesheetReviewScreen({
         <Notice tone="error">Rejected: {sheet.rejectReason}</Notice>
       ) : null}
 
-      {days.map((dayKey) => (
-        <DayEntries
-          key={dayKey}
-          dayKey={dayKey}
-          entries={entries.filter((e) => e.dayKey === dayKey)}
-          conflicts={conflicts}
-          onOpen={(entryId) => nav.navigate('EntryEdit', { entryId })}
-        />
-      ))}
-
+      {/* The decision first, under the week it is about: the days below are
+          what it rests on, and a reviewer should not have to scroll a whole
+          week to find the buttons. */}
       {sheet && sheet.status === 'submitted' ? (
         <View style={styles.decision}>
           <Text style={styles.hint}>
-            {displayName} submitted this week. Approve it, or reject it with a reason they will see.
+            Check the days below, then approve the week, or reject it with a reason {displayName} will see.
           </Text>
           <Button label="Approve timesheet" onPress={() => decide(() => approveTimesheet(sheet, reviewerUid, entries))} />
           <Button label="Reject timesheet…" kind="secondary" onPress={() => setRejecting(true)} />
         </View>
       ) : null}
       {status === 'approved' && sheet ? (
-        <>
+        <View style={styles.decision}>
           <Text style={styles.hint}>Approved, so this week is closed. Only an admin can reopen it.</Text>
           {admin ? (
             <Button
@@ -136,8 +129,20 @@ export function TimesheetReviewScreen({
               }}
             />
           ) : null}
-        </>
-      ) : (
+        </View>
+      ) : null}
+
+      {days.map((dayKey) => (
+        <DayEntries
+          key={dayKey}
+          dayKey={dayKey}
+          entries={entries.filter((e) => e.dayKey === dayKey)}
+          conflicts={conflicts}
+          onOpen={(entryId) => nav.navigate('EntryEdit', { entryId })}
+        />
+      ))}
+
+      {status === 'approved' ? null : (
         <Button
           label={`Add hours for ${displayName}`}
           kind="quiet"
@@ -170,6 +175,6 @@ export function TimesheetReviewScreen({
 const styles = StyleSheet.create({
   lede: { flexDirection: 'row', alignItems: 'center', gap: spacing(1.5), marginTop: spacing(1) },
   ledeText: { fontSize: 13, color: t.text.secondary },
-  decision: { gap: spacing(3), marginTop: spacing(4) },
+  decision: { gap: spacing(3), marginTop: spacing(2) },
   hint: { fontSize: 14, color: t.text.secondary },
 });

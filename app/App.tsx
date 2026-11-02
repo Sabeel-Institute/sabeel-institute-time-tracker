@@ -185,6 +185,17 @@ export default function App() {
     setNotifRoutingSession(routingApprover);
   }, [routingApprover]);
 
+  // Inside the navigator the browser tab is named by the screen; anywhere else
+  // (signed out, a gate, the rules) it is the app, not the last screen shown.
+  const navigating =
+    !outdated &&
+    session.phase === 'signedIn' &&
+    session.claims.status === 'active' &&
+    hasAcceptedRules(session.profile);
+  useEffect(() => {
+    if (Platform.OS === 'web' && !navigating) document.title = APP_NAME;
+  }, [navigating]);
+
   let content;
   if (outdated) {
     content = <UpdateScreen signedIn={session.phase === 'signedIn'} />;

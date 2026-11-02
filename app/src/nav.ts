@@ -34,7 +34,7 @@ export type TabRoute = 'Home' | 'Timesheet' | 'Approvals' | 'Reports';
  * route, which takes a complete state. On the web the browser's history follows the stack only while its key
  * holds (a new key reads as a page replaced, so Back left the site), and Today
  * keeps its route so its live data is not torn down and fetched again on every
- * tab press.
+ * tab press. A tab already open keeps its route too.
  */
 export function tabState<K extends TabRoute>(
   current: NavigationState | undefined,
@@ -48,7 +48,11 @@ export function tabState<K extends TabRoute>(
   });
   const bottom = current?.routes[0];
   const home = bottom?.name === 'Home' ? bottom : fresh('Home');
-  const routes = name === 'Home' ? [home] : [home, fresh(name, params)];
+  // The tab's own route, kept when it is already the one open under whatever
+  // was pushed over it, so going back to a tab keeps its filters and its week.
+  const open = current?.routes[1];
+  const tab = open?.name === name && params === undefined ? open : fresh(name, params);
+  const routes = name === 'Home' ? [home] : [home, tab];
   // A COMPLETE state (`stale: false`, every route keyed): a partial one is
   // rehydrated by the router, which gives the stack a new key.
   return (current
