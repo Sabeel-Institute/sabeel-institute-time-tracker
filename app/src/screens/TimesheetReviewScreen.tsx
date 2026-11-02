@@ -70,7 +70,9 @@ export function TimesheetReviewScreen({
     try {
       await fn();
       setRejecting(false);
-      nav.goBack();
+      // Only if still showing: a tab pressed while this saved has already
+      // moved on, and going back would undo it.
+      if (nav.isFocused()) nav.goBack();
     } catch (e) {
       setError((e as Error).message);
     }

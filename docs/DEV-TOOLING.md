@@ -531,9 +531,10 @@ native-build` made there instead of building one, which is how CI runs it.
   `onUserCreate`'s profile, and makes it an admin. It has not accepted the
   rules, so the flow meets that screen. A flow never edits the field: Maestro's
   `eraseText` deletes back from wherever the tap put the cursor.
-- **`maestro/timesheet.yaml`**: the rules and I agree, an activity made (its
-  name read back before Add), clocked in and out, then My timesheet, Reports,
-  Approvals and Users, each checked by text only that screen shows.
+- **`maestro/timesheet.yaml`**: the rules and I agree, an activity made from
+  More → Activities (its name read back before Add), clocked in and out on
+  Today, then the Timesheet, Reports and Approvals tabs and More → People,
+  each checked by text only that screen shows.
 - **A busy simulator drops taps.** The iPhone simulator holds a CI Mac's load
   average past 300, and a tap or a keystroke that lands before a screen takes it
   is lost. So every step that moves the app on goes through ci-tools' shared

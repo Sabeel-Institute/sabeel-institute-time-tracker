@@ -66,7 +66,9 @@ export function EntryEditScreen({ entryId, editorUid }: { entryId: string; edito
         note,
         editorUid,
       });
-      nav.goBack();
+      // Only if still showing: a tab pressed while this saved has already
+      // moved on, and going back would undo it.
+      if (nav.isFocused()) nav.goBack();
     } catch (e) {
       setError(explainEntryWriteError(e));
     }
@@ -76,7 +78,9 @@ export function EntryEditScreen({ entryId, editorUid }: { entryId: string; edito
     setError(null);
     try {
       await deleteEntry(entry.id);
-      nav.goBack();
+      // Only if still showing: a tab pressed while this saved has already
+      // moved on, and going back would undo it.
+      if (nav.isFocused()) nav.goBack();
     } catch (e) {
       setError(explainEntryWriteError(e));
     }

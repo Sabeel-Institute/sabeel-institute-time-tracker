@@ -72,7 +72,9 @@ export function ManualEntryScreen({
         timeZone: tz,
         creatorUid: uid,
       });
-      nav.goBack();
+      // Only if still showing: a tab pressed while this saved has already
+      // moved on, and going back would undo it.
+      if (nav.isFocused()) nav.goBack();
     } catch (e) {
       setError(explainEntryWriteError(e));
     }
