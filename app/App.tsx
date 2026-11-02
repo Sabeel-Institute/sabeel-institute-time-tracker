@@ -505,6 +505,7 @@ function Shell({
         <MoreSheet
           visible={moreOpen}
           approver={approver}
+          admin={admin}
           pendingAccounts={pendingAccounts}
           onClose={() => setMoreOpen(false)}
           onNavigate={(name) => {

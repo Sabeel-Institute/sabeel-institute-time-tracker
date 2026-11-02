@@ -97,6 +97,9 @@ export function UserEditScreen({ uid, selfUid, claims }: { uid: string; selfUid:
         </>
       ) : null}
 
+      {!isAdmin && u.status !== 'pending' ? (
+        <Text style={styles.hint}>An admin sets roles and access.</Text>
+      ) : null}
       {isAdmin && u.status !== 'pending' ? (
         <>
           <SectionTitle>Role</SectionTitle>

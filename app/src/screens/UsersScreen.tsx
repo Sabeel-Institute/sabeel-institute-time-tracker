@@ -62,7 +62,10 @@ export function UsersScreen({ selfUid, claims }: { selfUid: string; claims: Toke
   );
 
   return (
-    <Screen width="read" subtitle="Open someone to set their approver, role and access.">
+    <Screen
+      width="read"
+      subtitle={isAdmin ? 'Open someone to set their approver, role and access.' : 'Open someone to set who approves their hours.'}
+    >
       {pending.length > 0 ? (
         <>
           <SectionTitle>Waiting for approval ({pending.length})</SectionTitle>

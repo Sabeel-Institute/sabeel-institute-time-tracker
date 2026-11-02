@@ -23,12 +23,14 @@ const t = getTheme();
 export function MoreSheet({
   visible,
   approver,
+  admin,
   pendingAccounts,
   onClose,
   onNavigate,
 }: {
   visible: boolean;
   approver: boolean;
+  admin: boolean;
   /** Accounts waiting for approval, counted for an admin only (0 otherwise). */
   pendingAccounts: number;
   onClose: () => void;
@@ -42,7 +44,7 @@ export function MoreSheet({
           <SheetSection label="Institute" />
           <SheetOption
             label="People"
-            detail="Approve new accounts, set roles and approvers"
+            detail={admin ? 'Approve new accounts, set roles and approvers' : 'Everyone here, and who approves their hours'}
             badge={pendingAccounts}
             testID="more-people"
             onPress={() => onNavigate('Users')}
