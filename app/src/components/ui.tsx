@@ -842,19 +842,29 @@ const styles = StyleSheet.create({
   trackOn: { backgroundColor: t.accent.base, borderColor: t.accent.base },
   knob: { width: 24, height: 24, borderRadius: 12, backgroundColor: t.bg.raised, transform: [{ translateX: 0 }] },
   knobOn: { transform: [{ translateX: 20 }] },
+  // Never wider than its column: at 320px two long labels wrap inside their
+  // segments rather than running the switch off the screen.
   segmented: {
     flexDirection: 'row',
     alignSelf: 'flex-start',
+    maxWidth: '100%',
     gap: 2,
     padding: 3,
     borderRadius: 9,
     backgroundColor: t.bg.inset,
   },
-  segment: { paddingVertical: spacing(2), paddingHorizontal: spacing(4), borderRadius: 7, minHeight: 44, justifyContent: 'center' },
+  segment: {
+    flexShrink: 1,
+    paddingVertical: spacing(2),
+    paddingHorizontal: spacing(4),
+    borderRadius: 7,
+    minHeight: 44,
+    justifyContent: 'center',
+  },
   // A raised thumb you can see, with the label in the accent: a view switch,
   // not the brand's loudest control.
   segmentOn: { backgroundColor: t.bg.surface, borderWidth: 1, borderColor: t.border.strong },
-  segmentText: { fontSize: 14, fontWeight: '600', color: t.text.secondary },
+  segmentText: { fontSize: 14, fontWeight: '600', color: t.text.secondary, textAlign: 'center' },
   segmentTextOn: { color: t.text.accent, fontWeight: '700' },
   field: { gap: spacing(1) },
   fieldLabel: { fontSize: 13, fontWeight: '600', color: t.text.secondary },
