@@ -205,7 +205,8 @@ export function DayEntries({
   dayKey: string;
   entries: TimeEntry[];
   conflicts: Set<string>;
-  onOpen: (entryId: string) => void;
+  /** Opens an entry to edit; absent while the week is closed to this viewer. */
+  onOpen?: (entryId: string) => void;
 }) {
   const total = entries.reduce((sum, e) => sum + (e.durationMinutes ?? 0), 0);
   return (
@@ -221,7 +222,12 @@ export function DayEntries({
       ) : (
         <RowList>
           {entries.map((e) => (
-            <EntryRow key={e.id} entry={e} conflict={conflicts.has(e.id)} onPress={() => onOpen(e.id)} />
+            <EntryRow
+              key={e.id}
+              entry={e}
+              conflict={conflicts.has(e.id)}
+              onPress={onOpen ? () => onOpen(e.id) : undefined}
+            />
           ))}
         </RowList>
       )}

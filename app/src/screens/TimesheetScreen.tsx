@@ -148,7 +148,9 @@ export function TimesheetScreen({
           dayKey={dayKey}
           entries={dayEntries}
           conflicts={conflicts}
-          onOpen={(entryId) => nav.navigate('EntryEdit', { entryId })}
+          // A submitted or approved week is closed to its owner: the rules
+          // refuse the edit, so the rows do not offer one.
+          onOpen={status === 'draft' || status === 'rejected' ? (entryId) => nav.navigate('EntryEdit', { entryId }) : undefined}
         />
       ))}
       {entries.length === 0 ? (

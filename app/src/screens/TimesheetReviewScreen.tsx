@@ -138,7 +138,8 @@ export function TimesheetReviewScreen({
           dayKey={dayKey}
           entries={entries.filter((e) => e.dayKey === dayKey)}
           conflicts={conflicts}
-          onOpen={(entryId) => nav.navigate('EntryEdit', { entryId })}
+          // An approver corrects entries in any week not yet approved.
+          onOpen={status === 'approved' ? undefined : (entryId) => nav.navigate('EntryEdit', { entryId })}
         />
       ))}
 
