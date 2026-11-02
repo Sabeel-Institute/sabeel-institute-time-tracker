@@ -50,6 +50,7 @@ export function TimesheetReviewScreen({
   const entries = useEntriesRange(uid, period.fromKey, period.toKey);
   const [rejecting, setRejecting] = useState(false);
   const [reason, setReason] = useState('');
+  const [error, setError] = useState<string | null>(null);
   // A second submission notification can re-target this screen (another person,
   // another week) while it is mounted — navigate() swaps the params in place —
   // and whatever was under way for the last subject goes with it: a Reject
@@ -58,8 +59,13 @@ export function TimesheetReviewScreen({
     setAnchor(periodKey);
     setRejecting(false);
     setReason('');
+    setError(null);
   }, [uid, periodKey]);
-  const [error, setError] = useState<string | null>(null);
+  // An error is about the week it happened on; another week starts clear.
+  const showWeek = (key: string) => {
+    setAnchor(key);
+    setError(null);
+  };
 
   const conflicts = useMemo(() => overlappingEntryIds(entries), [entries]);
   const total = useMemo(() => entries.reduce((s, e) => s + (e.durationMinutes ?? 0), 0), [entries]);
@@ -99,8 +105,8 @@ export function TimesheetReviewScreen({
       <WeekStepper
         period={period}
         current={periodRangeFor(todayKey).fromKey === period.fromKey}
-        onStep={(dir) => setAnchor(stepPeriod(period, dir))}
-        onCurrent={() => setAnchor(todayKey)}
+        onStep={(dir) => showWeek(stepPeriod(period, dir))}
+        onCurrent={() => showWeek(todayKey)}
       />
       {sheet?.status === 'rejected' && sheet.rejectReason ? (
         <Notice tone="error">Rejected: {sheet.rejectReason}</Notice>
@@ -115,7 +121,14 @@ export function TimesheetReviewScreen({
             Check the days below, then approve the week, or reject it with a reason {displayName} will see.
           </Text>
           <Button label="Approve timesheet" onPress={() => decide(() => approveTimesheet(sheet, reviewerUid, entries))} />
-          <Button label="Reject timesheet…" kind="secondary" onPress={() => setRejecting(true)} />
+          <Button
+            label="Reject timesheet…"
+            kind="secondary"
+            onPress={() => {
+              setError(null);
+              setRejecting(true);
+            }}
+          />
         </View>
       ) : null}
       {status === 'approved' && sheet ? (
@@ -137,6 +150,8 @@ export function TimesheetReviewScreen({
           ) : null}
         </View>
       ) : null}
+      {/* Under the buttons it answers, not below the whole week. */}
+      <ErrorText error={error} />
 
       {days.map((dayKey) => (
         <DayEntries
@@ -158,7 +173,6 @@ export function TimesheetReviewScreen({
           }
         />
       )}
-      <ErrorText error={error} />
 
       <Sheet visible={rejecting} title="Reject timesheet" onClose={() => setRejecting(false)} closeLabel="Cancel">
         <Field

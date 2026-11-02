@@ -762,6 +762,24 @@ async function main() {
   await tab(mgr, 'approvals');
   await mgr.getByRole('button', { name: "Review Volunteer's timesheet", exact: true }).click();
   await logged(mgr, '2h 00m').waitFor();
+  // Two people on one week: the approval leaves first but travels slowly, the
+  // withdrawal lands first, and the rules refuse the approval. The approver is
+  // told so in words, under the buttons pressed, not in the database's.
+  await mgr.context().route(`http://${EMULATOR_HOSTS.firestore}/**`, async (route) => {
+    await new Promise((r) => setTimeout(r, 3000));
+    await route.continue().catch(() => {});
+  });
+  await mgr.getByRole('button', { name: 'Approve timesheet', exact: true }).click();
+  await vol.waitForTimeout(200);
+  await onScreen(vol.getByRole('button', { name: 'Withdraw submission', exact: true })).click();
+  const weekChanged = firstOnScreen(mgr.getByText(/^This week changed a moment ago/));
+  await weekChanged.waitFor({ timeout: 30000 });
+  if (!(await weekChanged.evaluate((e) => e.getBoundingClientRect().bottom <= innerHeight)))
+    throw new Error('the refused approval is explained out of sight');
+  await mgr.context().unroute(`http://${EMULATOR_HOSTS.firestore}/**`);
+  await firstOnScreen(vol.getByRole('button', { name: 'Submit timesheet', exact: true })).click();
+  await firstOnScreen(vol.getByText('Submitted', { exact: true })).waitFor();
+  await mgr.getByRole('button', { name: 'Reject timesheet…', exact: true }).waitFor({ timeout: 30000 });
   await mgr.getByRole('button', { name: 'Reject timesheet…', exact: true }).click();
   // The reason is required: Reject is dead until something is typed.
   const rejectSheet = dialogOf(mgr);

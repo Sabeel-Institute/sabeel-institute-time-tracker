@@ -64,12 +64,20 @@ export function TimesheetScreen({
   const todayKey = dayKeyFor(Date.now(), deviceTimeZone());
   const [anchor, setAnchor] = useState(initialPeriodKey ?? todayKey);
   const [error, setError] = useState<string | null>(null);
+  // An error is about the week it happened on; another week starts clear.
+  const showWeek = (key: string) => {
+    setAnchor(key);
+    setError(null);
+  };
 
   // Re-target when the param changes under a mounted screen: navigating here
   // from a notification while already on this screen updates params rather than
   // remounting, so without this the tap would leave you on the previous week.
   useEffect(() => {
-    if (initialPeriodKey) setAnchor(initialPeriodKey);
+    if (initialPeriodKey) {
+      setAnchor(initialPeriodKey);
+      setError(null);
+    }
   }, [initialPeriodKey]);
 
   const period = periodRangeFor(anchor);
@@ -143,7 +151,7 @@ export function TimesheetScreen({
       }
       width="read"
     >
-      <MonthWeeks period={period} todayKey={todayKey} stateOf={stateOf} onPick={setAnchor} />
+      <MonthWeeks period={period} todayKey={todayKey} stateOf={stateOf} onPick={showWeek} />
 
       {sheet?.status === 'rejected' ? (
         <Notice tone="error">
