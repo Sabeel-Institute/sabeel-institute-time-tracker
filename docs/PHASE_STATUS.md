@@ -52,6 +52,16 @@ no app version carry no version in their heading.
 - On a phone, the rules screen's heading clears the status bar.
 - The user manual follows the tabs, with new screenshots.
 
+No rules or functions deploy: the release changes neither. The help
+films were published beforehand to their own Hosting site,
+`sabeel-time-tracker-help.web.app`. **v0.32.0** released, tag `v0.32.0`
+at `e7c6e73`: GitHub release; Play internal testing 0.32.0 (32000),
+whose universal APK booted five times in a row with `v0.32.0 · e7c6e73`;
+TestFlight 0.32.0 build 32000 from the tag; hosting from the Web
+workflow's artifact through Deploy Web, serving `0.32.0` and `e7c6e73`.
+The redesign's preview channel was deleted and its domain taken off
+Firebase Auth's authorized domains.
+
 ### 2026-10-28 — Archived activities; notes on clocked hours — v0.31.0
 
 - **A note can be added to clocked hours.** Editing an entry keeps any
