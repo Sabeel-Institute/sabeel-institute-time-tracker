@@ -3,6 +3,8 @@ import { createNavigationContainerRef } from '@react-navigation/native';
 export type RootStackParamList = {
   Home: undefined;
   Users: undefined;
+  /** One person's account: approver, role and access. */
+  UserEdit: { uid: string };
   Activities: undefined;
   /** forUid/forName: log hours on someone else's behalf (manager/approver flow). */
   ManualEntry: { forUid?: string; forName?: string } | undefined;

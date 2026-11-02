@@ -26,7 +26,8 @@ export function PushNudge({ uid }: { uid: string }) {
       {/* No Enable button once it has failed — pressing again would do the same
           nothing. Dismissing is the only useful action left. */}
       {failed ? null : (
-        <Button label="Enable notifications" disabled={busy} onPress={enable} />
+        // Secondary: the clock is this screen's main action, not the nudge.
+        <Button label="Enable notifications" kind="secondary" disabled={busy} onPress={enable} />
       )}
       <Pressable
         accessibilityRole="button"
@@ -43,13 +44,13 @@ export function PushNudge({ uid }: { uid: string }) {
 const styles = StyleSheet.create({
   card: {
     gap: spacing(2),
+    backgroundColor: t.bg.surface,
     borderWidth: 1,
     borderColor: t.border.subtle,
     borderRadius: 12,
-    padding: spacing(3.5),
-    marginBottom: spacing(2),
+    padding: spacing(4),
   },
-  text: { fontSize: 14, color: t.text.primary },
+  text: { fontSize: 15, color: t.text.primary },
   /**
    * Left, hugging its text — NOT centred across the card. On a wide screen the
    * button above sizes to its label and sits left, so a centred dismiss floated

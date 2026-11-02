@@ -1,19 +1,18 @@
 import { useEffect, useState } from 'react';
-import { StyleSheet, Text, TextInput, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import {
   dayKeyFor,
+  dayLabel,
   editedEntryTimes,
   entryFormTimes,
-  entryMinutes,
   entryTimesValid,
-  formatDuration,
   tzLabelFor,
 } from '@sabeel/shared';
 import { useActivities } from '../activities';
 import { useEntry, updateEntry, deleteEntry, explainEntryWriteError } from '../entries';
-import { ActivityPicker } from '../components/ActivityPicker';
-import { DateTimeField } from '../components/DateTimeField';
+import { confirmAction } from '../confirm';
+import { EntryForm } from '../components/EntryForm';
 import { Button, ErrorText, Screen } from '../components/ui';
 import { getTheme, spacing } from '../theme';
 
@@ -83,76 +82,56 @@ export function EntryEditScreen({ entryId, editorUid }: { entryId: string; edito
     }
   };
 
+  const confirmRemove = async () => {
+    if (await confirmAction('Delete this entry?', "Its hours come off the timesheet. This can't be undone.")) {
+      await remove();
+    }
+  };
+
+  const movedTo = times !== null ? dayKeyFor(times.start, entry.timeZone) : null;
   return (
-    <Screen width="read">
-      <Text style={styles.meta}>
-        {entry.source === 'clock' ? 'Clocked session' : 'Manual entry'} · times in{' '}
-        {tzLabelFor(entry.start, entry.timeZone)}
-        {entry.uid !== editorUid ? ' · editing as manager' : ''}
-      </Text>
-
-      <Text style={styles.label}>Activity</Text>
-      <ActivityPicker activities={activities} selectedId={activityId} onSelect={setActivityId} />
-
-      <Text style={styles.label}>Date</Text>
-      <DateTimeField kind="date" value={dateKey} onChange={setDateKey} />
-
-      <View style={styles.timesRow}>
-        <View style={styles.grow}>
-          <Text style={styles.label}>From</Text>
-          <DateTimeField kind="time" value={from} onChange={setFrom} />
-        </View>
-        <View style={styles.grow}>
-          <Text style={styles.label}>To</Text>
-          <DateTimeField kind="time" value={to} onChange={setTo} />
-        </View>
-      </View>
-      {/* Live duration echo — catches AM/PM slips before saving. */}
-      {times !== null && times.end > times.start ? (
-        <Text style={styles.durationPreview}>
-          = {formatDuration(entryMinutes(times.start, times.end))}
-        </Text>
-      ) : null}
-      {endKey !== null && endKey !== dateKey ? (
-        <Text style={styles.hint}>Ends on {endKey}.</Text>
-      ) : null}
-
-      <Text style={styles.label}>Note</Text>
-      <TextInput
-        value={note}
-        onChangeText={setNote}
-        style={[styles.input, styles.noteInput]}
-        multiline
+    <Screen
+      width="read"
+      subtitle={`${entry.source === 'clock' ? 'Clocked in and out' : 'Added by hand'} · times in ${tzLabelFor(
+        entry.start,
+        entry.timeZone,
+      )}${entry.uid !== editorUid ? ' · you are editing as a manager' : ''}`}
+    >
+      <EntryForm
+        activities={activities}
+        activityId={activityId}
+        onActivity={setActivityId}
+        dateKey={dateKey}
+        onDate={setDateKey}
+        from={from}
+        onFrom={setFrom}
+        to={to}
+        onTo={setTo}
+        span={times}
+        note={note}
+        onNote={setNote}
+        noteLabel="Note"
       />
+      {endKey !== null && endKey !== dateKey ? <Text style={styles.hint}>Ends on {dayLabel(endKey)}.</Text> : null}
+      {movedTo !== null && movedTo !== entry.dayKey ? (
+        <Text style={styles.hint}>This moves the entry to {dayLabel(movedTo)}.</Text>
+      ) : null}
 
       <Button label="Save changes" onPress={save} disabled={!valid} />
       {loaded && !valid ? (
-        <Text style={styles.hint}>Times must be HH:MM, end after start, at most 24h.</Text>
+        <Text style={styles.hint}>The end has to be after the start, and at most 24 hours later.</Text>
       ) : null}
-      <Button label="Delete entry" kind="danger" onPress={remove} />
       <ErrorText error={error} />
-      {times !== null && dayKeyFor(times.start, entry.timeZone) !== entry.dayKey ? (
-        <Text style={styles.hint}>
-          This moves the entry to {dayKeyFor(times.start, entry.timeZone)}.
-        </Text>
-      ) : null}
+      {/* Apart from Save, so a destructive button is never the one you hit by
+          habit; and it asks once. */}
+      <View style={styles.dangerZone}>
+        <Button label="Delete entry" kind="danger" onPress={confirmRemove} />
+      </View>
     </Screen>
   );
 }
 
 const styles = StyleSheet.create({
-  meta: { fontSize: 13, color: t.text.secondary },
-  durationPreview: { fontSize: 15, fontWeight: '700', color: t.accent.base, textAlign: 'right' },
-  label: { fontSize: 13, color: t.text.secondary, marginTop: spacing(2) },
-  input: {
-    borderWidth: 1,
-    borderColor: t.border.subtle,
-    borderRadius: 8,
-    padding: spacing(3),
-    fontSize: 15,
-  },
-  noteInput: { minHeight: 72, textAlignVertical: 'top' },
-  timesRow: { flexDirection: 'row', gap: spacing(3) },
-  grow: { flex: 1 },
-  hint: { fontSize: 12, color: t.text.muted },
+  hint: { fontSize: 14, color: t.text.secondary },
+  dangerZone: { marginTop: spacing(6), paddingTop: spacing(4), borderTopWidth: 1, borderTopColor: t.border.subtle },
 });

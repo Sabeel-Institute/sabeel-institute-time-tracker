@@ -1,23 +1,20 @@
 import { useState } from 'react';
-import { StyleSheet, Text, TextInput, View } from 'react-native';
+import { StyleSheet, Text } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import {
   addDays,
   dayKeyFor,
   deviceTimeZone,
-  entryMinutes,
   entryTimesValid,
-  formatDuration,
   formInstant,
   tzLabelFor,
 } from '@sabeel/shared';
 import { useActivities } from '../activities';
 import { createManualEntry, explainEntryWriteError } from '../entries';
 import { useUser } from '../users';
-import { ActivityPicker } from '../components/ActivityPicker';
-import { DateTimeField } from '../components/DateTimeField';
-import { Button, ErrorText, Screen } from '../components/ui';
-import { getTheme, spacing } from '../theme';
+import { EntryForm } from '../components/EntryForm';
+import { Button, Chips, ErrorText, Notice, Screen } from '../components/ui';
+import { getTheme } from '../theme';
 
 const t = getTheme();
 
@@ -78,61 +75,47 @@ export function ManualEntryScreen({
     }
   };
 
+  const yesterdayKey = addDays(todayKey, -1);
   return (
     <Screen width="read">
       {onBehalf ? (
-        <Text style={styles.onBehalf}>
+        <Notice tone="info">
           Adding hours for {forName ?? forUid}
           {/* Which clock these times are read against is not guessable — say it,
               but only when it differs from the one this device would have used. */}
-          {tz !== deviceTimeZone() ? ` · times are ${tzLabelFor(Date.now(), tz)}` : ''}
-        </Text>
+          {tz !== deviceTimeZone() ? `. Times are ${tzLabelFor(Date.now(), tz)}.` : '.'}
+        </Notice>
       ) : null}
-      <Text style={styles.label}>Activity</Text>
-      <ActivityPicker activities={activities} selectedId={activityId} onSelect={setActivityId} />
-
-      <Text style={styles.label}>Date</Text>
-      <View style={styles.dateRow}>
-        <View style={styles.dateField}>
-          <DateTimeField kind="date" value={dateKey} onChange={setDateKey} />
-        </View>
-        <Button label="Today" kind="secondary" onPress={() => setDateKey(todayKey)} />
-        <Button
-          label="Yesterday"
-          kind="secondary"
-          onPress={() => setDateKey(addDays(todayKey, -1))}
-        />
-      </View>
-
-      <View style={styles.timesRow}>
-        <View style={styles.grow}>
-          <Text style={styles.label}>From</Text>
-          <DateTimeField kind="time" value={from} onChange={setFrom} />
-        </View>
-        <View style={styles.grow}>
-          <Text style={styles.label}>To</Text>
-          <DateTimeField kind="time" value={to} onChange={setTo} />
-        </View>
-      </View>
-      {/* Live duration echo — catches AM/PM slips before saving. */}
-      {start !== null && end !== null && end > start ? (
-        <Text style={styles.durationPreview}>= {formatDuration(entryMinutes(start, end))}</Text>
-      ) : null}
-
-      <Text style={styles.label}>What did you work on? (optional)</Text>
-      <TextInput
-        value={note}
-        onChangeText={setNote}
-        style={[styles.input, styles.noteInput]}
-        multiline
-        placeholder="Notes…"
+      <EntryForm
+        activities={activities}
+        activityId={activityId}
+        onActivity={setActivityId}
+        dateKey={dateKey}
+        onDate={setDateKey}
+        dateShortcuts={
+          <Chips
+            label="Day"
+            value={dateKey === todayKey ? 'today' : dateKey === yesterdayKey ? 'yesterday' : 'other'}
+            options={[
+              { value: 'today', label: 'Today' },
+              { value: 'yesterday', label: 'Yesterday' },
+            ]}
+            onChange={(day) => setDateKey(day === 'today' ? todayKey : yesterdayKey)}
+          />
+        }
+        from={from}
+        onFrom={setFrom}
+        to={to}
+        onTo={setTo}
+        span={start !== null && end !== null ? { start, end } : null}
+        note={note}
+        onNote={setNote}
+        noteLabel="What did you work on? (optional)"
       />
 
       <Button label="Save hours" onPress={save} disabled={!valid} />
       {!valid && activity ? (
-        <Text style={styles.hint}>
-          Times must be HH:MM on the same day, end after start, at most 24h.
-        </Text>
+        <Text style={styles.hint}>The end has to be after the start, on the same day, and at most 24 hours later.</Text>
       ) : null}
       <ErrorText error={error} />
     </Screen>
@@ -140,26 +123,5 @@ export function ManualEntryScreen({
 }
 
 const styles = StyleSheet.create({
-  onBehalf: { fontSize: 14, fontWeight: '700', color: t.accent.base },
-  durationPreview: { fontSize: 15, fontWeight: '700', color: t.accent.base, textAlign: 'right' },
-  label: { fontSize: 13, color: t.text.secondary, marginTop: spacing(2) },
-  input: {
-    borderWidth: 1,
-    borderColor: t.border.subtle,
-    borderRadius: 8,
-    padding: spacing(3),
-    fontSize: 15,
-  },
-  noteInput: { minHeight: 72, textAlignVertical: 'top' },
-  // The date and its two shortcuts share a line while there is room and WRAP
-  // when there is not. `flex: 1` here (as the times row below uses) sets
-  // flexBasis to 0 and lets the field collapse instead — at 320px that left the
-  // date input showing "08". Growing from its natural width, and refusing to
-  // shrink below it, is what makes the row give way at the gap rather than
-  // inside the field.
-  dateRow: { flexDirection: 'row', gap: spacing(2), alignItems: 'center', flexWrap: 'wrap' },
-  dateField: { flexGrow: 1, flexShrink: 0, flexBasis: 'auto' },
-  timesRow: { flexDirection: 'row', gap: spacing(3) },
-  grow: { flex: 1 },
-  hint: { fontSize: 12, color: t.text.muted },
+  hint: { fontSize: 14, color: t.text.secondary },
 });

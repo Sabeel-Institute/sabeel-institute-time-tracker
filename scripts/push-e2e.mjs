@@ -124,7 +124,8 @@ async function main() {
       kind,
       notification: { title: `Timesheet ${kind}`, body: `For ${periodLabel(ownWeek)}.` },
       route: { screen: 'Timesheet', periodKey: ownWeek.fromKey },
-      landed: async (p) => (await onScreen(p.getByText('My timesheet', { exact: true })))
+      // The heading, not the text: "Timesheet" is also the tab's label.
+      landed: async (p) => (await onScreen(p.getByRole('heading', { name: 'Timesheet', exact: true })))
         && onScreen(p.getByText(periodLabel(ownWeek), { exact: true }), 5000),
     })),
   ];

@@ -1,5 +1,13 @@
-import { useEffect, useEffectEvent } from 'react';
-import { ActivityIndicator, View } from 'react-native';
+import {
+  createContext,
+  type ReactNode,
+  useCallback,
+  useContext,
+  useEffect,
+  useEffectEvent,
+  useState,
+} from 'react';
+import { ActivityIndicator, Platform, StyleSheet, View } from 'react-native';
 import { doc, updateDoc } from 'firebase/firestore';
 import { COLLECTIONS, deviceTimeZone, hasAcceptedRules } from '@sabeel/shared';
 import { db } from './src/firebase';
@@ -23,6 +31,7 @@ import {
 import { useMinVersion } from './src/minVersion';
 import { HomeScreen } from './src/screens/HomeScreen';
 import { UsersScreen } from './src/screens/UsersScreen';
+import { UserEditScreen } from './src/screens/UserEditScreen';
 import { ActivitiesScreen } from './src/screens/ActivitiesScreen';
 import { ManualEntryScreen } from './src/screens/ManualEntryScreen';
 import { TimesheetScreen } from './src/screens/TimesheetScreen';
@@ -36,6 +45,12 @@ import { NotificationSettingsScreen } from './src/screens/NotificationSettingsSc
 import { ReportProblemScreen } from './src/screens/ReportProblemScreen';
 import { RulesScreen } from './src/screens/RulesScreen';
 import { navigationRef, type RootStackParamList } from './src/nav';
+import { AppNav, activeTab } from './src/components/AppNav';
+import { MoreSheet } from './src/components/MoreSheet';
+import { ScreenOwnsTopInset } from './src/components/ui';
+import { useApprovalQueue } from './src/timesheets';
+import { usePendingCount } from './src/users';
+import { useLayout } from './src/theme/layout';
 import { getTheme } from './src/theme';
 import { initSentry } from './src/sentry';
 import { ErrorBoundary } from './src/components/ErrorBoundary';
@@ -45,6 +60,39 @@ const t = getTheme();
 initSentry();
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
+type RouteName = keyof RootStackParamList;
+
+/**
+ * THE TAB ROOTS RUN WITHOUT A STACK HEADER. A header carries Back and names
+ * where you are; a tab root is never pushed and names itself in its own heading,
+ * so a header there is a duplicate title in a 56px bar. `Screen` pays the
+ * status-bar inset instead, on exactly these screens. Pushed screens keep their
+ * header: it is the only thing carrying Back.
+ */
+const HEADERLESS = new Set<RouteName>(['Home', 'Timesheet', 'Approvals', 'Reports']);
+
+function screenOptions(name: RouteName, title: string) {
+  return { title, headerShown: !HEADERLESS.has(name) } as const;
+}
+
+// Chrome is ivory with a dark title, deliberately not a raspberry app bar.
+const navTheme = {
+  dark: false,
+  colors: {
+    primary: t.accent.base,
+    background: t.bg.canvas,
+    card: t.bg.canvas,
+    text: t.text.primary,
+    border: t.border.subtle,
+    notification: t.accent.base,
+  },
+  fonts: {
+    regular: { fontFamily: 'System', fontWeight: '400' as const },
+    medium: { fontFamily: 'System', fontWeight: '500' as const },
+    bold: { fontFamily: 'System', fontWeight: '700' as const },
+    heavy: { fontFamily: 'System', fontWeight: '900' as const },
+  },
+};
 
 export default function App() {
   const session = useSession();
@@ -132,27 +180,30 @@ export default function App() {
   } else {
     const { profile, claims, user } = session;
     content = (
-      <NavigationContainer ref={navigationRef} onReady={flushNotifRoute}>
+      <Shell uid={user.uid} approver={isApprover} admin={claims.admin === true}>
+        <Navigator>
         <Stack.Navigator
           screenOptions={{
-            headerShown: false,
-            // Ivory chrome: a nav header is a dark title on the ivory canvas,
-            // not a raspberry bar (brand chrome-vs-content rule).
-            headerStyle: { backgroundColor: t.bg.canvas },
             headerTintColor: t.text.primary,
-            headerTitleStyle: { color: t.text.primary },
             headerShadowVisible: false,
+            // iOS labels Back with the previous screen's title; a chevron alone,
+            // as Android and the web draw it.
+            headerBackButtonDisplayMode: Platform.OS === 'ios' ? 'minimal' : undefined,
           }}
+          // Per screen, from its own route: a screen beneath the top one keeps
+          // its inset rather than shifting while it is covered.
+          screenLayout={({ route, children }) => (
+            <ScreenOwnsTopInset.Provider value={HEADERLESS.has(route.name)}>
+              {children}
+            </ScreenOwnsTopInset.Provider>
+          )}
         >
-          <Stack.Screen name="Home">
-            {() => <HomeScreen uid={user.uid} profile={profile} claims={claims} />}
+          <Stack.Screen name="Home" options={screenOptions('Home', 'Today')}>
+            {() => <HomeScreen uid={user.uid} profile={profile} />}
           </Stack.Screen>
           <Stack.Screen
             name="ManualEntry"
-            options={{
-              headerShown: true,
-              title: 'Add hours',
-            }}
+            options={screenOptions('ManualEntry', 'Add hours')}
           >
             {({ route }) => {
               const p = (route.params ?? {}) as { forUid?: string; forName?: string };
@@ -161,10 +212,7 @@ export default function App() {
           </Stack.Screen>
           <Stack.Screen
             name="Timesheet"
-            options={{
-              headerShown: true,
-              title: 'My timesheet',
-            }}
+            options={screenOptions('Timesheet', 'Timesheet')}
           >
             {({ route }) => (
               <TimesheetScreen
@@ -179,19 +227,13 @@ export default function App() {
           </Stack.Screen>
           <Stack.Screen
             name="NeedsAttention"
-            options={{
-              headerShown: true,
-              title: 'Needs attention',
-            }}
+            options={screenOptions('NeedsAttention', 'Needs attention')}
           >
             {() => <NeedsAttentionScreen uid={user.uid} />}
           </Stack.Screen>
           <Stack.Screen
             name="NotificationSettings"
-            options={{
-              headerShown: true,
-              title: 'Notifications',
-            }}
+            options={screenOptions('NotificationSettings', 'Notifications')}
           >
             {() => (
               <NotificationSettingsScreen uid={user.uid} profile={profile} claims={claims} />
@@ -199,19 +241,13 @@ export default function App() {
           </Stack.Screen>
           <Stack.Screen
             name="ReportProblem"
-            options={{
-              headerShown: true,
-              title: 'Report a problem',
-            }}
+            options={screenOptions('ReportProblem', 'Report a problem')}
           >
             {() => <ReportProblemScreen uid={user.uid} />}
           </Stack.Screen>
           <Stack.Screen
             name="EntryEdit"
-            options={{
-              headerShown: true,
-              title: 'Edit entry',
-            }}
+            options={screenOptions('EntryEdit', 'Edit entry')}
           >
             {({ route }) => (
               <EntryEditScreen
@@ -223,10 +259,7 @@ export default function App() {
           {isApprover ? (
             <Stack.Screen
               name="Reports"
-              options={{
-                headerShown: true,
-                title: 'Reports',
-                  }}
+              options={screenOptions('Reports', 'Reports')}
             >
               {() => <ReportsScreen />}
             </Stack.Screen>
@@ -234,10 +267,7 @@ export default function App() {
           {isApprover ? (
             <Stack.Screen
               name="PersonDetail"
-              options={{
-                headerShown: true,
-                title: 'Lifetime hours',
-                  }}
+              options={screenOptions('PersonDetail', 'Lifetime hours')}
             >
               {({ route }) => {
                 const p = route.params as { uid: string; displayName: string };
@@ -248,10 +278,7 @@ export default function App() {
           {isApprover ? (
             <Stack.Screen
               name="Activities"
-              options={{
-                headerShown: true,
-                title: 'Activities',
-                  }}
+              options={screenOptions('Activities', 'Activities')}
             >
               {() => <ActivitiesScreen selfUid={user.uid} claims={claims} />}
             </Stack.Screen>
@@ -259,10 +286,7 @@ export default function App() {
           {isApprover ? (
             <Stack.Screen
               name="Approvals"
-              options={{
-                headerShown: true,
-                title: 'Approvals',
-                  }}
+              options={screenOptions('Approvals', 'Approvals')}
             >
               {() => <ApprovalsScreen uid={user.uid} claims={claims} />}
             </Stack.Screen>
@@ -270,10 +294,7 @@ export default function App() {
           {isApprover ? (
             <Stack.Screen
               name="TimesheetReview"
-              options={{
-                headerShown: true,
-                title: 'Review timesheet',
-                  }}
+              options={screenOptions('TimesheetReview', 'Review timesheet')}
             >
               {({ route }) => {
                 const p = route.params as {
@@ -295,16 +316,25 @@ export default function App() {
           {isApprover ? (
             <Stack.Screen
               name="Users"
-              options={{
-                headerShown: true,
-                title: 'Users',
-                  }}
+              options={screenOptions('Users', 'People')}
             >
               {() => <UsersScreen selfUid={user.uid} claims={claims} />}
             </Stack.Screen>
           ) : null}
+          {isApprover ? (
+            <Stack.Screen name="UserEdit" options={screenOptions('UserEdit', 'Person')}>
+              {({ route }) => (
+                <UserEditScreen
+                  uid={(route.params as { uid: string }).uid}
+                  selfUid={user.uid}
+                  claims={claims}
+                />
+              )}
+            </Stack.Screen>
+          ) : null}
         </Stack.Navigator>
-      </NavigationContainer>
+        </Navigator>
+      </Shell>
     );
   }
 
@@ -323,3 +353,106 @@ export default function App() {
     </ErrorBoundary>
   );
 }
+
+/** Lets the NavigationContainer report state changes up to the Shell above it. */
+const NavStateContext = createContext<() => void>(() => {});
+
+/**
+ * The container, split out only so it can read the Shell's callback out of
+ * context — a provider cannot consume its own value.
+ */
+function Navigator({ children }: { children: ReactNode }) {
+  const onStateChange = useContext(NavStateContext);
+  return (
+    <NavigationContainer
+      ref={navigationRef}
+      theme={navTheme}
+      onReady={() => {
+        onStateChange();
+        flushNotifRoute();
+      }}
+      onStateChange={onStateChange}
+    >
+      {children}
+    </NavigationContainer>
+  );
+}
+
+/**
+ * THE PERSISTENT CHROME — what stays put while screens come and go: the bar on a
+ * phone, the rail on a wide screen, and the More sheet.
+ *
+ * Composition rather than React Navigation's tab navigator, as in the sibling
+ * LMS: a tab navigator draws its bar inside each screen, so it can never become
+ * a left column, and the rail has to be a SIBLING of the whole stack.
+ *
+ * TABS RESET, MORE ITEMS PUSH. A tab is a root: switching sections replaces the
+ * stack, or Back from Reports would walk through every tab visited before it. A
+ * More destination is somewhere you go and come back from, so it is pushed.
+ */
+function Shell({
+  uid,
+  approver,
+  admin,
+  children,
+}: {
+  uid: string;
+  approver: boolean;
+  admin: boolean;
+  children: ReactNode;
+}) {
+  const { isWide } = useLayout();
+  // The same queries the screens behind the badges read, so a badge cannot
+  // disagree with the screen it opens.
+  const waiting = useApprovalQueue(uid).length;
+  const pendingAccounts = usePendingCount(admin);
+  // The stack's route names, top first: the lit tab follows from it.
+  const [stack, setStack] = useState<RouteName[]>(['Home']);
+  const onStateChange = useCallback(() => {
+    const state = navigationRef.isReady() ? navigationRef.getRootState() : undefined;
+    if (state) setStack(state.routes.map((r) => r.name as RouteName).reverse());
+  }, []);
+
+  const [moreOpen, setMoreOpen] = useState(false);
+  const nav = (
+    <AppNav
+      approver={approver}
+      variant={isWide ? 'rail' : 'bar'}
+      active={activeTab(stack)}
+      waiting={approver ? waiting : 0}
+      pendingAccounts={pendingAccounts}
+      onTab={(name) => {
+        if (navigationRef.isReady()) navigationRef.reset({ index: 0, routes: [{ name }] });
+      }}
+      onOpenMore={() => setMoreOpen(true)}
+    />
+  );
+  return (
+    <NavStateContext.Provider value={onStateChange}>
+        {/* Reading order decides which side of the content the chrome sits on:
+            a rail before it, a bar after it — what a screen reader and the Tab
+            key follow. */}
+        <View style={[styles.shell, isWide ? styles.shellWide : null]}>
+          {isWide ? nav : null}
+          <View style={styles.stack}>{children}</View>
+          {isWide ? null : nav}
+        </View>
+        <MoreSheet
+          visible={moreOpen}
+          approver={approver}
+          pendingAccounts={pendingAccounts}
+          onClose={() => setMoreOpen(false)}
+          onNavigate={(name) => {
+            setMoreOpen(false);
+            if (navigationRef.isReady()) (navigationRef.navigate as (n: RouteName) => void)(name);
+          }}
+        />
+    </NavStateContext.Provider>
+  );
+}
+
+const styles = StyleSheet.create({
+  shell: { flex: 1, flexDirection: 'column', backgroundColor: t.bg.canvas },
+  shellWide: { flexDirection: 'row' },
+  stack: { flex: 1 },
+});

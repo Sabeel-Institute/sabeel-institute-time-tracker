@@ -1,34 +1,30 @@
 import { useEffect, useMemo, useState } from 'react';
-import { StyleSheet, Text, TextInput, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import {
   addDays,
+  dayKeyFor,
+  deviceTimeZone,
   formatDuration,
   overlappingEntryIds,
-  periodLabel,
   periodRangeFor,
 } from '@sabeel/shared';
 import type { RootStackParamList } from '../nav';
-import { useEntriesRange, type TimeEntry } from '../entries';
+import { useEntriesRange } from '../entries';
 import { approveTimesheet, rejectTimesheet, useTimesheet } from '../timesheets';
-import { EntryRow } from './TimesheetScreen';
-import { Button, ErrorText, Screen } from '../components/ui';
+import { DayEntries, WeekStepper, stepPeriod } from '../components/WeekView';
+import { Sheet } from '../components/Sheet';
+import { Button, ErrorText, Field, Notice, Screen, StatusChip, sheetStatus } from '../components/ui';
 import { getTheme, spacing } from '../theme';
 
 const t = getTheme();
 
-const STATUS_LINE = {
-  draft: { label: 'Not submitted', color: t.text.secondary },
-  submitted: { label: 'Submitted — awaiting your decision', color: t.accent.goldText },
-  approved: { label: 'Approved', color: t.accent.base },
-  rejected: { label: 'Rejected — back with the owner', color: t.feedback.danger },
-} as const;
-
 /**
- * A manager's view of one person's weeks: per-day breakdown with week
- * navigation, entry corrections (tap → edit) and add-on-behalf in any
- * non-approved week, and approve/reject when the week is submitted.
+ * A manager's view of one person's weeks: every day of the week, entry
+ * corrections (tap → edit) and adding hours on their behalf in any week not yet
+ * approved, and the decision when the week is submitted — Approve, or Reject
+ * with the reason they will see.
  */
 export function TimesheetReviewScreen({
   reviewerUid,
@@ -39,7 +35,7 @@ export function TimesheetReviewScreen({
   reviewerUid: string;
   uid: string;
   displayName: string;
-  /** Initial week; the screen navigates freely from here. */
+  /** Initial week; the screen steps freely from here. */
   periodKey: string;
 }) {
   const nav = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
@@ -47,142 +43,114 @@ export function TimesheetReviewScreen({
   // A second submission notification can re-target this screen (another person,
   // another week) while it is mounted — navigate() swaps the params in place.
   useEffect(() => setAnchor(periodKey), [periodKey]);
+  const todayKey = dayKeyFor(Date.now(), deviceTimeZone());
   const period = periodRangeFor(anchor);
   const sheet = useTimesheet(uid, period.fromKey);
   const status = sheet === undefined ? undefined : (sheet?.status ?? 'draft');
   const entries = useEntriesRange(uid, period.fromKey, period.toKey);
+  const [rejecting, setRejecting] = useState(false);
   const [reason, setReason] = useState('');
   const [error, setError] = useState<string | null>(null);
 
-  const stepPeriod = (dir: 1 | -1) =>
-    setAnchor(dir === -1 ? addDays(period.fromKey, -1) : addDays(period.toKey, 1));
-
   const conflicts = useMemo(() => overlappingEntryIds(entries), [entries]);
-  const total = useMemo(
-    () => entries.reduce((s, e) => s + (e.durationMinutes ?? 0), 0),
-    [entries],
-  );
+  const total = useMemo(() => entries.reduce((s, e) => s + (e.durationMinutes ?? 0), 0), [entries]);
 
-  // Sun–Sat day scaffold so empty days are visible during review.
+  // Every day of the week, so an empty day is visible during review.
   const days = useMemo(() => {
-    const list: { dayKey: string; dayEntries: TimeEntry[] }[] = [];
-    for (let d = period.fromKey; d <= period.toKey; d = addDays(d, 1)) {
-      list.push({ dayKey: d, dayEntries: entries.filter((e) => e.dayKey === d) });
-    }
+    const list: string[] = [];
+    for (let d = period.fromKey; d <= period.toKey; d = addDays(d, 1)) list.push(d);
     return list;
-  }, [period.fromKey, period.toKey, entries]);
+  }, [period.fromKey, period.toKey]);
 
-  const act = async (fn: () => Promise<void>) => {
+  const decide = async (fn: () => Promise<void>) => {
     setError(null);
     try {
       await fn();
+      setRejecting(false);
       nav.goBack();
     } catch (e) {
       setError((e as Error).message);
     }
   };
 
+  const shown = status ? sheetStatus(status) : null;
   return (
-    <Screen width="read">
-      <Text style={styles.title}>{displayName}</Text>
-      <View style={styles.navRow}>
-        <Button label="‹" kind="secondary" onPress={() => stepPeriod(-1)} />
-        <View style={styles.navCenter}>
-          <Text style={styles.navLabel}>{periodLabel(period)}</Text>
-          <Text style={styles.total}>Total: {formatDuration(total)}</Text>
-          {status ? (
-            <Text style={[styles.statusLine, { color: STATUS_LINE[status].color }]}>
-              {STATUS_LINE[status].label}
-            </Text>
-          ) : null}
-        </View>
-        <Button label="›" kind="secondary" onPress={() => stepPeriod(1)} />
-      </View>
+    <Screen
+      title={displayName}
+      subtitle={
+        shown ? (
+          <View style={styles.lede}>
+            <StatusChip label={shown.label} tone={shown.tone} />
+            <Text style={styles.ledeText}>· {formatDuration(total)} logged</Text>
+          </View>
+        ) : undefined
+      }
+      width="read"
+    >
+      <WeekStepper
+        period={period}
+        current={periodRangeFor(todayKey).fromKey === period.fromKey}
+        onStep={(dir) => setAnchor(stepPeriod(period, dir))}
+        onCurrent={() => setAnchor(todayKey)}
+      />
       {sheet?.status === 'rejected' && sheet.rejectReason ? (
-        <Text style={styles.gone}>Reason: {sheet.rejectReason}</Text>
+        <Notice tone="error">Rejected: {sheet.rejectReason}</Notice>
       ) : null}
 
-      {days.map(({ dayKey, dayEntries }) => (
-        <View key={dayKey} style={styles.dayGroup}>
-          <Text style={styles.dayHeader}>
-            {dayKey} ·{' '}
-            {formatDuration(dayEntries.reduce((s, e) => s + (e.durationMinutes ?? 0), 0))}
-          </Text>
-          {dayEntries.length === 0 ? (
-            <Text style={styles.noHours}>No hours.</Text>
-          ) : (
-            dayEntries.map((e) => (
-              <EntryRow
-                key={e.id}
-                entry={e}
-                conflict={conflicts.has(e.id)}
-                onPress={() =>
-                  e.end !== null ? nav.navigate('EntryEdit', { entryId: e.id }) : null
-                }
-              />
-            ))
-          )}
-        </View>
+      {days.map((dayKey) => (
+        <DayEntries
+          key={dayKey}
+          dayKey={dayKey}
+          entries={entries.filter((e) => e.dayKey === dayKey)}
+          conflicts={conflicts}
+          onOpen={(entryId) => nav.navigate('EntryEdit', { entryId })}
+        />
       ))}
 
+      {sheet && sheet.status === 'submitted' ? (
+        <View style={styles.decision}>
+          <Text style={styles.hint}>
+            {displayName} submitted this week. Approve it, or reject it with a reason they will see.
+          </Text>
+          <Button label="Approve timesheet" onPress={() => decide(() => approveTimesheet(sheet, reviewerUid, entries))} />
+          <Button label="Reject timesheet…" kind="secondary" onPress={() => setRejecting(true)} />
+        </View>
+      ) : null}
       {status === 'approved' ? (
-        <Text style={styles.gone}>
-          Approved — this week is locked. Only an admin can reopen it.
-        </Text>
+        <Text style={styles.hint}>Approved, so this week is closed. Only an admin can reopen it.</Text>
       ) : (
         <Button
-          label={`Add entry for ${displayName}`}
-          kind="secondary"
+          label={`Add hours for ${displayName}`}
+          kind="quiet"
           onPress={() => nav.navigate('ManualEntry', { forUid: uid, forName: displayName })}
         />
       )}
-
-      {sheet && sheet.status === 'submitted' ? (
-        <>
-          <Button
-            label="Approve timesheet"
-            onPress={() => act(() => approveTimesheet(sheet, reviewerUid, entries))}
-          />
-          <Text style={styles.rejectLabel}>Or reject with a reason:</Text>
-          <TextInput
-            value={reason}
-            onChangeText={setReason}
-            placeholder="What needs fixing?"
-            style={styles.reasonInput}
-            multiline
-          />
-          <Button
-            label="Reject timesheet"
-            kind="danger"
-            disabled={reason.trim().length === 0}
-            onPress={() => act(() => rejectTimesheet(sheet, reviewerUid, reason.trim()))}
-          />
-        </>
-      ) : null}
       <ErrorText error={error} />
+
+      <Sheet visible={rejecting} title="Reject timesheet" onClose={() => setRejecting(false)} closeLabel="Cancel">
+        <Field
+          label={`What does ${displayName} need to fix?`}
+          value={reason}
+          onChangeText={setReason}
+          placeholder="What needs fixing?"
+          multiline
+        />
+        <Button
+          label="Reject timesheet"
+          kind="danger"
+          block
+          disabled={reason.trim().length === 0 || !sheet}
+          onPress={() => (sheet ? decide(() => rejectTimesheet(sheet, reviewerUid, reason.trim())) : undefined)}
+        />
+        <ErrorText error={error} />
+      </Sheet>
     </Screen>
   );
 }
 
 const styles = StyleSheet.create({
-  title: { fontSize: 18, fontWeight: '700', color: t.text.primary },
-  navRow: { flexDirection: 'row', alignItems: 'center', gap: spacing(3) },
-  navCenter: { flex: 1, alignItems: 'center' },
-  navLabel: { fontSize: 15, fontWeight: '600', color: t.text.primary },
-  statusLine: { fontSize: 13, fontWeight: '700' },
-  total: { fontSize: 14, color: t.text.secondary },
-  gone: { color: t.feedback.danger, fontSize: 14 },
-  dayGroup: { gap: spacing(2) },
-  dayHeader: { fontSize: 13, fontWeight: '700', color: t.text.secondary, marginTop: spacing(2) },
-  noHours: { fontSize: 13, color: t.text.secondary, fontStyle: 'italic' },
-  rejectLabel: { fontSize: 13, color: t.text.secondary, marginTop: spacing(2) },
-  reasonInput: {
-    borderWidth: 1,
-    borderColor: t.border.subtle,
-    borderRadius: 8,
-    padding: spacing(3),
-    fontSize: 15,
-    minHeight: 60,
-    textAlignVertical: 'top',
-  },
+  lede: { flexDirection: 'row', alignItems: 'center', gap: spacing(1.5), marginTop: spacing(1) },
+  ledeText: { fontSize: 13, color: t.text.secondary },
+  decision: { gap: spacing(3), marginTop: spacing(4) },
+  hint: { fontSize: 14, color: t.text.secondary },
 });

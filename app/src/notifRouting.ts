@@ -45,7 +45,12 @@ function flush(): void {
       navigationRef.navigate('Users');
       return;
     case 'Timesheet':
-      navigationRef.navigate('Timesheet', { initialPeriodKey: route.periodKey });
+      // A tab's own screen: switch to the tab, at that week, rather than push a
+      // second copy of it with no way back.
+      navigationRef.reset({
+        index: 0,
+        routes: [{ name: 'Timesheet', params: { initialPeriodKey: route.periodKey } }],
+      });
       return;
     case 'TimesheetReview':
       navigationRef.navigate('TimesheetReview', {

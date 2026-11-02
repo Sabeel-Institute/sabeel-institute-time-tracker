@@ -68,7 +68,7 @@ function Gate({
       <Text style={styles.email}>{email}</Text>
       <View style={styles.actions}>
         {action ? <Button label={action.label} onPress={action.onPress} block /> : null}
-        <Button label="Sign out" kind="secondary" onPress={() => signOut()} block />
+        <Button label="Sign out" kind="quiet" onPress={() => signOut()} block />
       </View>
     </View>
   );
@@ -123,7 +123,7 @@ export function UpdateScreen({ signedIn }: { signedIn: boolean }) {
       <View style={styles.actions}>
         <Button label={UPDATE.label} onPress={() => Linking.openURL(UPDATE.url).catch(() => undefined)} block />
         {signedIn ? (
-          <Button label="Sign out" kind="secondary" onPress={() => signOut()} block />
+          <Button label="Sign out" kind="quiet" onPress={() => signOut()} block />
         ) : null}
       </View>
       <Text style={styles.build} testID="update-build-label">
@@ -152,7 +152,7 @@ const styles = StyleSheet.create({
     lineHeight: 22,
     maxWidth: 420,
   },
-  email: { fontSize: 14, color: t.accent.base, fontWeight: '600' },
+  email: { fontSize: 14, color: t.text.primary, fontWeight: '600' },
   actions: { marginTop: spacing(4), width: '100%', maxWidth: 240, gap: spacing(3) },
   build: { marginTop: spacing(3), fontSize: 12, color: t.text.secondary, textAlign: 'center' },
 });

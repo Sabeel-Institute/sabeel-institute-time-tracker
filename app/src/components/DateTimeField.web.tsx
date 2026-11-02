@@ -10,11 +10,14 @@ const inputStyle: React.CSSProperties = {
   borderStyle: 'solid',
   borderColor: t.border.subtle,
   borderRadius: 8,
-  padding: 12,
+  padding: '10px 12px',
+  minHeight: 44,
   fontSize: 15,
   color: t.text.primary,
   fontFamily: 'inherit',
-  backgroundColor: t.bg.canvas,
+  // The look of every text box in the app (ui.tsx `input`).
+  backgroundColor: t.bg.inset,
+  colorScheme: 'light',
   // Hug the current date/time rather than reserve width for the widest possible
   // value — a native date input otherwise sits in an oversized box, stretched on
   // a desktop. Capped at the column; progressive enhancement (no-ops on older

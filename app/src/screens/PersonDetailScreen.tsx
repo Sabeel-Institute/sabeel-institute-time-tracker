@@ -1,13 +1,13 @@
 import { useEffect, useState } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { dayKeyFor, deviceTimeZone, formatDuration, periodKeyFor } from '@sabeel/shared';
 import type { RootStackParamList } from '../nav';
 import { fetchTotals, type Totals } from '../reporting';
 import { printStatement, CAN_PRINT } from '../printStatement';
-import { Button, ErrorText, Screen } from '../components/ui';
-import { getTheme, spacing } from '../theme';
+import { Button, Empty, ErrorText, Row, RowList, Screen, SectionTitle, StatTile } from '../components/ui';
+import { getTheme } from '../theme';
 
 const t = getTheme();
 
@@ -45,27 +45,24 @@ export function PersonDetailScreen({ uid, displayName }: { uid: string; displayN
   };
 
   return (
-    <Screen width="read">
-      <Text style={styles.name}>{displayName}</Text>
-      <View style={styles.totalCard}>
-        <Text style={styles.totalLabel}>LIFETIME APPROVED HOURS</Text>
-        <Text style={styles.totalValue}>
-          {totals ? formatDuration(totals.totalMinutes) : '…'}
-        </Text>
-      </View>
+    <Screen title={displayName} width="read">
+      <StatTile value={totals ? formatDuration(totals.totalMinutes) : '…'} caption="Lifetime approved hours" />
 
-      {totals?.byActivity.map((a) => (
-        <View key={a.activityId} style={styles.row}>
-          <Text style={styles.rowLabel}>{a.activityName}</Text>
-          <Text style={styles.rowValue}>{formatDuration(a.minutes)}</Text>
-        </View>
-      ))}
-      {totals && totals.byActivity.length === 0 ? (
-        <Text style={styles.empty}>No recorded hours yet.</Text>
+      {totals && totals.byActivity.length > 0 ? (
+        <>
+          <SectionTitle>By activity</SectionTitle>
+          <RowList>
+            {totals.byActivity.map((a) => (
+              <Row key={a.activityId} label={a.activityName} value={formatDuration(a.minutes)} />
+            ))}
+          </RowList>
+        </>
       ) : null}
+      {totals && totals.byActivity.length === 0 ? <Empty>No approved hours yet.</Empty> : null}
 
       <Button
         label="View timesheets"
+        kind="secondary"
         onPress={() =>
           nav.navigate('TimesheetReview', {
             uid,
@@ -76,7 +73,7 @@ export function PersonDetailScreen({ uid, displayName }: { uid: string; displayN
       />
       <Button
         label={CAN_PRINT ? 'Print statement' : 'Printing is on the website'}
-        kind="secondary"
+        kind="quiet"
         onPress={print}
         disabled={!totals}
       />
@@ -87,24 +84,5 @@ export function PersonDetailScreen({ uid, displayName }: { uid: string; displayN
 }
 
 const styles = StyleSheet.create({
-  name: { fontSize: 22, fontWeight: '700', color: t.text.primary },
-  totalCard: {
-    backgroundColor: t.accent.base,
-    borderRadius: 14,
-    padding: spacing(5),
-    alignItems: 'center',
-  },
-  totalLabel: { color: t.accent.goldText, fontSize: 12, fontWeight: '700', letterSpacing: 1 },
-  totalValue: { color: t.text.inverse, fontSize: 32, fontWeight: '700' },
-  row: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    paddingVertical: spacing(2),
-    borderBottomWidth: 1,
-    borderBottomColor: t.border.subtle,
-  },
-  rowLabel: { fontSize: 15, color: t.text.primary },
-  rowValue: { fontSize: 15, fontWeight: '600', color: t.accent.base },
-  empty: { color: t.text.secondary },
-  status: { color: t.accent.base, fontSize: 13 },
+  status: { color: t.text.secondary, fontSize: 14 },
 });

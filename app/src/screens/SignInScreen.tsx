@@ -179,7 +179,7 @@ const styles = StyleSheet.create({
     gap: spacing(2),
   },
   title: {
-    color: t.accent.base,
+    color: t.text.primary,
     fontSize: 26,
     fontWeight: '700',
     textAlign: 'center',
@@ -199,10 +199,12 @@ const styles = StyleSheet.create({
   build: { color: t.text.muted, fontSize: 12, textAlign: 'center' },
   devLabel: { color: t.text.muted, fontSize: 12, marginTop: spacing(2) },
   input: {
+    backgroundColor: t.bg.inset,
     borderWidth: 1,
     borderColor: t.border.subtle,
     borderRadius: 8,
     padding: spacing(3),
+    minHeight: 44,
     fontSize: 15,
     color: t.text.primary,
   },

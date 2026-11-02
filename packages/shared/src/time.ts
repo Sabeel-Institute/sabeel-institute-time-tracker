@@ -146,6 +146,18 @@ export function periodLabel(range: { fromKey: string; toKey: string }): string {
   return `${fmt(range.fromKey)} – ${fmt(range.toKey)}`;
 }
 
+/** Human label for a day: 'Sunday, Nov 1'. The year only when it is not `currentYear`'s. */
+export function dayLabel(dayKey: string, currentYear?: number): string {
+  const { y, m, d } = parseDayKey(dayKey);
+  return new Intl.DateTimeFormat('en-US', {
+    timeZone: 'UTC',
+    weekday: 'long',
+    month: 'short',
+    day: 'numeric',
+    year: currentYear !== undefined && currentYear !== y ? 'numeric' : undefined,
+  }).format(new Date(Date.UTC(y, m - 1, d)));
+}
+
 /**
  * The instant corresponding to a wall-clock time in a given IANA timezone.
  * Inverse of dayKeyFor/timeOfDayFor, found by correcting a UTC guess against

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { StyleSheet, Text, TextInput, View } from 'react-native';
+import { StyleSheet, TextInput, View } from 'react-native';
 import type { TokenClaims } from '@sabeel/shared';
 import {
   useActivities,
@@ -9,7 +9,7 @@ import {
   type Activity,
 } from '../activities';
 import { confirmAction } from '../confirm';
-import { Button, Collapsible, ErrorText, Screen } from '../components/ui';
+import { Button, Collapsible, Empty, ErrorText, Row, RowList, Screen } from '../components/ui';
 import { getTheme, spacing } from '../theme';
 
 const t = getTheme();
@@ -59,47 +59,47 @@ export function ActivitiesScreen({ selfUid, claims }: { selfUid: string; claims:
     }
   };
 
-  const card = (a: Activity) => (
-    <View key={a.id} style={[styles.card, a.status === 'archived' && styles.cardWrap]}>
-      <Text style={[styles.name, styles.cardText, a.status === 'archived' && styles.nameWrap]}>
-        {a.name}
-      </Text>
-      {a.status === 'active' ? (
-        <Button label="Archive" kind="secondary" onPress={() => flip(a.id, 'archived')} />
-      ) : (
-        <View style={styles.actions}>
-          <Button label="Restore" kind="secondary" onPress={() => flip(a.id, 'active')} />
-          {claims.admin === true ? (
-            <Button label="Delete" kind="danger" onPress={() => remove(a)} />
-          ) : null}
-        </View>
-      )}
-    </View>
+  const row = (a: Activity) => (
+    <Row
+      key={a.id}
+      label={a.name}
+      actions={
+        a.status === 'active' ? (
+          <Button label="Archive" kind="quiet" onPress={() => flip(a.id, 'archived')} />
+        ) : (
+          <>
+            <Button label="Restore" kind="secondary" onPress={() => flip(a.id, 'active')} />
+            {claims.admin === true ? <Button label="Delete" kind="danger" onPress={() => remove(a)} /> : null}
+          </>
+        )
+      }
+    />
   );
 
   return (
-    <Screen width="read">
-      <View style={styles.form}>
+    <Screen width="read" subtitle="What people log their hours against. Archiving one takes it out of the pickers; its hours stay.">
+      <View style={styles.add}>
         <TextInput
           testID="activity-name"
+          accessibilityLabel="New activity name"
           value={name}
           onChangeText={setName}
+          onSubmitEditing={add}
           placeholder="New activity name"
+          placeholderTextColor={t.text.muted}
           style={styles.input}
         />
         <Button label="Add" onPress={add} disabled={!name.trim()} />
-        <ErrorText error={error} />
       </View>
+      <ErrorText error={error} />
 
-      {active.map(card)}
+      {active.length > 0 ? <RowList>{active.map(row)}</RowList> : null}
       {active.length === 0 ? (
-        <Text style={styles.empty}>
-          {archived.length === 0 ? 'Nothing yet — add the first one.' : 'No active activities.'}
-        </Text>
+        <Empty>{archived.length === 0 ? 'Nothing yet. Add the first one above.' : 'No active activities.'}</Empty>
       ) : null}
       {archived.length > 0 ? (
         <Collapsible title="Archived" count={archived.length}>
-          {archived.map(card)}
+          <RowList>{archived.map(row)}</RowList>
         </Collapsible>
       ) : null}
     </Screen>
@@ -107,30 +107,18 @@ export function ActivitiesScreen({ selfUid, claims }: { selfUid: string; claims:
 }
 
 const styles = StyleSheet.create({
-  form: { gap: spacing(2), marginBottom: spacing(2) },
+  add: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: spacing(2) },
   input: {
-    borderWidth: 1,
-    borderColor: t.border.subtle,
+    flexGrow: 1,
+    flexBasis: 200,
+    backgroundColor: t.bg.inset,
     borderRadius: 8,
-    padding: spacing(3),
-    fontSize: 15,
-  },
-  card: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
     borderWidth: 1,
     borderColor: t.border.subtle,
-    borderRadius: 12,
-    padding: spacing(3.5),
-    gap: spacing(3),
+    paddingVertical: spacing(3),
+    paddingHorizontal: spacing(3),
+    fontSize: 15,
+    color: t.text.primary,
+    minHeight: 44,
   },
-  cardText: { flexShrink: 1 },
-  // Two buttons do not fit beside a long name on a small phone: they move
-  // under it instead of running off the edge.
-  cardWrap: { flexWrap: 'wrap' },
-  nameWrap: { flexGrow: 1, flexBasis: 160 },
-  actions: { flexDirection: 'row', gap: spacing(2) },
-  name: { fontSize: 16, fontWeight: '600', color: t.text.primary },
-  empty: { color: t.text.secondary },
 });
