@@ -87,10 +87,15 @@ closer under the old brick-red.
 
 ## The logo
 
-`app/assets/logo.png` — Arabic calligraphy reading *Sabeel* with gold accent
-strokes. **One asset, no plate and no tint**: a flat `tintColor` would recolour
-the mark and throw the gold away. It appears on the **sign-in screen only**;
-inside the app the brand is carried by the palette.
+The designer's stacked lockup (2026-09-28): Arabic calligraphy reading
+*Sabeel* in raspberry with a gold stroke, above **SABEEL** in raspberry and
+**INSTITUTE** in taupe. The source is `skills/sabeel-brand/logo/sabeel-logo.png`
+in `Sabeel-Institute/brand`; `app/assets/logo.png` is that file scaled to
+1200 px wide, and `app/public/logo.png` the same at 480 px. **No plate and no
+tint**: a flat `tintColor` would recolour the mark and throw the gold and taupe
+away. It appears on the sign-in screen, the manual's cover
+(`app/assets/logo.png`) and the printed statement's header
+(`app/public/logo.png`); inside the app the brand is carried by the palette.
 
 ## The app icon
 
