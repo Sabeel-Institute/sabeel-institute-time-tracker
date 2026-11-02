@@ -36,9 +36,9 @@ export const PEOPLE = {
 };
 
 /** Who signs up on camera in the signing-in film; removed again by every world. */
-export const NEWCOMER = { email: 'hana.qureshi@oursabeel.com', name: 'Hana Qureshi' };
+const NEWCOMER = { email: 'hana.qureshi@oursabeel.com', name: 'Hana Qureshi' };
 
-export const ACTIVITIES = {
+const ACTIVITIES = {
   tutoring: 'Tutoring',
   food: 'Food Drive',
   mentoring: 'Youth Mentoring',

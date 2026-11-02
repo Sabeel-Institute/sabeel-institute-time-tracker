@@ -159,18 +159,21 @@ export function useMyTimesheetsRange(
 
 /**
  * Live approval queue: sheets submitted to me — or every submitted sheet when
- * `all` (admin view). Oldest submissions first.
+ * `all` (admin view). Oldest submissions first. `enabled: false` subscribes to
+ * nothing: a member has no queue, and the shell asks for every account.
  */
-export function useApprovalQueue(approverUid: string, opts?: { all?: boolean }): Timesheet[] {
+export function useApprovalQueue(approverUid: string, opts?: { all?: boolean; enabled?: boolean }): Timesheet[] {
   const all = opts?.all ?? false;
+  const enabled = opts?.enabled ?? true;
   return useLiveQuery(
     () => {
+      if (!enabled) return null;
       const base = collection(db, COLLECTIONS.timesheets);
       return all
         ? query(base, where('status', '==', 'submitted'))
         : query(base, where('approverUid', '==', approverUid), where('status', '==', 'submitted'));
     },
-    [approverUid, all],
+    [approverUid, all, enabled],
     {
       label: 'useApprovalQueue',
       map: (snap) => {

@@ -22,9 +22,14 @@ const t = getTheme();
 
 type Period = { fromKey: string; toKey: string };
 
-/** The day Add hours opens on from a week: today if the week holds it, else its first day. */
-export function dayIn(period: Period, todayKey: string): string {
-  return todayKey >= period.fromKey && todayKey <= period.toKey ? todayKey : period.fromKey;
+/**
+ * The day Add hours opens on from a week: a PAST week's first day, so its hours
+ * land in it; otherwise nothing, and the form opens on today — read in the
+ * timezone of the person the hours are for, which this screen may not share.
+ * Never a future day: the form would sit one tap from saving hours not worked.
+ */
+export function openingDay(period: Period, todayKey: string): string | undefined {
+  return period.toKey < todayKey ? period.fromKey : undefined;
 }
 
 /** The period before or after this one (periods are weeks clipped to months). */

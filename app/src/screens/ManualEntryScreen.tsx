@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { StyleSheet, Text } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
+import { leaveIfShowing } from '../nav';
 import {
   addDays,
   dayKeyFor,
@@ -72,9 +73,7 @@ export function ManualEntryScreen({
         timeZone: tz,
         creatorUid: uid,
       });
-      // Only if still showing: a tab pressed while this saved has already
-      // moved on, and going back would undo it.
-      if (nav.isFocused()) nav.goBack();
+      leaveIfShowing(nav);
     } catch (e) {
       setError(explainEntryWriteError(e));
     }

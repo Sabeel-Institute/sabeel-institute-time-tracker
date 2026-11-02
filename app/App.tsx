@@ -478,13 +478,17 @@ function Shell({
   const { isWide } = useLayout();
   // The same queries the screens behind the badges read, so a badge cannot
   // disagree with the screen it opens.
-  const waiting = useApprovalQueue(uid).length;
+  const waiting = useApprovalQueue(uid, { enabled: approver }).length;
   const pendingAccounts = usePendingCount(admin);
   // The stack's route names, top first: the lit tab follows from it.
   const [stack, setStack] = useState<RouteName[]>(['Home']);
   const onStateChange = useCallback(() => {
     const state = navigationRef.isReady() ? navigationRef.getRootState() : undefined;
-    if (state) setStack(state.routes.map((r) => r.name as RouteName).reverse());
+    if (!state) return;
+    const next = state.routes.map((r) => r.name as RouteName).reverse();
+    // The same screens keep the same array, so what follows `stack` — the lit
+    // tab, the More sheet closing — reacts to a change of screen and nothing else.
+    setStack((prev) => (prev.join('/') === next.join('/') ? prev : next));
   }, []);
 
   const [moreOpen, setMoreOpen] = useState(false);
@@ -497,7 +501,7 @@ function Shell({
       approver={approver}
       variant={isWide ? 'rail' : 'bar'}
       active={activeTab(stack)}
-      waiting={approver ? waiting : 0}
+      waiting={waiting}
       pendingAccounts={pendingAccounts}
       onTab={(name) => {
         if (navigationRef.isReady()) navigationRef.reset(tabState(navigationRef.getRootState(), name));

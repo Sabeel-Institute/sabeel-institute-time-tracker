@@ -64,6 +64,15 @@ export function tabState<K extends TabRoute>(
 }
 
 /**
+ * Back, after a save — but only while the screen is still the one showing. A
+ * tab pressed while the save was in flight has already left it, and going back
+ * then would undo the tab.
+ */
+export function leaveIfShowing(nav: { isFocused: () => boolean; goBack: () => void }): void {
+  if (nav.isFocused()) nav.goBack();
+}
+
+/**
  * Navigation from outside the tree — specifically a notification tap, which has
  * no component to hang a useNavigation() on. See notifRouting.ts.
  */

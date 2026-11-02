@@ -26,9 +26,9 @@ import {
   useMyTimesheetsRange,
   useTimesheet,
 } from '../timesheets';
-import { setApprover, useApproverChoices } from '../users';
+import { approverItems, setApprover, useApproverChoices } from '../users';
 import { SearchablePicker } from '../components/SearchablePicker';
-import { DayEntries, MonthWeeks, dayIn, type WeekState } from '../components/WeekView';
+import { DayEntries, MonthWeeks, openingDay, type WeekState } from '../components/WeekView';
 import {
   Button,
   Empty,
@@ -130,7 +130,17 @@ export function TimesheetScreen({
           </View>
         ) : undefined
       }
-      actions={<IconButton icon="add" label="Add hours" onPress={() => nav.navigate('ManualEntry', { dayKey: dayIn(period, todayKey) })} />}
+      actions={
+        // Only on a week hours can still go into: a submitted or approved week
+        // is closed to its owner, and a week not yet begun has nothing to log.
+        (status === 'draft' || status === 'rejected') && started ? (
+          <IconButton
+            icon="add"
+            label="Add hours"
+            onPress={() => nav.navigate('ManualEntry', { dayKey: openingDay(period, todayKey) })}
+          />
+        ) : undefined
+      }
       width="read"
     >
       <MonthWeeks period={period} todayKey={todayKey} stateOf={stateOf} onPick={setAnchor} />
@@ -189,17 +199,7 @@ export function TimesheetScreen({
           <SectionTitle>Approver</SectionTitle>
           <Text style={styles.hint}>Your timesheet goes to them when you submit it.</Text>
           <SearchablePicker
-            items={approvers
-              // Managers and admins may approve their own hours (PRODUCTION-REVIEW
-              // M5 — deliberate at this org size). Sorted last so picking yourself
-              // stays a considered choice rather than the first thing in the list.
-              .slice()
-              .sort((a, b) => Number(a.uid === uid) - Number(b.uid === uid))
-              .map((a) => ({
-                id: a.uid,
-                label: a.uid === uid ? `${a.displayName} (myself)` : a.displayName,
-                sublabel: a.admin ? 'admin' : 'manager',
-              }))}
+            items={approverItems(approvers, uid, '(myself)')}
             selectedId={profile.approverUid}
             onSelect={(id) => void act(() => setApprover(uid, id))}
             placeholder="Choose who approves your hours"

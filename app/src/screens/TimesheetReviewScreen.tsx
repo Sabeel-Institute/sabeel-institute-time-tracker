@@ -10,10 +10,10 @@ import {
   overlappingEntryIds,
   periodRangeFor,
 } from '@sabeel/shared';
-import type { RootStackParamList } from '../nav';
+import { leaveIfShowing, type RootStackParamList } from '../nav';
 import { useEntriesRange } from '../entries';
 import { approveTimesheet, rejectTimesheet, reopenTimesheet, useTimesheet } from '../timesheets';
-import { DayEntries, WeekStepper, dayIn, stepPeriod } from '../components/WeekView';
+import { DayEntries, WeekStepper, openingDay, stepPeriod } from '../components/WeekView';
 import { Sheet } from '../components/Sheet';
 import { Button, ErrorText, Field, Notice, Screen, StatusChip, sheetStatus } from '../components/ui';
 import { getTheme, spacing } from '../theme';
@@ -43,9 +43,6 @@ export function TimesheetReviewScreen({
 }) {
   const nav = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const [anchor, setAnchor] = useState(periodKey);
-  // A second submission notification can re-target this screen (another person,
-  // another week) while it is mounted — navigate() swaps the params in place.
-  useEffect(() => setAnchor(periodKey), [periodKey]);
   const todayKey = dayKeyFor(Date.now(), deviceTimeZone());
   const period = periodRangeFor(anchor);
   const sheet = useTimesheet(uid, period.fromKey);
@@ -53,6 +50,15 @@ export function TimesheetReviewScreen({
   const entries = useEntriesRange(uid, period.fromKey, period.toKey);
   const [rejecting, setRejecting] = useState(false);
   const [reason, setReason] = useState('');
+  // A second submission notification can re-target this screen (another person,
+  // another week) while it is mounted — navigate() swaps the params in place —
+  // and whatever was under way for the last subject goes with it: a Reject
+  // sheet left open would otherwise reject the new week with the old reason.
+  useEffect(() => {
+    setAnchor(periodKey);
+    setRejecting(false);
+    setReason('');
+  }, [uid, periodKey]);
   const [error, setError] = useState<string | null>(null);
 
   const conflicts = useMemo(() => overlappingEntryIds(entries), [entries]);
@@ -70,9 +76,7 @@ export function TimesheetReviewScreen({
     try {
       await fn();
       setRejecting(false);
-      // Only if still showing: a tab pressed while this saved has already
-      // moved on, and going back would undo it.
-      if (nav.isFocused()) nav.goBack();
+      leaveIfShowing(nav);
     } catch (e) {
       setError((e as Error).message);
     }
@@ -150,7 +154,7 @@ export function TimesheetReviewScreen({
           label={`Add hours for ${displayName}`}
           kind="quiet"
           onPress={() =>
-            nav.navigate('ManualEntry', { forUid: uid, forName: displayName, dayKey: dayIn(period, todayKey) })
+            nav.navigate('ManualEntry', { forUid: uid, forName: displayName, dayKey: openingDay(period, todayKey) })
           }
         />
       )}

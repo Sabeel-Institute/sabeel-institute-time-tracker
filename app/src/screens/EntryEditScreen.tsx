@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
+import { leaveIfShowing } from '../nav';
 import {
   dayKeyFor,
   dayLabel,
@@ -66,9 +67,7 @@ export function EntryEditScreen({ entryId, editorUid }: { entryId: string; edito
         note,
         editorUid,
       });
-      // Only if still showing: a tab pressed while this saved has already
-      // moved on, and going back would undo it.
-      if (nav.isFocused()) nav.goBack();
+      leaveIfShowing(nav);
     } catch (e) {
       setError(explainEntryWriteError(e));
     }
@@ -78,9 +77,7 @@ export function EntryEditScreen({ entryId, editorUid }: { entryId: string; edito
     setError(null);
     try {
       await deleteEntry(entry.id);
-      // Only if still showing: a tab pressed while this saved has already
-      // moved on, and going back would undo it.
-      if (nav.isFocused()) nav.goBack();
+      leaveIfShowing(nav);
     } catch (e) {
       setError(explainEntryWriteError(e));
     }

@@ -1,7 +1,5 @@
 import { useMemo, useState } from 'react';
 import {
-  FlatList,
-  Modal,
   Pressable,
   StyleSheet,
   Text,
@@ -9,7 +7,7 @@ import {
   View,
 } from 'react-native';
 import { Icon } from '../icons';
-import { IconButton } from './ui';
+import { Sheet } from './Sheet';
 import { getTheme, spacing } from '../theme';
 
 const t = getTheme();
@@ -42,6 +40,10 @@ export function SearchablePicker({
 }) {
   const [open, setOpen] = useState(false);
   const [filter, setFilter] = useState('');
+  const close = () => {
+    setOpen(false);
+    setFilter('');
+  };
 
   const selected = items.find((i) => i.id === selectedId) ?? null;
   const shown = useMemo(() => {
@@ -64,59 +66,43 @@ export function SearchablePicker({
         <Icon name="expand-more" size={22} color={t.text.secondary} />
       </Pressable>
 
-      <Modal visible={open} transparent animationType="fade" onRequestClose={() => setOpen(false)}>
-        {/* Neither Pressable is an accessibility element: one is by default,
-            and on iOS it swallows everything under it: the accessibility tree
-            held the whole picker as ONE element, so VoiceOver had no row to
-            move to and Maestro could not tap one. react-native-web does not forward the prop. */}
-        <Pressable style={styles.backdrop} onPress={() => setOpen(false)} accessible={false}>
-          <Pressable style={styles.sheet} onPress={() => {}} accessible={false}>
-            <View style={styles.titleRow}>
-              <Text style={styles.title} role="heading">
-                {title ?? placeholder}
-              </Text>
-              <IconButton icon="close" label="Close" bare onPress={() => setOpen(false)} />
-            </View>
-            <TextInput
-              value={filter}
-              onChangeText={setFilter}
-              placeholder="Search…"
-              placeholderTextColor={t.text.muted}
-              accessibilityLabel="Search"
-              style={styles.search}
-              autoFocus
-            />
-            <FlatList
-              data={shown}
-              keyExtractor={(i) => i.id}
-              style={styles.list}
-              keyboardShouldPersistTaps="handled"
-              ListEmptyComponent={<Text style={styles.empty}>No matches.</Text>}
-              renderItem={({ item }) => {
-                const on = item.id === selectedId;
-                return (
-                  <Pressable
-                    onPress={() => {
-                      onSelect(item.id);
-                      setOpen(false);
-                      setFilter('');
-                    }}
-                    accessibilityRole="radio"
-                    aria-checked={on}
-                    style={({ pressed }) => [styles.row, on && styles.rowOn, pressed && styles.rowPressed]}
-                  >
-                    <View style={styles.rowMain}>
-                      <Text style={styles.rowLabel}>{item.label}</Text>
-                      {item.sublabel ? <Text style={styles.rowSub}>{item.sublabel}</Text> : null}
-                    </View>
-                    {on ? <Icon name="check" size={20} color={t.accent.base} /> : null}
-                  </Pressable>
-                );
+      {/* The app's one sheet (Sheet.tsx): its panel, its × and its keyboard
+          handling, so the search field is never under the keyboard. The list is
+          rows, not a virtualised list: a few dozen people or activities, inside
+          the sheet's own bounded scroll. */}
+      <Sheet visible={open} title={title ?? placeholder} onClose={close} closeAt="corner">
+        <TextInput
+          value={filter}
+          onChangeText={setFilter}
+          placeholder="Search…"
+          placeholderTextColor={t.text.muted}
+          accessibilityLabel="Search"
+          style={styles.search}
+          autoFocus
+        />
+        {shown.length === 0 ? <Text style={styles.empty}>No matches.</Text> : null}
+        {shown.map((item) => {
+          const on = item.id === selectedId;
+          return (
+            <Pressable
+              key={item.id}
+              onPress={() => {
+                onSelect(item.id);
+                close();
               }}
-            />
-          </Pressable>
-        </Pressable>
-      </Modal>
+              accessibilityRole="radio"
+              aria-checked={on}
+              style={({ pressed }) => [styles.row, on && styles.rowOn, pressed && styles.rowPressed]}
+            >
+              <View style={styles.rowMain}>
+                <Text style={styles.rowLabel}>{item.label}</Text>
+                {item.sublabel ? <Text style={styles.rowSub}>{item.sublabel}</Text> : null}
+              </View>
+              {on ? <Icon name="check" size={20} color={t.accent.base} /> : null}
+            </Pressable>
+          );
+        })}
+      </Sheet>
     </>
   );
 }
@@ -138,27 +124,6 @@ const styles = StyleSheet.create({
   fieldDisabled: { opacity: 0.5 },
   value: { flex: 1, fontSize: 15, color: t.text.primary },
   placeholder: { flex: 1, fontSize: 15, color: t.text.secondary },
-  backdrop: {
-    flex: 1,
-    backgroundColor: t.effect.overlay,
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: spacing(4),
-  },
-  // The same panel as every other sheet in the app (Sheet.tsx).
-  sheet: {
-    width: '100%',
-    maxWidth: 420,
-    backgroundColor: t.bg.raised,
-    borderColor: t.border.strong,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderRadius: 12,
-    padding: spacing(4),
-    maxHeight: '80%',
-    gap: spacing(3),
-  },
-  titleRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing(2) },
-  title: { flexShrink: 1, fontSize: 18, fontWeight: '700', color: t.text.primary },
   search: {
     backgroundColor: t.bg.inset,
     borderWidth: 1,
@@ -170,7 +135,6 @@ const styles = StyleSheet.create({
     color: t.text.primary,
     minHeight: 44,
   },
-  list: { flexGrow: 0 },
   empty: { color: t.text.secondary, fontSize: 14, padding: spacing(2) },
   row: {
     flexDirection: 'row',

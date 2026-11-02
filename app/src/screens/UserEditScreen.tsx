@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import { StyleSheet, Text } from 'react-native';
 import { type TokenClaims, type UserRole } from '@sabeel/shared';
 import { confirmAction } from '../confirm';
-import { approverChoices, setApprover, useUsers } from '../users';
+import { approverChoices, approverItems, setApprover, useUsers } from '../users';
 import { setUserAccess } from '../access';
 import { SearchablePicker } from '../components/SearchablePicker';
 import {
@@ -71,16 +71,7 @@ export function UserEditScreen({ uid, selfUid, claims }: { uid: string; selfUid:
           <Text style={styles.hint}>Their timesheets go to this person when they submit them.</Text>
           {isAdmin || !u.admin ? (
             <SearchablePicker
-              items={approvers
-                // Self-approval is allowed for managers and admins alike; listed
-                // last so it reads as a deliberate assignment (see M5).
-                .slice()
-                .sort((a, b) => Number(a.uid === u.uid) - Number(b.uid === u.uid))
-                .map((a) => ({
-                  id: a.uid,
-                  label: a.uid === u.uid ? `${a.displayName} (self)` : a.displayName,
-                  sublabel: a.admin ? 'admin' : 'manager',
-                }))}
+              items={approverItems(approvers, u.uid, '(self)')}
               selectedId={u.approverUid}
               onSelect={(id) => {
                 setError(null);
