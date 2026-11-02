@@ -23,6 +23,15 @@ headed `### <YYYY-MM-DD> — <summary> — vX.Y.Z`: `npx sabeel-ci release` take
 the release's title and notes from it (`docs/DEPLOY.md`). Deploys that shipped
 no app version carry no version in their heading.
 
+### 2026-11-02 — Loading, not empty — v0.32.2
+
+- While a list is still loading, the app says so instead of saying there
+  is nothing: Today's activity field reads "Loading activities…" rather
+  than "No activities yet", and Timesheet, Approvals, Needs attention,
+  Review timesheet and People show what they are loading rather than
+  their empty message.
+- Submit, Resubmit and Approve wait until the week's hours have loaded.
+
 ### 2026-11-02 — The current Sabeel logo — v0.32.1
 
 - Sign-in, the printed statement and the user manual's cover show the
