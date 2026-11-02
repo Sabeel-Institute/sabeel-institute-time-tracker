@@ -1155,11 +1155,14 @@ async function main() {
     await more(mgr, 'People');
     await mgr.getByText(/^Everyone \(\d+\)$/).waitFor();
   }
-  /** One person's page: a disabled account waits in the list's closed Disabled section. */
+  /**
+   * One person's page: a disabled account waits in the list's closed Disabled
+   * section. The row's label carries their address, as a screen reader says it.
+   */
   async function openPerson(name, { disabled = false } = {}) {
     await openPeople();
     if (disabled) await mgr.getByRole('button', { name: /^Show Disabled \(\d+\)$/ }).click();
-    await mgr.getByRole('button', { name: `${name}. Open their account.`, exact: true }).click();
+    await mgr.getByRole('button', { name: new RegExp(`^${escapeRe(name)}( \\(you\\))?, \\S+@\\S+[,.] `) }).click();
     await statusLine(mgr).waitFor();
   }
   /**

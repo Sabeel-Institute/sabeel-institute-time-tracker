@@ -42,24 +42,30 @@ export function UsersScreen({ selfUid, claims }: { selfUid: string; claims: Toke
   const disabled = rows.filter((u) => u.status === 'disabled').sort(byName);
 
   const open = (u: UserRow) => nav.navigate('UserEdit', { uid: u.uid });
-  const person = (u: UserRow) => (
-    <Row
-      key={u.uid}
-      label={u.uid === selfUid ? `${u.displayName} (you)` : u.displayName}
-      detail={
-        <>
-          <Text style={styles.detail}>{u.email}</Text>
-          {u.status === 'active' ? (
-            <Text style={styles.detail}>
-              {roleWords(u)} · approver: {u.approverUid ? (nameOf.get(u.approverUid) ?? 'unknown') : 'none yet'}
-            </Text>
-          ) : null}
-        </>
-      }
-      accessibilityLabel={`${u.displayName}. Open their account.`}
-      onPress={() => open(u)}
-    />
-  );
+  // A screen reader hears what the row shows, then what a tap does.
+  const person = (u: UserRow) => {
+    const name = u.uid === selfUid ? `${u.displayName} (you)` : u.displayName;
+    const active = u.status === 'active';
+    const approver = u.approverUid ? (nameOf.get(u.approverUid) ?? 'unknown') : 'none yet';
+    return (
+      <Row
+        key={u.uid}
+        label={name}
+        detail={
+          <>
+            <Text style={styles.detail}>{u.email}</Text>
+            {active ? (
+              <Text style={styles.detail}>
+                {roleWords(u)} · approver: {approver}
+              </Text>
+            ) : null}
+          </>
+        }
+        accessibilityLabel={`${name}, ${u.email}${active ? `, ${roleWords(u)}, approver: ${approver}` : ''}. Open their account.`}
+        onPress={() => open(u)}
+      />
+    );
+  };
 
   return (
     <Screen
