@@ -136,6 +136,23 @@ see `TODO.md`.
 
 ## Decision log
 
+- 2026-11-02 — **The sibling apps' look, tabs by role, and help films** (#74).
+  The app takes Kanban's and the LMS's design language, with the same
+  shared primitives in `app/src/components/ui.tsx`, and does nothing it did
+  not do before. Navigation is tabs by role, chosen over one "Team" tab:
+  Today, Timesheet and More for everyone, Approvals and Reports added for
+  managers and admins, with People and Activities under More. The Timesheet
+  keeps month paging with a pill per week, at the owner's word after trying
+  a week-at-a-time stepper. The owner judged it by using a web build on a
+  Hosting preview channel before any phone build. The help films are made
+  by ci-tools' `sabeel-ci films` and played from a Hosting site of their
+  own, `sabeel-time-tracker-help`, so a film changes without a release and
+  the app's deploys carry no video. Bug-hunt rounds against the emulators,
+  with double taps, slow networks, two people on one week, malformed links
+  and the native flow, led to: live data reset before the browser paints,
+  a double tap on the clock counted once, dates in links checked
+  (`isDayKey`), and a refused week action explained in words.
+
 - 2026-10-28 — **An admin may delete an archived activity, and archived
   activities wait in a closed section below the list** (#62, #63). Deleting
   takes two steps, archive and then delete, and the rules hold it to admins and
