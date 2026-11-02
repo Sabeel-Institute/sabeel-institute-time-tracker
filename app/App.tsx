@@ -104,8 +104,10 @@ const APPROVER_PATHS = {
   Users: 'people',
   UserEdit: 'people/:uid',
 } as const;
+// `initialRouteName`: an address opened directly (a reload, a notification)
+// lands with Today beneath it, as if reached from the tab.
 const linkingFor = (screens: Record<string, string>): LinkingOptions<RootStackParamList> | undefined =>
-  Platform.OS === 'web' ? { prefixes: [], config: { screens } } : undefined;
+  Platform.OS === 'web' ? { prefixes: [], config: { initialRouteName: 'Home', screens } } : undefined;
 // Built once, not per render: the container treats `linking` as an input.
 const MEMBER_LINKING = linkingFor(MEMBER_PATHS);
 const APPROVER_LINKING = linkingFor(APPROVER_PATHS);
@@ -467,7 +469,7 @@ function Shell({
       waiting={approver ? waiting : 0}
       pendingAccounts={pendingAccounts}
       onTab={(name) => {
-        if (navigationRef.isReady()) navigationRef.reset(tabState(name));
+        if (navigationRef.isReady()) navigationRef.reset(tabState(navigationRef.getRootState(), name));
       }}
       onOpenMore={() => setMoreOpen(true)}
     />

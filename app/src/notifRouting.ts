@@ -47,7 +47,7 @@ function flush(): void {
     case 'Timesheet':
       // A tab's own screen: switch to the tab, at that week, rather than push a
       // second copy of it with no way back.
-      navigationRef.reset(tabState('Timesheet', { initialPeriodKey: route.periodKey }));
+      navigationRef.reset(tabState(navigationRef.getRootState(), 'Timesheet', { initialPeriodKey: route.periodKey }));
       return;
     case 'TimesheetReview':
       navigationRef.navigate('TimesheetReview', {

@@ -56,7 +56,7 @@ export function NeedsAttentionScreen({ uid }: { uid: string }) {
                 }
                 value={formatDuration(ts.totalMinutes)}
                 accessibilityLabel={`Fix the timesheet for ${periodLabel({ fromKey: ts.periodKey, toKey: ts.toKey })}`}
-                onPress={() => nav.reset(tabState('Timesheet', { initialPeriodKey: ts.periodKey }))}
+                onPress={() => nav.reset(tabState(nav.getState(), 'Timesheet', { initialPeriodKey: ts.periodKey }))}
               />
             ))}
           </RowList>
