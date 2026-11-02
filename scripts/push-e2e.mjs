@@ -105,6 +105,8 @@ async function main() {
   // Weeks that are not this one, so landing on the right week is seen, not assumed.
   const reviewWeek = periodRangeFor('2026-09-08');
   const ownWeek = periodRangeFor('2026-08-12');
+  /** The address each of those screens has on the web (App.tsx `APPROVER_PATHS`). */
+  const OWN_ADDRESS = { Users: '/people', TimesheetReview: '/approvals/review', Timesheet: '/timesheet' };
   /** One per notification the server builds (notifyCore.ts `texts`), each with the screen its tap must open. */
   const cases = [
     {
@@ -213,7 +215,14 @@ async function main() {
     const fresh = await context.newPage();
     await fresh.goto(new URL(url, baseUrl).href, { waitUntil: 'domcontentloaded' });
     check(`${c.kind}: the address the worker opens lands on the route (${url})`, await c.landed(fresh));
-    check(`${c.kind}: and the route leaves the address bar`, new URL(fresh.url()).search === '', fresh.url());
+    // The route is consumed, and what stays is the screen's own address, which a
+    // reload opens again: its path, and none of the notification's `screen` key.
+    const address = new URL(fresh.url());
+    check(
+      `${c.kind}: and the route leaves the address bar`,
+      !address.searchParams.has('screen') && address.pathname === OWN_ADDRESS[c.route.screen],
+      fresh.url(),
+    );
     await fresh.close();
   }
 
