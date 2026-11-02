@@ -134,3 +134,31 @@ name: Rules, clock in and out, and the tabs
       EXPECT: "[\\s\\S]*volunteer@oursabeel.com[\\s\\S]*"
       SECONDS: 30
 - takeScreenshot: 04-users
+
+# Help: a film opens in the platform's own player (expo-video), a native
+# module of its own. The player's frame is what is checked, so a player
+# missing from the build fails here; the device need not reach the films'
+# site.
+- runFlow:
+    file: ci-tools/tap-until.yaml
+    env:
+      TARGET: "More[\\s\\S]*"
+      EXPECT: "Help[\\s\\S]*"
+      SECONDS: 30
+- runFlow:
+    file: ci-tools/tap-until.yaml
+    env:
+      TARGET: "Help[\\s\\S]*"
+      EXPECT: "Clocking in and out[\\s\\S]*"
+      SECONDS: 30
+- runFlow:
+    file: ci-tools/tap-until.yaml
+    env:
+      TARGET: "Clocking in and out[\\s\\S]*"
+      EXPECT: "On a computer"
+      SECONDS: 30
+- extendedWaitUntil:
+    visible:
+      id: "help-film"
+    timeout: 20000
+- takeScreenshot: 05-help-film

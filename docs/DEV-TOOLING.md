@@ -592,7 +592,8 @@ native-build` made there instead of building one, which is how CI runs it.
 - **`maestro/timesheet.yaml`**: the rules and I agree, an activity made from
   More → Activities (its name read back before Add), clocked in and out on
   Today, then the Timesheet, Reports and Approvals tabs and More → People,
-  each checked by text only that screen shows.
+  each checked by text only that screen shows, and last a help film's
+  player (expo-video, a native module of its own).
 - **A busy simulator drops taps.** The iPhone simulator holds a CI Mac's load
   average past 300, and a tap or a keystroke that lands before a screen takes it
   is lost. So every step that moves the app on goes through ci-tools' shared
