@@ -32,6 +32,13 @@ no app version carry no version in their heading.
   their empty message.
 - Submit, Resubmit and Approve wait until the week's hours have loaded.
 
+No rules or functions deploy: the release changes neither. **v0.32.2**
+released, tag `v0.32.2` at `78f44ad`: GitHub release; Play internal
+testing 0.32.2 (32002), whose universal APK booted five times in a row
+with `v0.32.2 · 78f44ad`; TestFlight 0.32.2 build 32002 from the tag;
+hosting from the Web workflow's artifact through Deploy Web, serving
+`0.32.2` and `78f44ad`.
+
 ### 2026-11-02 — The current Sabeel logo — v0.32.1
 
 - Sign-in, the printed statement and the user manual's cover show the
