@@ -17,11 +17,13 @@ const t = getTheme();
 /**
  * WHETHER THIS SCREEN MUST PAY FOR THE STATUS BAR ITSELF.
  *
- * True on the tab roots, which run with no stack header (the shell in App.tsx
- * sets it). A pushed screen's header already clears the status bar and carries
- * Back; a tab root has neither, so its own heading is the top of the screen.
+ * Inside the navigator, every route says (the shell in App.tsx sets it): true
+ * on the tab roots, which run with no stack header, false on a pushed screen,
+ * whose header already clears the status bar and carries Back. A screen
+ * outside the navigator, such as the rules before it, has no header above it
+ * at all, so the default is true; false would put its heading under the clock.
  */
-export const ScreenOwnsTopInset = createContext(false);
+export const ScreenOwnsTopInset = createContext(true);
 
 /**
  * Page wrapper: the heading, the latest live-data error, and the content in a
