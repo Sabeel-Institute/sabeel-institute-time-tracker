@@ -197,7 +197,7 @@ An Apple-silicon simulator gets a real token from Apple's sandbox, so the whole
 round trip runs against it except the tap from outside the app.
 
 1. **The row.** Sign in on a debug build that already allows notifications (or
-   tap **Enable notifications** on Home): the app writes
+   tap **Enable notifications** on Today): the app writes
    `users/{uid}/pushTokens/{token}` with `platform: 'ios'` and
    `apnsEnvironment: 'development'` (a simulator carries no provisioning
    profile, so the release type decides). The row goes through the rules, which
@@ -215,7 +215,7 @@ round trip runs against it except the tap from outside the app.
    `testPush.ts` from source, and refuses fields that are no route the app
    opens).
    With the app open the banner appears at the top; tap it and the app opens the
-   route, here My timesheet on the week of 4 October (verified 2026-10-15).
+   route, here Timesheet on the week of 4 October (verified 2026-10-15).
 3. **The emulated functions send nothing.** A trigger that reaches an iPhone row
    logs `[emulator] push suppressed for 1 device(s)`: there is no APNs or FCM
    emulator, and `APNS_KEY` is a placeholder there (`ci.emulatorSecrets` in
