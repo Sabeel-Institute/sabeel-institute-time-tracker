@@ -52,11 +52,11 @@ function onShutdown(fn) {
 }
 
 /**
- * Kill everything this process started, then exit. Detached children are killed
- * by PROCESS GROUP (`-pid`): the emulator spawns its own runtime children, and
+ * Kill everything this process started. Detached children are killed by
+ * PROCESS GROUP (`-pid`): the emulator spawns its own runtime children, and
  * signalling only the parent leaves them holding the ports for the next run.
  */
-export function shutdown(code) {
+export function stopAll() {
   for (const close of closers) {
     try {
       close();
@@ -75,6 +75,11 @@ export function shutdown(code) {
       }
     }
   }
+}
+
+/** Kill everything this process started, then exit. */
+export function shutdown(code) {
+  stopAll();
   process.exit(code);
 }
 
