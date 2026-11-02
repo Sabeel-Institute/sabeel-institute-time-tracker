@@ -125,6 +125,10 @@ approver is Faisal, held there by the server:
 Each denial test was shown red with its lock removed. The account sees its own
 hours and timesheets and nothing else.
 
+The sign-in form itself is driven in `scripts/web-e2e.mjs`: an unknown address
+and a wrong password get the one refusal sentence, and the account signs in,
+accepts the rules and is shown no manager or admin screen.
+
 **The address is public, on purpose** (decided 2026-10-15): it is in this repo
 and in the rules as a literal. Its protection is a long generated password and
 Firebase's rate limiting, and it can see nothing but its own hours.
@@ -153,8 +157,8 @@ does (Application Default Credentials, `GCLOUD_PROJECT=sabeel-institute-time-tra
 without printing it; the new value into the file above, `bash vault.sh
 collect`; then App Store Connect's sign-in fields and Play's App access.
 
-**No sample data.** The reviewer adds hours (Home, Add hours manually, or Clock
-in), sees its week (My timesheet) and submits it. The account does not expire
+**No sample data.** The reviewer adds hours (Today: Add hours, or Clock in),
+sees its week (Timesheet) and submits it. The account does not expire
 and nothing in it ages. Before each submission: it signs in, and its approver
 is still Faisal (an approver pointer drops when its holder loses the manager
 or admin role).
@@ -177,7 +181,7 @@ release after it, the functions deployed first (`docs/DEPLOY.md`).
 1. **The institute's rules, accepted once.** `app/src/screens/RulesScreen.tsx`,
    the skill's text with "Sabeel Time Tracker is for Sabeel Institute's staff
    and volunteers, and what you post is seen only by members of your team" and
-   Report a problem "on Home"; **I agree** and **Sign out**; no minimum age.
+   Report a problem "in More"; **I agree** and **Sign out**; no minimum age.
    `App.tsx` shows it to an active account whose profile lacks the current
    `RULES_VERSION` (`hasAcceptedRules` in `@sabeel/shared`), after the pending
    gate and INSTEAD of the navigator, so nothing that posts is reachable and a
@@ -188,8 +192,8 @@ release after it, the functions deployed first (`docs/DEPLOY.md`).
    write. Once per account, on every device; raising `RULES_VERSION` asks
    everyone again. Existing accounts, the review account included, see it once
    on their next open.
-2. **Report a problem**, on Home beside Notification settings (the app has no
-   More tab): one field, "What or who are you reporting, and what is wrong?",
+2. **Report a problem**, in the More tab beside Notifications and Help: one
+   field, "What or who are you reporting, and what is wrong?",
    and **Send**; the draft survives Back. `reportProblem`
    (`functions/src/reportProblem.ts`) takes an active account only (a password
    session as the ordinary member it is), 1 to 2000 characters, at most five
@@ -245,7 +249,7 @@ the app is not offered to children under 13. Texas SB 2420 is open
 
 | Page | URL | File | Linked from |
 |---|---|---|---|
-| Privacy policy | `https://sabeel-institute-time-tracker.web.app/privacy` | `app/public/privacy.html` | the sign-in screen (reachable before signing in, 5.1.1(i)), the bottom of Home, both store listings |
+| Privacy policy | `https://sabeel-institute-time-tracker.web.app/privacy` | `app/public/privacy.html` | the sign-in screen (reachable before signing in, 5.1.1(i)), More, both store listings |
 | Support | `https://sabeel-institute-time-tracker.web.app/support` | `app/public/support.html` | the App Store support URL only |
 
 Both are static, outside the signed-in app, rewritten ahead of the SPA
@@ -378,9 +382,9 @@ education/enterprise exemption under Guideline 4.8).
 
 For review, tap "Sign in with email" on the sign-in screen and use the account
 in the sign-in information (apps-reviewer@oursabeel.com). It is an ordinary member
-account made by an administrator: it records its own hours (Home > Add hours
-manually, or Clock in), sees its week (My timesheet) and submits it for
-approval (My timesheet > Submit). Approving timesheets, managing activities,
+account made by an administrator: it records its own hours (Today > Add
+hours, or Clock in), sees its week (Timesheet) and submits it for approval
+(Timesheet > Submit timesheet). Approving timesheets, managing activities,
 reports and user administration belong to manager and administrator roles,
 which are granted only to the institute's own Workspace accounts.
 

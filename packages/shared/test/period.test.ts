@@ -1,6 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import {
   addDays,
+  dayLabel,
+  isDayKey,
   monthRange,
   periodHasStarted,
   periodKeyFor,
@@ -121,5 +123,27 @@ describe('periodLabel', () => {
   it('formats compact ranges', () => {
     expect(periodLabel({ fromKey: '2026-07-05', toKey: '2026-07-11' })).toBe('Jul 5 – Jul 11');
     expect(periodLabel({ fromKey: '2026-05-31', toKey: '2026-05-31' })).toBe('May 31 – May 31');
+  });
+});
+
+describe('dayLabel', () => {
+  it('names the weekday and the date', () => {
+    expect(dayLabel('2026-11-01')).toBe('Sunday, Nov 1');
+    expect(dayLabel('2026-07-15', 2026)).toBe('Wednesday, Jul 15');
+  });
+  it('adds the year only when it is not the current one', () => {
+    expect(dayLabel('2025-12-31', 2026)).toBe('Wednesday, Dec 31, 2025');
+  });
+});
+
+describe('isDayKey', () => {
+  it('takes a real calendar day, written YYYY-MM-DD', () => {
+    for (const k of ['2026-07-19', '2026-01-01', '2026-12-31', '2028-02-29']) expect(isDayKey(k)).toBe(true);
+  });
+
+  it('refuses everything else, which the period helpers turn into NaN keys', () => {
+    for (const k of ['garbage', '', '2026-13-45', '2026-02-30', '2026-02-29', '2026-7-19', '2026-07-19x', ' 2026-07-19'])
+      expect(isDayKey(k)).toBe(false);
+    for (const v of [undefined, null, 20260719, {}]) expect(isDayKey(v)).toBe(false);
   });
 });

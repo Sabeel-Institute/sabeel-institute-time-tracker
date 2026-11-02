@@ -5,7 +5,7 @@
 # back-until.yaml): a busy CI simulator drops taps that land before a screen
 # takes them, and a step is taken again only while its screen still shows.
 appId: ${APP_ID}
-name: Rules, clock in and out, and the manager screens
+name: Rules, clock in and out, and the tabs
 ---
 - launchApp:
     clearState: true
@@ -35,13 +35,18 @@ name: Rules, clock in and out, and the manager screens
     commands:
       - tapOn: "Not now"
 
-# An activity to work on, its name read back before it is added: a keystroke
-# the busy simulator drops would otherwise add a misspelt activity. A retry
-# erases what the last try left, which is at most the start of "Teaching",
-# left-aligned in a full-width field: the tap at its centre lands after it, so
-# eraseText takes all of it.
-- scrollUntilVisible:
-    element: "Activities"
+# An activity to work on, made from More → Activities, its name read back
+# before it is added: a keystroke the busy simulator drops would otherwise add
+# a misspelt activity. A retry erases what the last try left, which is at most
+# the start of "Teaching", left-aligned in a full-width field: the tap at its
+# centre lands after it, so eraseText takes all of it. A tab's name may carry a
+# count after it ("More, 1 accounts waiting" on iOS), hence the open endings.
+- runFlow:
+    file: ci-tools/tap-until.yaml
+    env:
+      TARGET: "More[\\s\\S]*"
+      EXPECT: "Activities"
+      SECONDS: 30
 - runFlow:
     file: ci-tools/tap-until.yaml
     env:
@@ -72,10 +77,7 @@ name: Rules, clock in and out, and the manager screens
     env:
       FROM: "New activity name"
 
-# Clock in on it, and out again.
-- scrollUntilVisible:
-    element: "Pick an activity[\\s\\S]*"
-    direction: UP
+# Clock in on it, and out again, on Today.
 - runFlow:
     file: ci-tools/tap-until.yaml
     env:
@@ -98,53 +100,65 @@ name: Rules, clock in and out, and the manager screens
       SECONDS: 30
 - assertNotVisible: "CLOCKED IN"
 
-# The manager's screens open, each with something only it shows. Each
-# screen's title is the row that opened it, so Back waits for what only the
-# screen being left shows to go.
-- scrollUntilVisible:
-    element: "My timesheet"
+# The tabs, each with something only its screen shows.
 - runFlow:
     file: ci-tools/tap-until.yaml
     env:
-      TARGET: "My timesheet"
-      EXPECT: "‹"
+      TARGET: "Timesheet"
+      EXPECT: "in progress"
       SECONDS: 30
 - assertVisible: "[\\s\\S]*– [\\s\\S]*"
 - takeScreenshot: 03-timesheet
 - runFlow:
-    file: ci-tools/back-until.yaml
-    env:
-      FROM: "‹"
-- scrollUntilVisible:
-    element: "Reports"
-- runFlow:
     file: ci-tools/tap-until.yaml
     env:
       TARGET: "Reports"
-      EXPECT: "Period"
+      EXPECT: "Approved hours"
       SECONDS: 30
-- runFlow:
-    file: ci-tools/back-until.yaml
-    env:
-      FROM: "Period"
-- scrollUntilVisible:
-    element: "Approvals"
 - runFlow:
     file: ci-tools/tap-until.yaml
     env:
-      TARGET: "Approvals"
+      TARGET: "Approvals[\\s\\S]*"
       EXPECT: "Assigned to me"
       SECONDS: 30
 - runFlow:
-    file: ci-tools/back-until.yaml
+    file: ci-tools/tap-until.yaml
     env:
-      FROM: "Assigned to me"
-- scrollUntilVisible:
-    element: "Manage users"
+      TARGET: "More[\\s\\S]*"
+      EXPECT: "People[\\s\\S]*"
+      SECONDS: 30
 - runFlow:
     file: ci-tools/tap-until.yaml
     env:
-      TARGET: "Manage users"
+      TARGET: "People[\\s\\S]*"
       EXPECT: "[\\s\\S]*volunteer@oursabeel.com[\\s\\S]*"
       SECONDS: 30
 - takeScreenshot: 04-users
+
+# Help: a film opens in the platform's own player (expo-video), a native
+# module of its own. The player's frame is what is checked, so a player
+# missing from the build fails here; the device need not reach the films'
+# site.
+- runFlow:
+    file: ci-tools/tap-until.yaml
+    env:
+      TARGET: "More[\\s\\S]*"
+      EXPECT: "Help[\\s\\S]*"
+      SECONDS: 30
+- runFlow:
+    file: ci-tools/tap-until.yaml
+    env:
+      TARGET: "Help[\\s\\S]*"
+      EXPECT: "Clocking in and out[\\s\\S]*"
+      SECONDS: 30
+- runFlow:
+    file: ci-tools/tap-until.yaml
+    env:
+      TARGET: "Clocking in and out[\\s\\S]*"
+      EXPECT: "On a computer"
+      SECONDS: 30
+- extendedWaitUntil:
+    visible:
+      id: "help-film"
+    timeout: 20000
+- takeScreenshot: 05-help-film

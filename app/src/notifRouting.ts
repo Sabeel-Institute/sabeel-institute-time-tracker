@@ -7,7 +7,7 @@
 // away and several React trees later. So a route is held until BOTH the
 // navigator is ready and the session is known — and dropped if it turns out the
 // destination isn't a screen this account has.
-import { navigationRef } from './nav';
+import { navigationRef, tabState } from './nav';
 import { notifRouteNeedsApprover, type NotifRoute } from '@sabeel/shared';
 
 let pending: NotifRoute | null = null;
@@ -45,7 +45,9 @@ function flush(): void {
       navigationRef.navigate('Users');
       return;
     case 'Timesheet':
-      navigationRef.navigate('Timesheet', { initialPeriodKey: route.periodKey });
+      // A tab's own screen: switch to the tab, at that week, rather than push a
+      // second copy of it with no way back.
+      navigationRef.reset(tabState(navigationRef.getRootState(), 'Timesheet', { initialPeriodKey: route.periodKey }));
       return;
     case 'TimesheetReview':
       navigationRef.navigate('TimesheetReview', {

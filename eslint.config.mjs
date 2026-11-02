@@ -3,6 +3,25 @@ import tseslint from 'typescript-eslint';
 import globals from 'globals';
 import reactHooks from 'eslint-plugin-react-hooks';
 
+/**
+ * Icons come from `src/icons`, whose font holds only the glyphs the app names
+ * (ci-tools' README, "Icons"). A stock set like
+ * `@expo/vector-icons/MaterialIcons` type-checks just as well and puts its
+ * whole font back on the web's first load. The bare package is a `path`: as a
+ * pattern it would exclude the directory, and gitignore semantics cannot
+ * re-include createIconSet beneath it.
+ */
+const ICONS_MESSAGE = 'Use Icon from src/icons; add the glyph to src/icons/names.json.';
+const ICONS_FROM_SRC_ICONS = {
+  paths: [{ name: '@expo/vector-icons', message: ICONS_MESSAGE }],
+  patterns: [
+    {
+      group: ['@expo/vector-icons/*', '!@expo/vector-icons/createIconSet'],
+      message: ICONS_MESSAGE,
+    },
+  ],
+};
+
 export default tseslint.config(
   {
     ignores: [
@@ -74,13 +93,14 @@ export default tseslint.config(
     },
   },
   {
-    // The `page.evaluate` callbacks in the browser suites run IN THE BROWSER,
-    // where `document` and `getComputedStyle` exist. eslint parses each file as
-    // one program and cannot tell the two contexts apart, so the browser globals
-    // are declared for the whole file. The alternative — and what these files
-    // carried before the layout sweep arrived with sixteen more measurements —
-    // is a `no-undef` disable comment above every single one.
-    files: ['scripts/*-e2e.mjs'],
+    // The `page.evaluate` callbacks in the browser suites and the manual's
+    // screenshots run IN THE BROWSER, where `document` and `getComputedStyle`
+    // exist. eslint parses each file as one program and cannot tell the two
+    // contexts apart, so the browser globals are declared for the whole file.
+    // The alternative — and what these files carried before the layout sweep
+    // arrived with sixteen more measurements — is a `no-undef` disable comment
+    // above every single one.
+    files: ['scripts/*-e2e.mjs', 'scripts/manual-shots.mjs'],
     languageOptions: {
       globals: {
         ...globals.node,
@@ -122,7 +142,7 @@ export default tseslint.config(
     // connections (docs/POSTMORTEM-2026-07-16-stale-week.md). Exemptions:
     // liveQuery.ts is the choke point; session.ts couples its doc listener to
     // the auth lifecycle and does its own reset.
-    files: ['app/src/**/*.{ts,tsx}'],
+    files: ['app/**/*.{ts,tsx}'],
     ignores: ['app/src/liveQuery.ts', 'app/src/session.ts'],
     rules: {
       'no-restricted-imports': [
@@ -135,9 +155,18 @@ export default tseslint.config(
               message:
                 'Subscribe via useLiveQuery/useLiveDoc (src/liveQuery.ts) — they reset on input change and clear on error. See docs/POSTMORTEM-2026-07-16-stale-week.md.',
             },
+            ...ICONS_FROM_SRC_ICONS.paths,
           ],
+          patterns: ICONS_FROM_SRC_ICONS.patterns,
         },
       ],
+    },
+  },
+  {
+    // The two modules allowed onSnapshot keep the icon rule.
+    files: ['app/src/liveQuery.ts', 'app/src/session.ts'],
+    rules: {
+      'no-restricted-imports': ['error', ICONS_FROM_SRC_ICONS],
     },
   },
 );

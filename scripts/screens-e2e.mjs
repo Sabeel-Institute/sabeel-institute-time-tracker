@@ -190,8 +190,7 @@ const fromSource = (name) => {
   return Number(hit[1]);
 };
 const WIDE_BREAKPOINT = fromSource('WIDE_BREAKPOINT');
-const CONTENT_MAX_WIDTH = fromSource('CONTENT_MAX_WIDTH');
-const LIST_MAX_WIDTH = fromSource('LIST_MAX_WIDTH');
+const READ_MAX_WIDTH = fromSource('READ_MAX_WIDTH');
 
 /**
  * Widths chosen to STRADDLE the breakpoint rather than to look thorough: a bug
@@ -511,6 +510,16 @@ console.log(
     `decided ${periodLabel(DECIDED)} · empty ${periodLabel(EMPTY_WEEK)}\n`,
 );
 
+/**
+ * `SWEEP_EXPLORE=1` stops here, with the world seeded and the stack up, for a
+ * person (or an agent with a browser) to explore by hand: sign in through the
+ * dev row as any of the accounts above. Ctrl-C ends it and stops the stack.
+ */
+if (process.env.SWEEP_EXPLORE) {
+  console.log(`▸ exploring: ${baseUrl}  (dev sign-in as ${[ADMIN, MEMBER, MANAGER, PENDING, UNACCEPTED].map((a) => a.email).join(', ')})`);
+  await new Promise(() => {});
+}
+
 // ---- Assertions -------------------------------------------------------------
 /**
  * react-native-web renders every `Pressable` as a `<div tabindex="0">` (or
@@ -585,6 +594,27 @@ const layoutFaults = (page) =>
       };
       const area = (r) => Math.max(0, r.right - r.left) * Math.max(0, r.bottom - r.top);
 
+      /**
+       * The vertical scroller an element sits in, if any. Two controls in ONE
+       * scroller are laid out against each other wherever they sit (above); but
+       * a control in the scroller and one outside it — the header's Back, the
+       * tab bar — only meet where the scroller actually shows its content, so
+       * across scrollers each is clipped to its own. Without this, a row
+       * scrolled up under the header read as overlapping Back.
+       */
+      const scrollerOf = (el) => {
+        for (let n = el.parentElement; n && n !== document.documentElement; n = n.parentElement) {
+          const cs = getComputedStyle(n);
+          if (/auto|scroll/.test(cs.overflowY) && n.scrollHeight > n.clientHeight) return n;
+        }
+        return null;
+      };
+      const clipTo = (r, scroller) => {
+        if (!scroller) return r;
+        const c = scroller.getBoundingClientRect();
+        return { ...r, top: Math.max(r.top, c.top), bottom: Math.min(r.bottom, c.bottom) };
+      };
+
       /** The nearest positioned ancestor — a modal, or the page. */
       const layerOf = (el) => {
         for (let n = el; n && n !== document.body; n = n.parentElement) {
@@ -619,8 +649,14 @@ const layoutFaults = (page) =>
           // design, and comparing the two reports every control on the screen
           // beneath as overlapping the sheet.
           if (layerOf(a) !== layerOf(b)) continue;
-          const ra = visibleRect(a);
-          const rb = visibleRect(b);
+          let ra = visibleRect(a);
+          let rb = visibleRect(b);
+          const sa = scrollerOf(a);
+          const sb = scrollerOf(b);
+          if (sa !== sb) {
+            ra = clipTo(ra, sa);
+            rb = clipTo(rb, sb);
+          }
           const ox = Math.min(ra.right, rb.right) - Math.max(ra.left, rb.left);
           const oy = Math.min(ra.bottom, rb.bottom) - Math.max(ra.top, rb.top);
           if (ox > 1 && oy > 1) {
@@ -737,10 +773,11 @@ const layoutFaults = (page) =>
 /**
  * Can you LEAVE this screen without the browser's Back?
  *
- * This app is a native stack with no tab bar: the root answers with Sign out and
- * every pushed screen has the header's back link ("<previous screen>, back").
- * A screen with neither is a dead end on a phone browser, where there is no
- * hardware Back either.
+ * Inside the app the tabs are on every screen (a bar on a phone, a rail on a
+ * wide screen) and every pushed screen also has the header's back link
+ * ("<previous screen>, back"). The gates have no navigator, and answer with
+ * Sign out. A screen with none of these is a dead end on a phone browser, where
+ * there is no hardware Back either.
  */
 const escapes = (page) =>
   page.evaluate(
@@ -752,6 +789,7 @@ const escapes = (page) =>
       const controls = [...document.querySelectorAll(sel)].filter(shown);
       return {
         back: controls.some((e) => /,\s*back$/i.test(e.getAttribute('aria-label') ?? '')),
+        tabs: controls.some((e) => (e.getAttribute('data-testid') ?? '').startsWith('tab-')),
         signOut: controls.some((e) => (e.textContent ?? '').trim() === 'Sign out'),
       };
     },
@@ -796,7 +834,7 @@ const smallTargets = (page) =>
 const buttonLayout = (page) =>
   page.evaluate(() => {
     const btn = [...document.querySelectorAll('[tabindex]')].find(
-      (e) => (e.textContent ?? '').trim() === 'Notification settings',
+      (e) => (e.textContent ?? '').trim() === 'Add hours',
     );
     if (!btn) return null;
     return {
@@ -828,9 +866,9 @@ const gridLayout = (page) =>
   });
 
 // ---- The tour ---------------------------------------------------------------
-const ADMIN_SCREENS = 18;
-const MEMBER_SCREENS = 3;
-const MANAGER_SCREENS = 2;
+const ADMIN_SCREENS = 21;
+const MEMBER_SCREENS = 6;
+const MANAGER_SCREENS = 3;
 const PENDING_SCREENS = 1;
 const UNACCEPTED_SCREENS = 1;
 
@@ -859,6 +897,22 @@ const tapInSheet = async (page, text, exact = true) => {
 const goBack = async (page) => {
   await page.getByRole('link', { name: /,\s*back$/i }).first().click();
   await page.waitForTimeout(700);
+};
+/** A tab, in the bar or the rail — whichever this width draws. */
+const tab = async (page, key) => {
+  await vis(page.getByTestId(`tab-${key}`)).click();
+  await page.waitForTimeout(600);
+};
+/** A destination in the More sheet. */
+const more = async (page, label) => {
+  await tab(page, 'more');
+  await tapInSheet(page, label);
+  await page.waitForTimeout(400);
+};
+/** Page the Timesheet tab back a month. */
+const previousMonth = async (page) => {
+  await vis(page.getByRole('button', { name: 'Previous month', exact: true })).click();
+  await page.waitForTimeout(500);
 };
 
 /**
@@ -928,7 +982,7 @@ function visitor(page, tag) {
     check(`${tag} / ${name} — the layout checks examined something`, controls > 0, '0 controls');
     fieldsSeen += fields;
     const out = await escapes(page);
-    check(`${tag} / ${name} has a way out`, out.back || out.signOut, 'no Back and no Sign out');
+    check(`${tag} / ${name} has a way out`, out.back || out.tabs || out.signOut, 'no Back, no tabs and no Sign out');
     const small = await smallTargets(page);
     if (small.length) console.log(`         under 44px: ${small.join(', ').slice(0, 110)}`);
     await page.screenshot({ path: join(SHOTS, `${tag}-${name}.png`), fullPage: true });
@@ -966,7 +1020,7 @@ async function tourAdmin(tag, width) {
       l &&
       (wide
         ? // Hugging its label, inside a column the cap has narrowed.
-          l.button < l.column - 20 && l.column <= CONTENT_MAX_WIDTH
+          l.button < l.column - 20 && l.column <= READ_MAX_WIDTH
         : // Stretched to the full width of the column.
           Math.abs(l.button - l.column) <= 1);
     check(
@@ -976,21 +1030,16 @@ async function tourAdmin(tag, width) {
     );
   }
 
-  /**
-   * A PICKER IS ITS OWN SCREEN — a modal with a text field over a capped list,
-   * which is the shape most likely to break narrow and the one no structural
-   * check can see while it is closed.
-   */
-  await visit('home-picker', async () => {
-    await tap(page, 'Admin (myself)');
-    await sheet(page).waitFor({ timeout: 15000 });
-    await page.getByPlaceholder('Search…').waitFor({ timeout: 15000 });
+  /** The More sheet: the tail of the navigation, as an admin sees all of it. */
+  await visit('more', async () => {
+    await tab(page, 'more');
+    await vis(sheet(page).getByText('People', { exact: true })).waitFor({ timeout: 15000 });
   });
-  await tapInSheet(page, 'Admin (myself)'); // re-pick the same approver; closes the sheet
-  await page.waitForTimeout(500);
+  await vis(sheet(page).getByRole('button', { name: 'Close' })).click();
+  await page.waitForTimeout(400);
 
   await visit('manual-entry', async () => {
-    await tap(page, 'Add hours manually');
+    await tap(page, 'Add hours');
     await vis(page.getByText('Pick an activity')).waitFor({ timeout: 20000 });
   });
   /** The activity list, which is where the longest name in the app has to fit. */
@@ -1003,18 +1052,29 @@ async function tourAdmin(tag, width) {
   await goBack(page);
 
   await visit('timesheet', async () => {
-    await tap(page, 'My timesheet');
-    await vis(page.getByText('Week total:', { exact: false })).waitFor({ timeout: 20000 });
+    await tab(page, 'timesheet');
+    await vis(page.getByText('in progress', { exact: true })).waitFor({ timeout: 20000 });
   });
 
   /**
-   * REJECTED, which is three rows this screen has in no other state: the reason
-   * card, the conflict/approver hints, and Resubmit. Reached by stepping the
-   * month back — the only step in this tour that touches the month arrows.
+   * A PICKER IS ITS OWN SCREEN — a modal with a text field over a capped list,
+   * which is the shape most likely to break narrow and the one no structural
+   * check can see while it is closed. The approver is chosen beside Submit.
+   */
+  await visit('approver-picker', async () => {
+    await tap(page, 'Admin (myself)');
+    await sheet(page).waitFor({ timeout: 15000 });
+    await page.getByPlaceholder('Search…').waitFor({ timeout: 15000 });
+  });
+  await tapInSheet(page, 'Admin (myself)'); // re-pick the same approver; closes the sheet
+  await page.waitForTimeout(500);
+
+  /**
+   * REJECTED, which has rows this screen has in no other state: the reason,
+   * the approver and Resubmit. Reached by paging back a month to its chip.
    */
   await visit('timesheet-rejected', async () => {
-    await tap(page, '‹');
-    await page.waitForTimeout(600);
+    await previousMonth(page);
     await tap(page, periodLabel(DECIDED));
     await vis(page.getByText('Fix the entries below', { exact: false })).waitFor({ timeout: 20000 });
   });
@@ -1022,7 +1082,7 @@ async function tourAdmin(tag, width) {
   /** An EMPTY week: the state with nothing to lay out, which lays out badly too. */
   await visit('timesheet-empty', async () => {
     await tap(page, periodLabel(EMPTY_WEEK));
-    await vis(page.getByText('No hours in this week.')).waitFor({ timeout: 20000 });
+    await vis(page.getByText('Nothing logged this week yet', { exact: false })).waitFor({ timeout: 20000 });
   });
 
   await visit('entry-edit', async () => {
@@ -1031,16 +1091,16 @@ async function tourAdmin(tag, width) {
     await vis(page.getByText('Save changes')).waitFor({ timeout: 20000 });
   });
   await goBack(page);
-  await goBack(page);
+  await tab(page, 'today');
 
   await visit('needs-attention', async () => {
     await tap(page, 'A timesheet was rejected', false);
-    await vis(page.getByText('to fix and resubmit', { exact: false })).waitFor({ timeout: 20000 });
+    await vis(page.getByText('to fix it and resubmit', { exact: false })).waitFor({ timeout: 20000 });
   });
   await goBack(page);
 
   await visit('notification-settings', async () => {
-    await tap(page, 'Notification settings');
+    await more(page, 'Notifications');
     await vis(page.getByText('Weekly submit reminder')).waitFor({ timeout: 20000 });
   });
   await checkDeviceState(page, tag);
@@ -1048,7 +1108,7 @@ async function tourAdmin(tag, width) {
 
   /** One field and Send, with a report of real length typed in (Send enabled). */
   await visit('report-problem', async () => {
-    await tap(page, 'Report a problem');
+    await more(page, 'Report a problem');
     const field = page.getByRole('textbox', { name: 'What or who are you reporting, and what is wrong?' });
     await field.waitFor({ timeout: 20000 });
     await field.fill(
@@ -1059,26 +1119,28 @@ async function tourAdmin(tag, width) {
   await goBack(page);
 
   await visit('approvals', async () => {
-    await vis(page.getByText(/^Approvals( \(\d+\))?$/)).click();
+    await tab(page, 'approvals');
     await vis(page.getByText(MEMBER.name)).waitFor({ timeout: 20000 });
   });
 
-  /**
-   * A SUBMITTED week under review, which grows a reason box and two more buttons
-   * that exist in no other state — the closest thing this app has to kanban's
-   * "a card with the editor open is a different screen".
-   */
+  /** A SUBMITTED week under review: the decision buttons exist in no other state. */
   await visit('timesheet-review', async () => {
     await vis(page.getByText(MEMBER.name)).click();
-    await vis(page.getByPlaceholder('What needs fixing?')).waitFor({ timeout: 20000 });
+    await vis(page.getByText('Approve timesheet', { exact: true })).waitFor({ timeout: 20000 });
   });
-  await goBack(page);
+  /** Reject, which asks for the reason in a sheet over the week. */
+  await visit('timesheet-review-reject', async () => {
+    await tap(page, 'Reject timesheet…');
+    await vis(sheet(page).getByPlaceholder('What needs fixing?')).waitFor({ timeout: 20000 });
+  });
+  await vis(sheet(page).getByText('Cancel', { exact: true })).click();
+  await page.waitForTimeout(400);
   await goBack(page);
 
   await visit('reports', async () => {
-    await tap(page, 'Reports');
-    await tap(page, 'all');
-    await vis(page.getByText('By person (tap for lifetime statement)')).waitFor({ timeout: 25000 });
+    await tab(page, 'reports');
+    await tap(page, 'All time');
+    await vis(page.getByText('By person', { exact: true })).waitFor({ timeout: 25000 });
   });
   /** The person filter: the longest list in the app, and the one that grows. */
   await visit('reports-picker', async () => {
@@ -1091,13 +1153,12 @@ async function tourAdmin(tag, width) {
 
   await visit('person-detail', async () => {
     await vis(page.getByText(MEMBER.name)).click();
-    await vis(page.getByText('LIFETIME APPROVED HOURS')).waitFor({ timeout: 25000 });
+    await vis(page.getByText('Lifetime approved hours', { exact: true })).waitFor({ timeout: 25000 });
   });
-  await goBack(page);
   await goBack(page);
 
   await visit('activities', async () => {
-    await tap(page, 'Activities');
+    await more(page, 'Activities');
     await vis(page.getByText(ACTIVITIES[0][1], { exact: true })).waitFor({ timeout: 20000 });
     // The archived one, in its section opened.
     await page.getByRole('button', { name: 'Show Archived (1)' }).click();
@@ -1106,20 +1167,25 @@ async function tourAdmin(tag, width) {
   await goBack(page);
 
   await visit('users', async () => {
-    await vis(page.getByText(/^Manage users( \(\d+\))?$/)).click();
+    await more(page, 'People');
     await vis(page.getByText(PENDING.email)).waitFor({ timeout: 25000 });
   });
   {
+    // One list of people at every width, read top to bottom, inside the
+    // reading column.
     const g = await gridLayout(page);
-    const ok = wide
-      ? g.cards >= 4 && g.columns >= 2 && g.span <= LIST_MAX_WIDTH
-      : g.cards >= 4 && g.columns === 1;
     check(
-      `${tag} / users renders the ${wide ? 'flowing' : 'stacked'} card grid`,
-      ok,
+      `${tag} / people is one list`,
+      g.cards >= 4 && g.columns === 1 && g.span <= READ_MAX_WIDTH,
       JSON.stringify(g),
     );
   }
+
+  /** A person's own page: approver, role and the access switches. */
+  await visit('person', async () => {
+    await vis(page.getByText(MEMBER.name, { exact: true })).click();
+    await vis(page.getByRole('switch', { name: 'Active' })).waitFor({ timeout: 20000 });
+  });
 
   check(
     `${tag} / admin reached every screen`,
@@ -1162,26 +1228,33 @@ async function tourMember(tag, width) {
     await page.getByText('Salaam,', { exact: false }).waitFor({ timeout: 45000 });
     await vis(page.getByText('What are you working on?')).waitFor({ timeout: 20000 });
   });
+  /** A member's More: their own settings, and nothing of the institute's. */
+  await visit('member-more', async () => {
+    await tab(page, 'more');
+    await vis(sheet(page).getByText('Notifications', { exact: true })).waitFor({ timeout: 15000 });
+  });
   const gated = await page.evaluate(() => {
+    // The accessible name: a tab's text also holds its icon's glyph.
     const labels = [...document.querySelectorAll('[tabindex]')]
       .filter((e) => e.getBoundingClientRect().width > 2)
-      .map((e) => (e.textContent ?? '').trim());
+      .map((e) => (e.getAttribute('aria-label') ?? e.textContent ?? '').trim());
     return {
-      manager: labels.filter((l) => /^(Reports|Activities|Approvals)/.test(l)),
-      admin: labels.filter((l) => /^Manage users/.test(l)),
-      own: labels.includes('My timesheet'),
+      manager: labels.filter((l) => /^(Reports|Activities|Approvals|People)/.test(l)),
+      own: labels.includes('Timesheet'),
     };
   });
   check(
     `${tag} / a member sees none of the manager entry points`,
-    gated.manager.length === 0 && gated.admin.length === 0 && gated.own,
+    gated.manager.length === 0 && gated.own,
     JSON.stringify(gated),
   );
+  await vis(sheet(page).getByRole('button', { name: 'Close' })).click();
+  await page.waitForTimeout(400);
 
   /** Overlapping entries: two rows turn red, each grows a label, the list grows a hint. */
   await visit('member-timesheet', async () => {
-    await tap(page, 'My timesheet');
-    await vis(page.getByText('fix the highlighted times', { exact: false })).waitFor({
+    await tab(page, 'timesheet');
+    await vis(page.getByText('Fix the flagged times', { exact: false })).waitFor({
       timeout: 25000,
     });
   });
@@ -1195,11 +1268,56 @@ async function tourMember(tag, width) {
 
   /** APPROVED: the locked week, where the submit controls are replaced by a notice. */
   await visit('member-timesheet-locked', async () => {
-    await tap(page, '‹');
-    await page.waitForTimeout(600);
+    await previousMonth(page);
     await tap(page, periodLabel(DECIDED));
-    await vis(page.getByText('this week is locked', { exact: false })).waitFor({ timeout: 20000 });
+    await vis(page.getByText('this week is closed', { exact: false })).waitFor({ timeout: 20000 });
   });
+
+  /** Help: the list of films, then one film, which must fit the screen WHOLE. */
+  await visit('help', async () => {
+    await more(page, 'Help');
+    await vis(page.getByText('Clocking in and out', { exact: true })).waitFor({ timeout: 20000 });
+  });
+  await visit('help-film', async () => {
+    await vis(page.getByTestId('help-film-clocking')).click();
+    await vis(page.getByRole('tab', { name: 'On a phone' })).waitFor({ timeout: 20000 });
+    await page.waitForTimeout(1200);
+  });
+  {
+    // A standing film drawn at the column's width is taller than a phone: the
+    // frame is fitted to the room under the heading, so all of it is on screen.
+    const frame = await page.evaluate(() => {
+      const e = [...document.querySelectorAll('[data-testid="help-film"]')].find((x) => x.getBoundingClientRect().width > 0);
+      if (!e) return null;
+      const r = e.getBoundingClientRect();
+      return { bottom: Math.round(r.bottom), right: Math.round(r.right), h: innerHeight, w: innerWidth };
+    });
+    const unplayable = await page.getByText('This film could not be played', { exact: false }).filter({ visible: true }).count();
+    check(
+      `${tag} / the help film fits the screen whole, or says it cannot play`,
+      frame ? frame.bottom <= frame.h && frame.right <= frame.w : unplayable > 0,
+      JSON.stringify({ frame, unplayable }),
+    );
+  }
+  await page.goBack();
+  await page.goBack();
+  await page.waitForTimeout(600);
+
+  /**
+   * THE BROWSER'S BACK walks the app's screens rather than leaving the site:
+   * from a tab it returns to Today, and from a More destination to where More
+   * was opened. Until the web had addresses, Back from anywhere left the app.
+   */
+  await page.goBack();
+  await page.waitForTimeout(600);
+  const backToToday = await vis(page.getByText('What are you working on?')).isVisible().catch(() => false);
+  check(`${tag} / Back from a tab returns to Today`, backToToday, `on ${page.url()}`);
+  await more(page, 'Notifications');
+  await vis(page.getByText('Weekly submit reminder')).waitFor({ timeout: 20000 });
+  await page.goBack();
+  await page.waitForTimeout(600);
+  const backFromMore = await vis(page.getByText('What are you working on?')).isVisible().catch(() => false);
+  check(`${tag} / Back from a More screen returns to it`, backFromMore, `on ${page.url()}`);
 
   check(
     `${tag} / member reached every screen`,
@@ -1221,8 +1339,18 @@ async function tourManager(tag, width) {
 
   await page.getByText('Salaam,', { exact: false }).waitFor({ timeout: 45000 });
   await visit('manager-users', async () => {
-    await vis(page.getByText(/^Manage users( \(\d+\))?$/)).click();
+    await more(page, 'People');
     await vis(page.getByText(PENDING.email)).waitFor({ timeout: 25000 });
+  });
+  const approveButtons = await page
+    .getByRole('button', { name: 'Approve', exact: true })
+    .filter({ visible: true })
+    .count();
+  check(`${tag} / a manager cannot approve accounts`, approveButtons === 0, `${approveButtons} Approve button(s)`);
+
+  await visit('manager-person', async () => {
+    await vis(page.getByText(MEMBER.name, { exact: true })).click();
+    await vis(page.getByText('Approver', { exact: true })).waitFor({ timeout: 20000 });
   });
   const readOnly = await page.evaluate(() => {
     const vis2 = [...document.querySelectorAll('[tabindex], [role="switch"]')].filter(
@@ -1231,14 +1359,14 @@ async function tourManager(tag, width) {
     return {
       approve: vis2.filter((e) => (e.textContent ?? '').trim() === 'Approve').length,
       switches: vis2.filter((e) => e.getAttribute('role') === 'switch').length,
-      roleOptions: vis2.filter((e) => /^(member|manager)$/.test((e.textContent ?? '').trim()))
+      roleOptions: vis2.filter((e) => /^(Member|Manager)$/.test((e.textContent ?? '').trim()))
         .length,
       approverFields: vis2.filter((e) => /^(No approver assigned|Admin)/.test((e.textContent ?? '').trim()))
         .length,
     };
   });
   check(
-    `${tag} / a manager gets the read-only user list, and can still assign approvers`,
+    `${tag} / a manager sees a person read-only, and can still assign their approver`,
     readOnly.approve === 0 &&
       readOnly.switches === 0 &&
       readOnly.roleOptions === 0 &&
@@ -1248,8 +1376,8 @@ async function tourManager(tag, width) {
   await goBack(page);
 
   await visit('manager-approvals', async () => {
-    await vis(page.getByText(/^Approvals( \(\d+\))?$/)).click();
-    await vis(page.getByText('Nothing waiting for approval', { exact: false })).waitFor({
+    await tab(page, 'approvals');
+    await vis(page.getByText('Nothing waiting for you', { exact: false })).waitFor({
       timeout: 20000,
     });
   });
@@ -1306,7 +1434,7 @@ async function tourUnaccepted(tag, width) {
     [...document.querySelectorAll('[tabindex]')]
       .filter((e) => e.getBoundingClientRect().width > 2)
       .map((e) => (e.textContent ?? '').trim())
-      .filter((l) => /^(Clock in|Add hours manually|My timesheet|Report a problem)$/.test(l)),
+      .filter((l) => /^(Clock in|Add hours|Timesheet|Report a problem)$/.test(l)),
   );
   check(`${tag} / nothing to post with behind the rules`, behind.length === 0, JSON.stringify(behind));
   check(

@@ -142,7 +142,7 @@ Sign in once with your Google account (lands pending), then:
 GCLOUD_PROJECT=sabeel-institute-time-tracker node scripts/grant-admin.mjs you@example.com
 ```
 (Needs gcloud ADC or `GOOGLE_APPLICATION_CREDENTIALS`.) Sign out/in to pick up the
-admin claim. From then on, promote others in-app (Manage users).
+admin claim. From then on, promote others in-app (More → People).
 
 ## Ship it — the release runbook
 

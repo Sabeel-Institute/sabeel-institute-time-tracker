@@ -67,7 +67,7 @@ and it has one.
   and the `APP_ENV_LOCAL` secret: nothing reads it.
 
   On the site: a browser that has never been asked shows **Enable
-  notifications**, on Home and on Notification settings. That is expected, not a
+  notifications**, on Today and on More → Notifications. That is expected, not a
   fault — the app does not ask on sign-in, because a browser only honours a
   permission request raised straight from a press.
 

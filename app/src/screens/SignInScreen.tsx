@@ -139,10 +139,10 @@ export function SignInScreen() {
           <TextButton label="Sign in with email" onPress={() => setEmailOpen(true)} align="center" />
         )}
         {USE_EMULATORS && (
-          <>
-            <Text style={styles.devLabel} testID="dev-sign-in">
-              Dev sign-in (emulator only)
-            </Text>
+          // One box, so the help films can hide the whole row while still
+          // signing in through it.
+          <View testID="dev-sign-in" style={styles.devRow}>
+            <Text style={styles.devLabel}>Dev sign-in (emulator only)</Text>
             <TextInput
               value={devEmail}
               onChangeText={setDevEmail}
@@ -152,7 +152,7 @@ export function SignInScreen() {
               placeholder="email"
             />
             <Button label="Dev: sign in" kind="secondary" onPress={dev} block />
-          </>
+          </View>
         )}
         <ErrorText error={error} />
       </View>
@@ -179,7 +179,7 @@ const styles = StyleSheet.create({
     gap: spacing(2),
   },
   title: {
-    color: t.accent.base,
+    color: t.text.primary,
     fontSize: 26,
     fontWeight: '700',
     textAlign: 'center',
@@ -197,12 +197,15 @@ const styles = StyleSheet.create({
   },
   logo: { width: '82%', height: 150, marginBottom: spacing(2) },
   build: { color: t.text.muted, fontSize: 12, textAlign: 'center' },
+  devRow: { gap: spacing(3) },
   devLabel: { color: t.text.muted, fontSize: 12, marginTop: spacing(2) },
   input: {
+    backgroundColor: t.bg.inset,
     borderWidth: 1,
     borderColor: t.border.subtle,
     borderRadius: 8,
     padding: spacing(3),
+    minHeight: 44,
     fontSize: 15,
     color: t.text.primary,
   },

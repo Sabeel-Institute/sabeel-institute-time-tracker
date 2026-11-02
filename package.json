@@ -22,6 +22,7 @@
     "test:e2e": "node scripts/web-e2e.mjs",
     "test:screens": "node scripts/screens-e2e.mjs",
     "test:e2e:push": "node scripts/push-e2e.mjs",
+    "manual:shots": "node scripts/manual-shots.mjs",
     "build": "npm run build -w @sabeel/shared && npm run build -w functions",
     "knip": "knip",
     "verify": "npm run lint && npm run typecheck && npm run knip && npm test",
@@ -37,7 +38,7 @@
   },
   "devDependencies": {
     "@eslint/js": "^9.39.0",
-    "@sabeel-institute/ci-tools": "github:Sabeel-Institute/ci-tools#2a67b8fcede1d6e6578504566a4ae55d304aefe0",
+    "@sabeel-institute/ci-tools": "github:Sabeel-Institute/ci-tools#ba3679b892023b6a6f3922acd072b41398212fbf",
     "@sabeel/shared": "*",
     "@types/node": "^22.20.5",
     "eslint": "^9.39.0",

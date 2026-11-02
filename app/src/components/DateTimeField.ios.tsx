@@ -83,11 +83,15 @@ export function DateTimeField({
 }
 
 const styles = StyleSheet.create({
+  // The look of every text box in the app (ui.tsx `input`).
   field: {
+    backgroundColor: t.bg.inset,
     borderWidth: 1,
     borderColor: t.border.subtle,
     borderRadius: 8,
-    padding: spacing(3),
+    minHeight: 44,
+    justifyContent: 'center',
+    paddingHorizontal: spacing(3),
   },
   value: { fontSize: 15, color: t.text.primary },
   backdrop: { flex: 1, backgroundColor: t.effect.overlay, justifyContent: 'flex-end' },

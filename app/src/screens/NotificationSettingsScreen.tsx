@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react';
-import { StyleSheet, Switch, Text, View } from 'react-native';
+import { StyleSheet, Text } from 'react-native';
 import { doc, updateDoc } from 'firebase/firestore';
 import { COLLECTIONS, type NotifPrefs, type TokenClaims, type UserDoc } from '@sabeel/shared';
 import { db } from '../firebase';
-import { Button, Screen } from '../components/ui';
+import { Button, Card, RowList, Screen, SectionTitle, SwitchRow } from '../components/ui';
 import {
   canOpenPushSettings,
   enablePush,
@@ -11,7 +11,7 @@ import {
   pushPromptState,
   registerPush,
 } from '../notify';
-import { getTheme, spacing } from '../theme';
+import { getTheme } from '../theme';
 
 const t = getTheme();
 
@@ -94,82 +94,55 @@ export function NotificationSettingsScreen({
   );
 
   return (
-    <Screen width="read">
-      <Text style={styles.intro}>
-        Notifications arrive on every device where you’ve allowed them. A switch here turns
-        that kind of notification off everywhere.
-      </Text>
-      {push === 'default' ? (
-        <View style={styles.device}>
-          <Text style={styles.deviceText}>Notifications are not enabled on this device.</Text>
-          <Button label="Enable notifications" onPress={turnOnPush} />
-        </View>
-      ) : null}
-      {push === 'granted' ? (
-        <Text style={styles.intro}>Notifications are enabled on this device.</Text>
-      ) : null}
-      {push === 'denied' ? (
-        <View style={styles.device}>
-          <Text style={styles.deviceText}>
-            Notifications are blocked for this app on this device.
-          </Text>
-          {/* Native can open its own settings page; a browser cannot, so there
-              it is instructions or nothing. deviceHint rather than the row
-              `hint` style: that one is muted (2.92:1, the caption token) and
-              this is the only route back for someone who has blocked them. */}
-          {canOpenPushSettings ? (
-            <Button label="Open settings" kind="secondary" onPress={openPushSettings} />
-          ) : (
-            <Text style={styles.deviceHint}>
-              Allow them in your browser’s site settings, then reopen this screen.
-            </Text>
-          )}
-        </View>
-      ) : null}
-      {push === 'unsupported' ? (
-        <Text style={styles.intro}>This device can’t show notifications.</Text>
-      ) : null}
-      {rows.map((r) => (
-        <View key={r.key} style={styles.row}>
-          <View style={styles.rowText}>
-            <Text style={styles.label}>{r.label}</Text>
-            {r.hint ? <Text style={styles.hint}>{r.hint}</Text> : null}
-          </View>
-          <Switch
-            value={prefs[r.key] !== false}
-            onValueChange={(on) => void setPref(r.key, on)}
-            trackColor={{ true: t.accent.base, false: t.border.subtle }}
-            thumbColor={t.text.inverse}
+    <Screen
+      width="read"
+      subtitle="Notifications arrive on every device where you have allowed them. A switch here turns that kind off everywhere."
+    >
+      <SectionTitle>This device</SectionTitle>
+      <Card>
+        {push === 'default' ? (
+          <>
+            <Text style={styles.deviceText}>Notifications are not enabled on this device.</Text>
+            <Button label="Enable notifications" onPress={turnOnPush} />
+          </>
+        ) : null}
+        {push === 'granted' ? <Text style={styles.deviceText}>Notifications are enabled on this device.</Text> : null}
+        {push === 'denied' ? (
+          <>
+            <Text style={styles.deviceText}>Notifications are blocked for this app on this device.</Text>
+            {/* Native can open its own settings page; a browser cannot, so there
+                it is instructions or nothing — readable ones, since this is the
+                only route back for someone who has blocked them. */}
+            {canOpenPushSettings ? (
+              <Button label="Open settings" kind="secondary" onPress={openPushSettings} />
+            ) : (
+              <Text style={styles.deviceHint}>
+                Allow them in your browser’s site settings, then reopen this screen.
+              </Text>
+            )}
+          </>
+        ) : null}
+        {push === 'unsupported' ? <Text style={styles.deviceText}>This device can’t show notifications.</Text> : null}
+        {push === 'checking' ? <Text style={styles.deviceHint}>Checking this device…</Text> : null}
+      </Card>
+
+      <SectionTitle>Tell me when</SectionTitle>
+      <RowList>
+        {rows.map((r) => (
+          <SwitchRow
+            key={r.key}
+            label={r.label}
+            description={r.hint}
+            on={prefs[r.key] !== false}
+            onChange={(on) => void setPref(r.key, on)}
           />
-        </View>
-      ))}
+        ))}
+      </RowList>
     </Screen>
   );
 }
 
 const styles = StyleSheet.create({
-  intro: { fontSize: 13, color: t.text.secondary, marginBottom: spacing(2) },
-  device: {
-    gap: spacing(2),
-    borderWidth: 1,
-    borderColor: t.border.subtle,
-    borderRadius: 12,
-    padding: spacing(3.5),
-    marginBottom: spacing(2),
-  },
-  deviceText: { fontSize: 14, color: t.text.primary },
-  deviceHint: { fontSize: 13, color: t.text.secondary },
-  row: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: spacing(3),
-    borderWidth: 1,
-    borderColor: t.border.subtle,
-    borderRadius: 12,
-    padding: spacing(3.5),
-  },
-  rowText: { flex: 1 },
-  label: { fontSize: 15, fontWeight: '600', color: t.text.primary },
-  hint: { fontSize: 12, color: t.text.muted, marginTop: 2 },
+  deviceText: { fontSize: 15, color: t.text.primary },
+  deviceHint: { fontSize: 14, color: t.text.secondary },
 });

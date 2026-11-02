@@ -13,6 +13,7 @@ import {
   updateDoc,
   where,
 } from 'firebase/firestore';
+import { FirebaseError } from 'firebase/app';
 import { COLLECTIONS, type TimesheetDoc } from '@sabeel/shared';
 import { db } from './firebase';
 import { useLiveDoc, useLiveQuery } from './liveQuery';
@@ -21,6 +22,28 @@ import type { TimeEntry } from './entries';
 export type Timesheet = TimesheetDoc & { id: string };
 
 const tsId = (uid: string, periodKey: string) => `${uid}_${periodKey}`;
+
+/** What a refused week action says. */
+export const WEEK_CHANGED = "This week changed a moment ago, so that didn't go through. It now shows where it stands.";
+
+/**
+ * The rules refuse a submit, withdrawal, decision or reopen once the week is no
+ * longer in the state the screen showed: someone acted on it first (an approver
+ * approving as its owner withdraws, two approvers deciding at once), and the
+ * live screen catches up a moment later. Their raw refusal reads like a fault,
+ * so it is said in words; any other failure keeps its own message.
+ */
+export function weekWriteError(e: unknown): unknown {
+  return e instanceof FirebaseError && e.code === 'permission-denied' ? new Error(WEEK_CHANGED) : e;
+}
+
+async function weekWrite(write: Promise<void>): Promise<void> {
+  try {
+    await write;
+  } catch (e) {
+    throw weekWriteError(e);
+  }
+}
 
 /** Snapshot totals over a period's entries (closed only — a running one has no duration). */
 function snapshotOf(entries: TimeEntry[]): { totalMinutes: number; entryCount: number } {
@@ -50,7 +73,7 @@ export async function submitTimesheet(
     createdAt: now,
     updatedAt: now,
   };
-  await setDoc(doc(db, COLLECTIONS.timesheets, tsId(uid, period.fromKey)), sheet);
+  await weekWrite(setDoc(doc(db, COLLECTIONS.timesheets, tsId(uid, period.fromKey)), sheet));
 }
 
 /** Resubmit after rejection — re-stamps the approver, clears the decision. */
@@ -60,21 +83,23 @@ export async function resubmitTimesheet(
   entries: TimeEntry[],
 ): Promise<void> {
   const now = Date.now();
-  await updateDoc(doc(db, COLLECTIONS.timesheets, ts.id), {
-    status: 'submitted',
-    approverUid,
-    submittedAt: now,
-    ...snapshotOf(entries),
-    updatedAt: now,
-    decidedAt: deleteField(),
-    decidedBy: deleteField(),
-    rejectReason: deleteField(),
-  });
+  await weekWrite(
+    updateDoc(doc(db, COLLECTIONS.timesheets, ts.id), {
+      status: 'submitted',
+      approverUid,
+      submittedAt: now,
+      ...snapshotOf(entries),
+      updatedAt: now,
+      decidedAt: deleteField(),
+      decidedBy: deleteField(),
+      rejectReason: deleteField(),
+    }),
+  );
 }
 
 /** Withdraw a not-yet-approved submission — the period returns to draft. */
 export function withdrawTimesheet(ts: Timesheet): Promise<void> {
-  return deleteDoc(doc(db, COLLECTIONS.timesheets, ts.id));
+  return weekWrite(deleteDoc(doc(db, COLLECTIONS.timesheets, ts.id)));
 }
 
 /** Approve (stamped approver or admin). Refreshes the snapshot to what was reviewed. */
@@ -84,13 +109,15 @@ export async function approveTimesheet(
   entries: TimeEntry[],
 ): Promise<void> {
   const now = Date.now();
-  await updateDoc(doc(db, COLLECTIONS.timesheets, ts.id), {
-    status: 'approved',
-    decidedAt: now,
-    decidedBy: deciderUid,
-    ...snapshotOf(entries),
-    updatedAt: now,
-  });
+  await weekWrite(
+    updateDoc(doc(db, COLLECTIONS.timesheets, ts.id), {
+      status: 'approved',
+      decidedAt: now,
+      decidedBy: deciderUid,
+      ...snapshotOf(entries),
+      updatedAt: now,
+    }),
+  );
 }
 
 /** Reject with a required reason — the sheet goes back to the owner. */
@@ -100,18 +127,20 @@ export async function rejectTimesheet(
   reason: string,
 ): Promise<void> {
   const now = Date.now();
-  await updateDoc(doc(db, COLLECTIONS.timesheets, ts.id), {
-    status: 'rejected',
-    decidedAt: now,
-    decidedBy: deciderUid,
-    rejectReason: reason,
-    updatedAt: now,
-  });
+  await weekWrite(
+    updateDoc(doc(db, COLLECTIONS.timesheets, ts.id), {
+      status: 'rejected',
+      decidedAt: now,
+      decidedBy: deciderUid,
+      rejectReason: reason,
+      updatedAt: now,
+    }),
+  );
 }
 
 /** Admin only: reopen any sheet (approved included) back to draft. */
 export function reopenTimesheet(ts: Timesheet): Promise<void> {
-  return deleteDoc(doc(db, COLLECTIONS.timesheets, ts.id));
+  return weekWrite(deleteDoc(doc(db, COLLECTIONS.timesheets, ts.id)));
 }
 
 /**
@@ -159,18 +188,21 @@ export function useMyTimesheetsRange(
 
 /**
  * Live approval queue: sheets submitted to me — or every submitted sheet when
- * `all` (admin view). Oldest submissions first.
+ * `all` (admin view). Oldest submissions first. `enabled: false` subscribes to
+ * nothing: a member has no queue, and the shell asks for every account.
  */
-export function useApprovalQueue(approverUid: string, opts?: { all?: boolean }): Timesheet[] {
+export function useApprovalQueue(approverUid: string, opts?: { all?: boolean; enabled?: boolean }): Timesheet[] {
   const all = opts?.all ?? false;
+  const enabled = opts?.enabled ?? true;
   return useLiveQuery(
     () => {
+      if (!enabled) return null;
       const base = collection(db, COLLECTIONS.timesheets);
       return all
         ? query(base, where('status', '==', 'submitted'))
         : query(base, where('approverUid', '==', approverUid), where('status', '==', 'submitted'));
     },
-    [approverUid, all],
+    [approverUid, all, enabled],
     {
       label: 'useApprovalQueue',
       map: (snap) => {

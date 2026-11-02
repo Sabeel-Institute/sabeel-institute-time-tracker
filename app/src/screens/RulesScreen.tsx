@@ -46,11 +46,11 @@ export function RulesScreen() {
       </Text>
       <Text style={styles.body}>
         To report something or someone, use <Text style={styles.strong}>Report a problem</Text>{' '}
-        on Home; administrators respond within 24 hours.
+        in More; administrators respond within 24 hours.
       </Text>
       <Button label="I agree" onPress={agree} />
       <ErrorText error={error} />
-      <Button label="Sign out" kind="secondary" onPress={() => signOut()} />
+      <Button label="Sign out" kind="quiet" onPress={() => signOut()} />
     </Screen>
   );
 }

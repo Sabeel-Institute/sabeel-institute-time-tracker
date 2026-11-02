@@ -97,6 +97,8 @@ PODS:
     - RNWorklets
   - ExpoNotifications (57.0.24):
     - ExpoModulesCore
+  - ExpoVideo (57.0.5):
+    - ExpoModulesCore
   - FBLazyVector (0.86.3)
   - GoogleSignIn (9.2.0):
     - AppAuth (~> 2.1)
@@ -2415,6 +2417,7 @@ DEPENDENCIES:
   - ExpoModulesWorklets (from `../../node_modules/expo-modules-core/ExpoModulesWorklets.podspec`)
   - ExpoModulesWorkletsAdapter (from `../../node_modules/expo-modules-core`)
   - ExpoNotifications (from `../../node_modules/expo-notifications/ios`)
+  - ExpoVideo (from `../../node_modules/expo-video/ios/ExpoVideo.podspec`)
   - FBLazyVector (from `../../node_modules/react-native/Libraries/FBLazyVector`)
   - GoogleUtilities
   - hermes-engine (from `../../node_modules/react-native/sdks/hermes-engine/hermes-engine.podspec`)
@@ -2547,6 +2550,8 @@ EXTERNAL SOURCES:
     :path: "../../node_modules/expo-modules-core"
   ExpoNotifications:
     :path: "../../node_modules/expo-notifications/ios"
+  ExpoVideo:
+    :podspec: "../../node_modules/expo-video/ios/ExpoVideo.podspec"
   FBLazyVector:
     :path: "../../node_modules/react-native/Libraries/FBLazyVector"
   hermes-engine:
@@ -2735,6 +2740,7 @@ SPEC CHECKSUMS:
   ExpoModulesWorklets: 22d1898cfa60b815ffc7421c775e2e6a1bd8dc82
   ExpoModulesWorkletsAdapter: f750095b747d9b9b24772315b712721a6b22e6a9
   ExpoNotifications: c1cc56be0a720b0c8d658d547a6538c7770e7bd4
+  ExpoVideo: 31d5dc617d913808aeba05c3ab900712637b0e47
   FBLazyVector: 2138c6c2ab66c31bf5754dc18097fbc498a49c7f
   GoogleSignIn: e449a40a92e9f2eea56e98b5214d13725dc5a00a
   GoogleUtilities: 7dc09b3fa9ecb5c2298b952313d14628b61b9da3

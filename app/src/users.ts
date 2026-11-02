@@ -37,6 +37,29 @@ export function approverChoices(users: UserRow[]): UserRow[] {
 }
 
 /**
+ * The approver picker's rows for one person's approver: everyone who may
+ * approve, the person themself LAST — managers and admins may approve their
+ * own hours (PRODUCTION-REVIEW M5, deliberate at this org size), and listing
+ * them last keeps choosing yourself a considered choice, not the first row.
+ * `selfLabel` is how that row reads: "(myself)" to the person, "(self)" to an
+ * admin setting it for them.
+ */
+export function approverItems(
+  approvers: UserRow[],
+  forUid: string,
+  selfLabel: '(myself)' | '(self)',
+): { id: string; label: string; sublabel: string }[] {
+  return approvers
+    .slice()
+    .sort((a, b) => Number(a.uid === forUid) - Number(b.uid === forUid))
+    .map((a) => ({
+      id: a.uid,
+      label: a.uid === forUid ? `${a.displayName} ${selfLabel}` : a.displayName,
+      sublabel: a.admin ? 'admin' : 'manager',
+    }));
+}
+
+/**
  * Live list of possible approvers (active managers/admins). Unlike useUsers,
  * this query is readable by every active user — rules open manager/admin
  * profiles to all so people can pick their own approver.

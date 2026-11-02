@@ -47,6 +47,16 @@ export function parseDayKey(dayKey: string): { y: number; m: number; d: number }
   return { y, m, d };
 }
 
+/**
+ * A real calendar day written YYYY-MM-DD, the only shape the helpers here
+ * accept: anything else turns into NaN keys, and periodsOfMonth never ends on
+ * them. A key from outside — a link, a notification — is checked with this
+ * before it reaches them.
+ */
+export function isDayKey(s: unknown): s is string {
+  return typeof s === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(s) && addDays(s, 0) === s;
+}
+
 /** The dayKey n days after the given one (calendar arithmetic, tz-independent). */
 export function addDays(dayKey: string, n: number): string {
   const { y, m, d } = parseDayKey(dayKey);
@@ -144,6 +154,18 @@ export function periodLabel(range: { fromKey: string; toKey: string }): string {
     }).format(new Date(Date.UTC(y, m - 1, d)));
   };
   return `${fmt(range.fromKey)} – ${fmt(range.toKey)}`;
+}
+
+/** Human label for a day: 'Sunday, Nov 1'. The year only when it is not `currentYear`'s. */
+export function dayLabel(dayKey: string, currentYear?: number): string {
+  const { y, m, d } = parseDayKey(dayKey);
+  return new Intl.DateTimeFormat('en-US', {
+    timeZone: 'UTC',
+    weekday: 'long',
+    month: 'short',
+    day: 'numeric',
+    year: currentYear !== undefined && currentYear !== y ? 'numeric' : undefined,
+  }).format(new Date(Date.UTC(y, m - 1, d)));
 }
 
 /**

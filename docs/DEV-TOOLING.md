@@ -15,8 +15,10 @@ the shared `Sabeel-Institute/ci-tools` package, pinned to a commit in
 every command and every `ci-tools.json` key, and `ci-tools.json` says what
 differs for this app. Only this app's own tools live in `scripts/`: the two
 browser suites and their shared bring-up (`web-e2e.mjs`, `screens-e2e.mjs`,
-`lib/e2e-stack.mjs`), the native flows' seed (`seed-emulators.mjs`) and the
-first-admin bootstrap (`grant-admin.mjs`). The entries below keep the reasons
+`push-e2e.mjs`, `lib/e2e-stack.mjs`), the help films' module, scripts and
+world (`films/`), the manual's screenshots (`manual-shots.mjs`), the native
+flows' seed (`seed-emulators.mjs`) and the first-admin bootstrap
+(`grant-admin.mjs`). The entries below keep the reasons
 for both.
 
 ## Commands
@@ -33,6 +35,8 @@ for both.
 | `npm run test:screens` | every screen at five widths, asserted — the LAYOUT sweep (in CI) |
 | `npm run test:e2e:push` | every kind of notification, delivered to the real service worker and tapped, opens its screen (in CI) |
 | `npm run knip` | dead-code audit |
+| `npm run manual:shots [-- <name> …]` | the user manual's screenshots, in the help films' world (below); then `npx sabeel-ci render-manual` |
+| `npx sabeel-ci films lines\|tts\|asr\|record\|publish` | the help films: narration, the speech check, recording, and the help site (below) |
 | `npm run emulators:free` | stop this checkout's leftovers on its emulator ports (`sabeel-ci free-emulator-ports`) |
 | `npx sabeel-ci check-app` | what ci-tools assumes of this repo: `ci-tools.json`, the rendered workflows, the ports, the version and its deploy-log entry, `.gitignore` (in CI) |
 | `npx sabeel-ci native-e2e [--ios]` | the Maestro flows on the emulator, or an iPhone simulator (below) |
@@ -400,7 +404,86 @@ Beyond the flows themselves, the harness encodes:
   a session it has already closed with 400 "Unknown SID", and the SDK
   reconnects. Every other 400 fails the suite, now with its URL.
 - **Injects latency** around week switching — the stale-week bug class only
-  appears when snapshots lag (see `POSTMORTEM-2026-07-16-stale-week.md`).
+  appears when snapshots lag (see `POSTMORTEM-2026-07-16-stale-week.md`). The
+  Timesheet tab is moved to another week (its chip, paging the month first
+  when the week is in the previous one: `goToWeek`) while every Firestore
+  request is held for 2.5 s; the previous week's rows must be gone, and the
+  empty-week text drawn, inside 1.5 s.
+- **Reaches screens the way a person does.** A tab is pressed by its test id
+  (`tab-today`, `tab-timesheet`, `tab-approvals`, `tab-reports`, `tab-more`),
+  never by its text, which includes the icon's glyph. A press resets the stack
+  (to Today under the tab), so the suite never walks back through tabs. The
+  Timesheet tab's week is the checked radio chip named by its period
+  (`expectWeekShown`); Review timesheet steps weeks with its own arrows. More,
+  and every picker, is a `role="dialog"`, and a More row is pressed inside it
+  (`more`). A week's entries are the buttons named "<activity>, <times>. Edit
+  this entry." (`entryRow`), and the Reports total and the Lifetime hours
+  figure are read together with the words under them (`statTile`). A tab is
+  pressed once the screen that saved has closed onto what it saves to, as a
+  person does. The notification route
+  (`/?screen=Timesheet&periodKey=…`) is what the checks of that route load,
+  and it is also how a check reaches a past week, or the admin's own week for
+  review, in one step; the reopen check on someone else's week clicks its way
+  there. Once the app has acted on the route the address is the screen's own
+  (`/timesheet?initialPeriodKey=…`), with the route's keys gone, and a reload
+  stays on that week.
+
+Actions that have a check of their own, so that a change to how a screen looks
+can be shown not to have changed what its controls do:
+
+- **Copy last week's hours** on an empty started week: declined copies nothing,
+  accepted copies every entry a week on (days, times, notes) and leaves the
+  source week alone.
+- **Reopen (admin)** on two screens. On the admin's own approved week (the
+  Timesheet tab): one press, no question, and the week is a draft that saves
+  an edit again. On another person's approved week, reached the way an admin
+  does (Reports, By person, View timesheets, Review timesheet): one press, no
+  question, no sheet left on the server, the hours untouched, Add hours for
+  them offered again, and the person's own Today no longer locked.
+- **Delete entry** asks first: declined, the entry is still there on the
+  screen and on the server; accepted, it is gone from both. Deleting an
+  archived activity asks too, naming the activity.
+- **Submit is gated on an approver**: with none chosen the Timesheet's
+  Approver picker shows its placeholder, the screen says to choose one, and
+  Submit timesheet is disabled; a rejection needs a reason, so Reject
+  timesheet in the reject sheet is disabled until one is typed.
+- **People**: Role, Admin and Active each ask first, on a person's page;
+  declined changes neither the page nor the server, accepted changes the
+  server and the person's own session (the manager tabs and More's rows grow
+  and shrink live), and a fresh page still shows it. An admin's own page has
+  all three disabled, and pressing them anyway asks nothing. A disabled
+  person waits in the list's closed Disabled section.
+- **Account disabled**: the disabled person's open session shows the screen
+  with Sign out, signing in again meets it from the profile alone, and
+  re-activating un-gates the same session with no rules to accept again.
+- **Sign in with email**: an unknown address and a wrong password both get the
+  one refusal sentence; the password account signs in, accepts the rules and
+  is only a member, with no manager tab and nothing of People or Activities in
+  More (`expectMemberTools`, which every member is held to).
+- **Enable notifications / Not now** on Today's nudge.
+
+The mechanics behind them:
+
+- **Every `window.confirm` is answered on purpose** (`tapAndAnswer`).
+  Playwright dismisses a dialog nobody listens for, which makes Cancel and
+  "never asked" the same thing. The listener goes in before the tap, so a tap
+  that asks nothing fails and the question asked is asserted.
+  `confirmsRaisedBy` is the converse, for a press that must ask nothing.
+- **The server's copy is read, not just the screen** (`storedAccess`,
+  `storedEntries`, over the Firestore emulator's REST API), because "declining
+  changed nothing" has to mean the database, and an optimistic screen can
+  agree with itself.
+- **The nudge is pressed against a stand-in permission** (`askableNotifications`).
+  Headless Chromium reports notification permission as `denied`, a full
+  browser as `default`, and the nudge is drawn only for `default`; an init
+  script reports `default`, counts `requestPermission` and answers granted.
+  Under the emulators no push token is minted, so the card then says the
+  device cannot show notifications.
+- **The password account is made with the Admin SDK** (`adminAuth`), as
+  production's was: the sign-up gate refuses every public sign-up. Its
+  password is an emulator-only constant. Auth answers each refused sign-in
+  with a 400, which Chromium logs as a console error; it is excused for that
+  page and that Auth URL, like the set-up checks' own.
 
 Two races in it were fixed on 2026-08-27, both **reproduced on clean `HEAD`** —
 they predate the `e2e-stack` extraction and had been failing this suite roughly
@@ -429,6 +512,60 @@ whatever held them, a run in one repo SIGTERMed the other's Firestore (`exited
 with code: 143`) — or, worse, silently cost it a write. See **"Emulator ports
 are this checkout's own"** below.
 
+## The help films
+
+**More → Help** lists the films in `HELP_VIDEOS` (`packages/shared/src/help.ts`):
+who each is for (everyone, managers, admins), and the two cuts of each, a phone
+and a computer. The app plays them from the help site,
+`https://sabeel-time-tracker-help.web.app`, never from its own bundle, so a film
+changes without a release and the app's deploys never carry video.
+
+ci-tools makes them (`sabeel-ci films`, its README, "Help films"); this repo
+holds what is particular to the app, named by `films.module` in
+`ci-tools.json`:
+
+| File | What it holds |
+|---|---|
+| `scripts/films/films.mjs` | the module ci-tools reads: the catalogue, the stack (the emulators and the web build the browser suites use), the off-camera sign-in through the dev row, the screen a film starts on, the app's own moves (`tabOf`, `moreRow`, `inSheet`, `entryRow`), and what the camera must not see (the dev row, the build stamp) |
+| `scripts/films/scripts.mjs` | one script per film, in the catalogue's order: each step a line of narration and what happens on screen while it is said |
+| `scripts/films/world.mjs` | the guide world: made-up people (an admin, a manager, two members, one account waiting), activities and weeks, built fresh for every film so no film inherits what the last one did |
+
+```bash
+npx sabeel-ci films tts --wav <dir>                 # the narration, one WAV a line (resumes)
+npx sabeel-ci films asr --wav <dir>                 # transcribe it and compare with the script
+npx sabeel-ci films record --wav <dir> --out <dir>  # every film, both cuts (--only a,b; --variant phone)
+npx sabeel-ci films publish --from <dir>            # the whole set to the help site
+```
+
+The narration is written as a colleague talking someone through the screen:
+contractions, "you", whole sentences, never a label read out. A reworded line
+is rendered again; `record` refuses a WAV of other words. The narration model
+and the speech check are heavy (near 12 GB and 3 GB), so neither runs beside
+an emulator stack or the AVD; recording runs in real time against the
+emulators. The clock card shows the real time of day, so outside working
+hours run `record` and `manual:shots` under a `TZ` where it is daytime (`TZ=UTC
+npx sabeel-ci films record …`): Node, which writes the guide world, and
+Chromium both take it, so every time is real and every entry agrees, and the
+card says "Since 11:33" rather than "Since 01:17". Pick a zone whose date is
+still today's, or the world's weeks move.
+
+**A film follows the screen.** A change to a screen a film shows changes its
+script in the same pull request, and the films are recorded and published
+again with the release that ships it; a step that cannot find what it names
+fails the recording, with a screenshot of what the page showed beside the
+films.
+
+## `scripts/manual-shots.mjs` — the manual's screenshots
+
+`npm run manual:shots`, or `npm run manual:shots -- today review` for some.
+Every image in `docs/manual/img/`, taken on the web build at 420x860 in the
+films' guide world, so the manual shows the same made-up people as the films
+and never anyone's real hours. Each screenshot gets a world of its own and
+waits for what proves its screen is the right one; one that does not show it
+fails the run instead of landing in the manual. It brings up the films' stack,
+so nothing else heavy runs beside it. Then `npx sabeel-ci render-manual` for
+the PDF.
+
 ## `sabeel-ci native-e2e` — Maestro flows on the Android emulator
 
 `npx sabeel-ci native-e2e` runs the Maestro flows in `maestro/` against the
@@ -452,9 +589,11 @@ native-build` made there instead of building one, which is how CI runs it.
   `onUserCreate`'s profile, and makes it an admin. It has not accepted the
   rules, so the flow meets that screen. A flow never edits the field: Maestro's
   `eraseText` deletes back from wherever the tap put the cursor.
-- **`maestro/timesheet.yaml`**: the rules and I agree, an activity made (its
-  name read back before Add), clocked in and out, then My timesheet, Reports,
-  Approvals and Users, each checked by text only that screen shows.
+- **`maestro/timesheet.yaml`**: the rules and I agree, an activity made from
+  More → Activities (its name read back before Add), clocked in and out on
+  Today, then the Timesheet, Reports and Approvals tabs and More → People,
+  each checked by text only that screen shows, and last a help film's
+  player (expo-video, a native module of its own).
 - **A busy simulator drops taps.** The iPhone simulator holds a CI Mac's load
   average past 300, and a tap or a keystroke that lands before a screen takes it
   is lost. So every step that moves the app on goes through ci-tools' shared

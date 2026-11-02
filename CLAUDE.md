@@ -105,7 +105,7 @@ Do not silently change any of these.
   decision, `docs/STORE-RELEASE.md` 4). An active account sees the rules once,
   before anything it could post with (`App.tsx` renders them instead of the
   navigator), and only the `acceptRules` callable records the acceptance.
-  Report a problem on Home keeps `reports/{id}`, which no client reads or
+  Report a problem, in More, keeps `reports/{id}`, which no client reads or
   writes, and emails `apps-reports@`. No blocking between members and no word
   filter: administrators remove content and disable accounts.
 - **Honor system** — entries count immediately; managers may edit/correct. (The

@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react';
-import { StyleSheet, Text, TextInput } from 'react-native';
+import { StyleSheet, Text } from 'react-native';
 import { REPORT_MAX_LENGTH, REPORT_TOO_LONG, reportTextReady } from '@sabeel/shared';
 import {
   explainReportError,
@@ -9,8 +9,8 @@ import {
   sendProblemReport,
   SENT_MESSAGE,
 } from '../problemReport';
-import { Button, ErrorText, Screen } from '../components/ui';
-import { getTheme, spacing } from '../theme';
+import { Button, ErrorText, Field, Notice, Screen } from '../components/ui';
+import { getTheme } from '../theme';
 
 const t = getTheme();
 
@@ -60,43 +60,19 @@ export function ReportProblemScreen({ uid }: { uid: string }) {
   const tooLong = text.trim().length > REPORT_MAX_LENGTH;
 
   return (
-    <Screen width="read">
-      <Text style={styles.intro}>
-        Your report goes to the institute’s administrators with your name and email address,
-        so they can reply.
-      </Text>
-      <Text style={styles.label}>{LABEL}</Text>
-      <TextInput
-        value={text}
-        onChangeText={edit}
-        multiline
-        accessibilityLabel={LABEL}
-        style={styles.input}
-      />
-      {tooLong ? <Text style={styles.hint}>{REPORT_TOO_LONG}</Text> : null}
+    <Screen
+      width="read"
+      subtitle="Your report goes to the institute’s administrators with your name and email address, so they can reply."
+    >
+      <Field label={LABEL} value={text} onChangeText={edit} multiline />
+      {tooLong ? <Text style={styles.warn}>{REPORT_TOO_LONG}</Text> : null}
       <Button label="Send" onPress={send} disabled={!reportTextReady(text)} />
-      {notice ? (
-        <Text style={[styles.notice, notice === KEPT_NOT_EMAILED && styles.noticeKept]}>{notice}</Text>
-      ) : null}
+      {notice ? <Notice tone={notice === KEPT_NOT_EMAILED ? 'info' : 'success'}>{notice}</Notice> : null}
       <ErrorText error={error} />
     </Screen>
   );
 }
 
 const styles = StyleSheet.create({
-  intro: { fontSize: 14, color: t.text.secondary, lineHeight: 20 },
-  label: { fontSize: 15, fontWeight: '600', color: t.text.primary, marginTop: spacing(2) },
-  input: {
-    borderWidth: 1,
-    borderColor: t.border.subtle,
-    borderRadius: 8,
-    padding: spacing(3),
-    fontSize: 15,
-    minHeight: 160,
-    textAlignVertical: 'top',
-  },
-  hint: { fontSize: 13, color: t.feedback.danger },
-  notice: { fontSize: 15, color: t.feedback.success, fontWeight: '600' },
-  // Kept, but not emailed: not a success to celebrate, nor an error to fix.
-  noticeKept: { color: t.text.primary },
+  warn: { fontSize: 14, color: t.text.danger },
 });

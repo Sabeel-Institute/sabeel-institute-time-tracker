@@ -25,8 +25,9 @@ export const CONTENT_MAX_WIDTH = 840;
  *  capped so an ultra-wide monitor doesn't stretch the grid into one huge row. */
 export const LIST_MAX_WIDTH = 1160;
 
-/** Target width of one card in a responsive grid; the grid fits as many as it can. */
-export const GRID_CARD_MIN_WIDTH = 250;
+/** The navigation rail's width, on a wide screen; the bottom bar replaces it below
+ *  the breakpoint. The same as the sibling LMS's. */
+export const RAIL_WIDTH = 76;
 
 export interface Layout {
   width: number;

@@ -46,6 +46,15 @@ describe('decodeNotifRoute rejects anything it cannot trust', () => {
     ).toBeNull();
   });
 
+  it('returns null when the week is not a real day', () => {
+    for (const periodKey of ['garbage', '2026-13-45', '2026-7-19']) {
+      expect(decodeNotifRoute({ screen: 'Timesheet', periodKey })).toBeNull();
+      expect(
+        decodeNotifRoute({ screen: 'TimesheetReview', uid: 'u1', displayName: 'Alice Smith', periodKey }),
+      ).toBeNull();
+    }
+  });
+
   it('ignores extra keys — FCM adds its own', () => {
     expect(
       decodeNotifRoute({ screen: 'Timesheet', periodKey: '2026-07-19', google: 'x' }),
