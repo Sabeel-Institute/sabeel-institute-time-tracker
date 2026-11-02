@@ -97,6 +97,12 @@ export function HomeScreen({ uid, profile }: { uid: string; profile: UserDoc }) 
   };
 
   const elapsed = running ? Math.max(0, minutesBetween(running.start, Date.now())) : 0;
+  // "So far" counts the session running now too: 0m beside a card saying you
+  // have been clocked in for an hour reads as a fault. Finished entries are
+  // the stored ones; the running one is added from its start.
+  const runningToday = running && running.dayKey === todayKey ? elapsed : 0;
+  const runningThisWeek =
+    running && running.dayKey >= week.fromKey && running.dayKey <= week.toKey ? elapsed : 0;
 
   return (
     <Screen title="Today" subtitle={`Salaam, ${profile.displayName}`} width="read">
@@ -148,12 +154,12 @@ export function HomeScreen({ uid, profile }: { uid: string; profile: UserDoc }) 
 
       <SectionTitle>So far</SectionTitle>
       <RowList>
-        <Row label="Today" value={formatDuration(todayMinutes)} />
+        <Row label="Today" value={formatDuration(todayMinutes + runningToday)} />
         <Row
           label={`This week · ${periodLabel(week)}`}
           detail={<StatusChip label={weekStatus.label} tone={weekStatus.tone} />}
-          value={formatDuration(weekMinutes)}
-          accessibilityLabel={`This week, ${weekStatus.label}, ${formatDuration(weekMinutes)}. Open the timesheet.`}
+          value={formatDuration(weekMinutes + runningThisWeek)}
+          accessibilityLabel={`This week, ${weekStatus.label}, ${formatDuration(weekMinutes + runningThisWeek)}. Open the timesheet.`}
           onPress={() => nav.reset(tabState(nav.getState(), 'Timesheet'))}
         />
       </RowList>
