@@ -125,6 +125,10 @@ approver is Faisal, held there by the server:
 Each denial test was shown red with its lock removed. The account sees its own
 hours and timesheets and nothing else.
 
+The sign-in form itself is driven in `scripts/web-e2e.mjs`: an unknown address
+and a wrong password get the one refusal sentence, and the account signs in,
+accepts the rules and is shown no manager or admin screen.
+
 **The address is public, on purpose** (decided 2026-10-15): it is in this repo
 and in the rules as a literal. Its protection is a long generated password and
 Firebase's rate limiting, and it can see nothing but its own hours.
