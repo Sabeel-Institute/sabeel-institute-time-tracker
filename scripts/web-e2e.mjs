@@ -689,12 +689,34 @@ async function main() {
     await route.continue().catch(() => {});
   };
   await vol.context().route(`http://${EMULATOR_HOSTS.firestore}/**`, stall);
+  // Not for a single painted frame either: a reset left to a passive effect
+  // paints one frame of the old week's rows, status and buttons under the new
+  // week before clearing them. Every frame is sampled while weeks change.
+  await vol.evaluate((week) => {
+    window.__staleFrames = 0;
+    window.__sampling = true;
+    const tick = () => {
+      const on = document
+        .querySelector('[role="radiogroup"][aria-label="Week"] [role="radio"][aria-checked="true"]')
+        ?.getAttribute('aria-label');
+      if (on && !on.startsWith(week) && document.body.innerText.includes('Math tutoring with the kids')) {
+        window.__staleFrames += 1;
+      }
+      if (window.__sampling) requestAnimationFrame(tick);
+    };
+    requestAnimationFrame(tick);
+  }, shared.periodLabel(thisWeek));
   await goToWeek(vol, shared.periodLabel(otherWeek));
   await expectWeekShown(vol, shared.periodLabel(otherWeek));
   // Old rows must vanish at once — long before the stalled snapshot can land.
   await onScreen(vol.getByText(EMPTY_WEEK)).waitFor({ timeout: 1500 });
   if ((await vol.getByText('Math tutoring with the kids').count()) !== 0)
     throw new Error("stale entries visible under a different week's timesheet");
+  const staleFrames = await vol.evaluate(() => {
+    window.__sampling = false;
+    return window.__staleFrames;
+  });
+  if (staleFrames !== 0) throw new Error(`${staleFrames} frame(s) painted this week's entries under another week`);
   await vol.context().unroute(`http://${EMULATOR_HOSTS.firestore}/**`);
   await onScreen(vol.getByRole('link', { name: 'Back to this week', exact: true })).click();
   await firstOnScreen(vol.getByText('Math tutoring with the kids')).waitFor({ timeout: 15000 });

@@ -5,10 +5,13 @@
 //  1. State RESETS to `empty` the moment the subscription inputs change. React
 //     state otherwise persists across dependency changes, so query A's results
 //     would stay on screen while query B's first snapshot is in flight — on a
-//     slow connection that showed one week's entries under another week.
+//     slow connection that showed one week's entries under another week. The
+//     reset is a layout effect: a passive one runs after the browser paints,
+//     so the render that changed the inputs would show (and take taps on) A's
+//     results under B for one frame first.
 //  2. Listener errors also reset to `empty`: an empty screen plus a console
 //     warning beats silently-wrong data that never corrects itself.
-import { useEffect, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import {
   onSnapshot,
   type DocumentReference,
@@ -55,6 +58,20 @@ export function useListenerError(): string | null {
 }
 // ---------------------------------------------------------------------------
 
+/**
+ * Back to `empty` when `deps` change, before the browser paints (invariant 1).
+ * Not on mount, where the state already starts at `empty`.
+ */
+function useResetOnChange<T>(setValue: (v: T) => void, empty: T, deps: readonly unknown[]): void {
+  const mounted = useRef(false);
+  useLayoutEffect(() => {
+    if (mounted.current) setValue(empty);
+    mounted.current = true;
+    // The caller's subscription inputs, as for the listener effect below.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, deps);
+}
+
 /** How a live hook names, maps and empties what it subscribes to. */
 interface LiveOptions<S, T> {
   /** Names the listener in the error banner and in Sentry. */
@@ -80,8 +97,8 @@ export function useLiveQuery<T>(
   { label, map, empty }: LiveOptions<QuerySnapshot, T>,
 ): T {
   const [value, setValue] = useState<T>(empty);
+  useResetOnChange(setValue, empty, deps);
   useEffect(() => {
-    setValue(empty);
     const q = make();
     if (!q) return;
     return onSnapshot(
@@ -113,8 +130,8 @@ export function useLiveDoc<T>(
   { label, map, empty }: LiveOptions<DocumentSnapshot, T>,
 ): T {
   const [value, setValue] = useState<T>(empty);
+  useResetOnChange(setValue, empty, deps);
   useEffect(() => {
-    setValue(empty);
     const ref = make();
     if (!ref) return;
     return onSnapshot(
