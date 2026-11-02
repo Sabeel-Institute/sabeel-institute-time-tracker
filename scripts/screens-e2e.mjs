@@ -584,6 +584,27 @@ const layoutFaults = (page) =>
       };
       const area = (r) => Math.max(0, r.right - r.left) * Math.max(0, r.bottom - r.top);
 
+      /**
+       * The vertical scroller an element sits in, if any. Two controls in ONE
+       * scroller are laid out against each other wherever they sit (above); but
+       * a control in the scroller and one outside it — the header's Back, the
+       * tab bar — only meet where the scroller actually shows its content, so
+       * across scrollers each is clipped to its own. Without this, a row
+       * scrolled up under the header read as overlapping Back.
+       */
+      const scrollerOf = (el) => {
+        for (let n = el.parentElement; n && n !== document.documentElement; n = n.parentElement) {
+          const cs = getComputedStyle(n);
+          if (/auto|scroll/.test(cs.overflowY) && n.scrollHeight > n.clientHeight) return n;
+        }
+        return null;
+      };
+      const clipTo = (r, scroller) => {
+        if (!scroller) return r;
+        const c = scroller.getBoundingClientRect();
+        return { ...r, top: Math.max(r.top, c.top), bottom: Math.min(r.bottom, c.bottom) };
+      };
+
       /** The nearest positioned ancestor — a modal, or the page. */
       const layerOf = (el) => {
         for (let n = el; n && n !== document.body; n = n.parentElement) {
@@ -618,8 +639,14 @@ const layoutFaults = (page) =>
           // design, and comparing the two reports every control on the screen
           // beneath as overlapping the sheet.
           if (layerOf(a) !== layerOf(b)) continue;
-          const ra = visibleRect(a);
-          const rb = visibleRect(b);
+          let ra = visibleRect(a);
+          let rb = visibleRect(b);
+          const sa = scrollerOf(a);
+          const sb = scrollerOf(b);
+          if (sa !== sb) {
+            ra = clipTo(ra, sa);
+            rb = clipTo(rb, sb);
+          }
           const ox = Math.min(ra.right, rb.right) - Math.max(ra.left, rb.left);
           const oy = Math.min(ra.bottom, rb.bottom) - Math.max(ra.top, rb.top);
           if (ox > 1 && oy > 1) {
@@ -1110,8 +1137,8 @@ async function tourAdmin(tag, width) {
 
   await visit('reports', async () => {
     await tab(page, 'reports');
-    await tap(page, 'all');
-    await vis(page.getByText('By person (tap for lifetime statement)')).waitFor({ timeout: 25000 });
+    await tap(page, 'All time');
+    await vis(page.getByText('By person', { exact: true })).waitFor({ timeout: 25000 });
   });
   /** The person filter: the longest list in the app, and the one that grows. */
   await visit('reports-picker', async () => {
@@ -1124,7 +1151,7 @@ async function tourAdmin(tag, width) {
 
   await visit('person-detail', async () => {
     await vis(page.getByText(MEMBER.name)).click();
-    await vis(page.getByText('LIFETIME APPROVED HOURS')).waitFor({ timeout: 25000 });
+    await vis(page.getByText('Lifetime approved hours', { exact: true })).waitFor({ timeout: 25000 });
   });
   await goBack(page);
 
