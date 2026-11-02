@@ -154,7 +154,7 @@ export function HomeScreen({ uid, profile }: { uid: string; profile: UserDoc }) 
           detail={<StatusChip label={weekStatus.label} tone={weekStatus.tone} />}
           value={formatDuration(weekMinutes)}
           accessibilityLabel={`This week, ${weekStatus.label}, ${formatDuration(weekMinutes)}. Open the timesheet.`}
-          onPress={() => nav.reset(tabState('Timesheet'))}
+          onPress={() => nav.reset(tabState(nav.getState(), 'Timesheet'))}
         />
       </RowList>
     </Screen>

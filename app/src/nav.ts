@@ -1,4 +1,4 @@
-import { createNavigationContainerRef } from '@react-navigation/native';
+import { createNavigationContainerRef, type NavigationState } from '@react-navigation/native';
 
 export type RootStackParamList = {
   Home: undefined;
@@ -22,21 +22,29 @@ export type RootStackParamList = {
   TimesheetReview: { uid: string; displayName: string; periodKey: string };
 };
 
-/**
- * The stack a tab opens on: the tab, over Today unless it is Today — so Back
- * from any tab returns to Today, and only Back from Today leaves the app.
- */
 /** The screens the tabs open. */
 export type TabRoute = 'Home' | 'Timesheet' | 'Approvals' | 'Reports';
 
+/**
+ * The stack a tab opens on, as a reset of `current`: the tab, over Today unless
+ * it is Today — so Back from any tab returns to Today, and only Back from Today
+ * leaves the app.
+ *
+ * The SAME stack, not a new one: the reset keeps the stack's key and Today's
+ * route. On the web the browser's history follows the stack only while its key
+ * holds (a new key reads as a page replaced, so Back left the site), and Today
+ * keeps its route so its live data is not torn down and fetched again on every
+ * tab press.
+ */
 export function tabState<K extends TabRoute>(
+  current: NavigationState | undefined,
   name: K,
   params?: RootStackParamList[K],
 ) {
-  const tab = { name, params } as never;
-  return name === 'Home'
-    ? { index: 0, routes: [tab] }
-    : { index: 1, routes: [{ name: 'Home' } as never, tab] };
+  const bottom = current?.routes[0];
+  const home = bottom?.name === 'Home' ? bottom : { name: 'Home' as const };
+  const routes = name === 'Home' ? [home] : [home, { name, params }];
+  return { ...(current ? { key: current.key } : {}), index: routes.length - 1, routes } as never;
 }
 
 /**
