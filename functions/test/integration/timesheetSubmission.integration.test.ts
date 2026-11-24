@@ -51,6 +51,19 @@ describe('submission checks the exact hours the member reviewed', () => {
     expect((await sheetRef().get()).data()).toMatchObject({ status: 'submitted', totalMinutes: 60, entryCount: 1 });
   });
 
+  it('asks the member to clock out when a timer starts after they reviewed the draft', async () => {
+    const entryRef = getFirestore().doc('timeEntries/' + entry.id);
+    const running = { ...entry, source: 'clock', end: null };
+    await entryRef.set(running);
+    await expect(submitReviewed(request([]), uid, false)).rejects.toThrow('This week still has a running timer');
+    expect((await sheetRef().get()).exists).toBe(false);
+
+    const closed = { ...entry, source: 'clock' } satisfies TimeEntryDoc & { id: string };
+    await entryRef.set(closed);
+    await submitReviewed(request([closed]), uid, false);
+    expect((await sheetRef().get()).data()).toMatchObject({ status: 'submitted', totalMinutes: 60, entryCount: 1 });
+  });
+
   it('records only one submission when two sessions submit the same draft', async () => {
     const input = request([]);
     const results = await Promise.allSettled([submitReviewed(input, uid, false), submitReviewed(input, uid, false)]);

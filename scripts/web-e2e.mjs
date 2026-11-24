@@ -652,6 +652,15 @@ async function main() {
   if ((await vol.getByText('CLOCKED IN').count()) === 0) throw new Error('a double tap on Clock in clocked straight out');
   await vol.screenshot({ path: join(shots, '7-clocked-in.png'), animations: 'disabled', timeout: 8000 }).catch(() => {});
 
+  console.log('▸ the timesheet asks the member to clock out before submitting…');
+  await tab(vol, 'timesheet');
+  await firstOnScreen(vol.getByText('Clock out before you submit this week.', { exact: true })).waitFor();
+  if (!(await onScreen(vol.getByRole('button', { name: /^Submit timesheet/ })).isDisabled())) {
+    throw new Error('a timesheet with a running timer offers Submit');
+  }
+  await tab(vol, 'today');
+  await vol.getByText('CLOCKED IN').waitFor();
+
   await doubleTap(vol.getByRole('button', { name: 'Clock out', exact: true }));
   await vol.getByText('What are you working on?').waitFor();
   await vol.waitForTimeout(1500);
@@ -678,6 +687,9 @@ async function main() {
   console.log('▸ Phase 4: period timesheet — edit an entry, delete an entry…');
   await tab(vol, 'timesheet');
   await logged(vol, '1h 31m').waitFor();
+  if ((await vol.getByText('Clock out before you submit this week.', { exact: true }).count()) !== 0) {
+    throw new Error('clock-out prompt remained after the timer closed');
+  }
   await firstOnScreen(vol.getByText('Short entry · less than 3m', { exact: true })).waitFor();
   await vol.screenshot({ path: join(shots, '9-timesheet.png'), animations: 'disabled', timeout: 8000 }).catch(() => {});
 

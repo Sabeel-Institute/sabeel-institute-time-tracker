@@ -389,6 +389,22 @@ service cloud.firestore {
           && (d.approverUid == get(/databases/$(database)/documents/users/$(request.auth.uid)).data.approverUid
               || (isAdmin() && d.approverUid == request.auth.uid));
       }
+      function openTimerAt(path, d) {
+        return existsAfter(path) && getAfter(path).data.uid == d.uid
+          && getAfter(path).data.end == null && getAfter(path).data.periodKey == d.periodKey;
+      }
+      function timerOpenInPeriod(id, d) {
+        return id is string && id.matches('^[^/]+$')
+          && openTimerAt(/databases/$(database)/documents/timeEntries/$(id), d);
+      }
+      // Older clients write directly. Check both pointers so a batch cannot
+      // start a timer or clear the pointer to an open timer while submitting.
+      function noRunningTimer(d) {
+        let owner = /databases/$(database)/documents/users/$(d.uid);
+        let before = get(owner).data.get('activeEntryId', null);
+        let after = getAfter(owner).data.get('activeEntryId', null);
+        return !timerOpenInPeriod(after, d) && (before == after || !timerOpenInPeriod(before, d));
+      }
       // No future periods. Rules can't format request.time into a local dayKey,
       // so allow UTC+14 slack; the client enforces the device-local boundary.
       function periodStarted(d) {
@@ -413,6 +429,7 @@ service cloud.firestore {
         && tsValid(request.resource.data)
         && request.resource.data.status == 'submitted'
         && stampOk(request.resource.data)
+        && noRunningTimer(request.resource.data)
         && periodStarted(request.resource.data)
         && !('decidedAt' in request.resource.data)
         && !('decidedBy' in request.resource.data)
@@ -431,6 +448,7 @@ service cloud.firestore {
             && resource.data.status == 'rejected'
             && request.resource.data.status == 'submitted'
             && stampOk(request.resource.data)
+            && noRunningTimer(request.resource.data)
             && !('decidedAt' in request.resource.data)
             && !('decidedBy' in request.resource.data)
             && !('rejectReason' in request.resource.data)

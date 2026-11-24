@@ -9,7 +9,7 @@ import {
   assertSucceeds,
   type RulesTestEnvironment,
 } from '@firebase/rules-unit-testing';
-import { doc, getDoc, setDoc, updateDoc, deleteDoc, deleteField } from 'firebase/firestore';
+import { doc, getDoc, setDoc, updateDoc, deleteDoc, deleteField, writeBatch } from 'firebase/firestore';
 import { EMULATOR_PROJECT_ID } from '@sabeel/shared';
 
 let testEnv: RulesTestEnvironment;
@@ -92,6 +92,14 @@ const seed = (over: Record<string, unknown>) =>
     await setDoc(doc(ctx.firestore(), `timesheets/${TS_ID}`), { ...submitDoc, ...over });
   });
 
+async function seedActiveEntry(periodKey = PERIOD, end: number | null = null) {
+  await testEnv.withSecurityRulesDisabled(async (ctx) => {
+    const db = ctx.firestore();
+    await setDoc(doc(db, 'timeEntries/active-timer'), { uid: 'alice', periodKey, end });
+    await updateDoc(doc(db, 'users/alice'), { activeEntryId: 'active-timer' });
+  });
+}
+
 describe('timesheets — submit', () => {
   it('owner submits with the stamped approver from their profile', async () => {
     await assertSucceeds(setDoc(doc(alice().firestore(), `timesheets/${TS_ID}`), submitDoc));
@@ -112,6 +120,31 @@ describe('timesheets — submit', () => {
         entryCount: 0,
       }),
     );
+  });
+
+  it('refuses a stale zero-hour submission until the period’s running timer closes', async () => {
+    const ref = doc(alice().firestore(), 'timesheets/' + TS_ID);
+    await seedActiveEntry();
+    await assertFails(setDoc(ref, { ...submitDoc, totalMinutes: 0, entryCount: 0 }));
+    expect((await getDoc(ref)).exists()).toBe(false);
+    await seedActiveEntry(PERIOD, T0);
+    await assertSucceeds(setDoc(ref, submitDoc));
+  });
+
+  it('still accepts a zero-hour week while a different week has a running timer', async () => {
+    await seedActiveEntry('2026-07-19');
+    await assertSucceeds(setDoc(doc(alice().firestore(), 'timesheets/' + TS_ID), {
+      ...submitDoc, totalMinutes: 0, entryCount: 0,
+    }));
+  });
+
+  it('cannot clear the pointer and submit in one batch while leaving the timer open', async () => {
+    await seedActiveEntry();
+    const db = alice().firestore();
+    const batch = writeBatch(db);
+    batch.update(doc(db, 'users/alice'), { activeEntryId: null });
+    batch.set(doc(db, 'timesheets/' + TS_ID), submitDoc);
+    await assertFails(batch.commit());
   });
 
   it('rejects: mismatched doc id, non-canonical periodKey, cross-period toKey', async () => {
@@ -341,6 +374,15 @@ describe('timesheets — resubmit after rejection', () => {
     await assertSucceeds(
       updateDoc(doc(alice().firestore(), `timesheets/${TS_ID}`), resubmitPatch),
     );
+  });
+
+  it('keeps the rejected revision editable while a timer is still running', async () => {
+    const ref = doc(alice().firestore(), 'timesheets/' + TS_ID);
+    await seedActiveEntry();
+    await assertFails(updateDoc(ref, resubmitPatch));
+    expect((await getDoc(ref)).data()?.status).toBe('rejected');
+    await seedActiveEntry(PERIOD, T0);
+    await assertSucceeds(updateDoc(ref, resubmitPatch));
   });
 
   it('resubmit must clear the decision fields', async () => {

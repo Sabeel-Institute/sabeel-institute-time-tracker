@@ -65,10 +65,10 @@ async function reviewedHours(tx: Transaction, uid: string, input: ApprovalReques
     ? (await tx.get(db.collection(APP_CONFIG_COLLECTION).doc(TIMESHEET_REVIEW_CONFIG_DOC))).data() as ReviewLimits | undefined
     : undefined;
   const { entries, conflicts, review, hasRunning } = timesheetReviewEntries(nearby, period, savedLimits ?? DEFAULT_REVIEW_LIMITS);
+  if (hasRunning) throw new HttpsError('failed-precondition', 'This week still has a running timer.');
   if (timesheetEntriesVersion(entries) !== input.entriesVersion
       || timesheetReviewVersion(review) !== input.reviewVersion) changed();
   if (conflicts.size > 0) throw new HttpsError('failed-precondition', 'Fix overlapping entries first.');
-  if (hasRunning) throw new HttpsError('failed-precondition', 'This week still has a running timer.');
   return {
     review,
     snapshot: {
