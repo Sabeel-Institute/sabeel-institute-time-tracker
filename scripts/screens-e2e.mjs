@@ -866,7 +866,7 @@ const gridLayout = (page) =>
   });
 
 // ---- The tour ---------------------------------------------------------------
-const ADMIN_SCREENS = 21;
+const ADMIN_SCREENS = 23;
 const MEMBER_SCREENS = 6;
 const MANAGER_SCREENS = 3;
 const PENDING_SCREENS = 1;
@@ -1099,6 +1099,12 @@ async function tourAdmin(tag, width) {
   });
   await goBack(page);
 
+  await visit('timesheet-review-settings', async () => {
+    await more(page, 'Timesheet review settings');
+    await vis(page.getByText('Maximum total per day (hours)', { exact: true })).waitFor({ timeout: 20000 });
+  });
+  await goBack(page);
+
   await visit('notification-settings', async () => {
     await more(page, 'Notifications');
     await vis(page.getByText('Weekly submit reminder')).waitFor({ timeout: 20000 });
@@ -1128,6 +1134,13 @@ async function tourAdmin(tag, width) {
     await vis(page.getByText(MEMBER.name)).click();
     await vis(page.getByText('Approve timesheet', { exact: true })).waitFor({ timeout: 20000 });
   });
+  await visit('timesheet-review-confirm', async () => {
+    await tap(page, 'Approve timesheet');
+    await vis(sheet(page).getByText('Confirm approval', { exact: true })).waitFor({ timeout: 20000 });
+  });
+  await vis(sheet(page).getByText('Cancel', { exact: true })).click();
+  await page.waitForTimeout(400);
+
   /** Reject, which asks for the reason in a sheet over the week. */
   await visit('timesheet-review-reject', async () => {
     await tap(page, 'Reject timesheet…');

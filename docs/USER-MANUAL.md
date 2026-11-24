@@ -180,10 +180,10 @@ The **Timesheet** tab, top to bottom:
 
 ![Overlapping entries](manual/img/overlap.png)
 
-Two entries on the same day whose times overlap are **shaded red** ("Overlaps
-another entry") — usually a double log or an AM/PM slip. A week with overlaps
-**can't be submitted** until you fix the times. Back-to-back entries are fine:
-one ending at 2:00 PM and the next starting at 2:00 PM don't overlap.
+Overlapping entries are **shaded red** and say "Overlaps another entry".
+Fix overlapping times before submitting or approving a week. This includes
+overnight entries that overlap hours in a neighboring week. Back-to-back
+entries are fine. One can end at 2:00 PM and the next can start at 2:00 PM.
 
 ## 1.5 Choosing your approver
 
@@ -206,10 +206,17 @@ above, then submit."* and Submit stays unavailable.
 ![Submitted week](manual/img/submitted.png)
 
 1. Open the week on **Timesheet** and give it a once-over.
-2. Tap **Submit timesheet**. The status turns **Submitted** and the week
-   **locks** — you can't add or change entries while your approver has it.
-3. Change your mind? **Withdraw submission** unlocks it (only until it's
-   approved).
+2. Tap **Submit timesheet**. If any hours are flagged, the app shows them
+   together with the reason for each flag. Tap an entry to edit it, or tap
+   **I’ve checked these entries — submit** if the hours are correct.
+3. The status turns **Submitted** and the week locks while your approver has it.
+   **Withdraw submission** unlocks it until approval.
+
+![Checking flagged hours before submitting](manual/img/timesheet-review-prompt.png)
+
+By default, the app highlights entries under 3 minutes or over 8 hours,
+days totaling more than 12 hours, and auto-closed entries still at 12 hours.
+For the daily flag, overnight hours count on the local days they were worked.
 
 Rules of thumb:
 
@@ -354,13 +361,16 @@ Tap a submission to review it:
   timezone differs from yours the form says so. That way an entry always means
   what the person actually did, whoever typed it in.
 - Then either:
-  - **Approve timesheet** — the week becomes official and locks, or
+  - **Approve timesheet**. If there are flags, check the highlighted hours and
+    tap **Confirm approval**. The week becomes official and locks, or
   - **Reject timesheet…** — it asks what they need to fix, then returns the
     week to them with your reason word for word. A reason is required; "fix it"
     helps nobody.
 
 The arrows at the top step through the person's other weeks — you can review or
 correct any week not yet approved, not just the submitted one.
+
+![Confirming approval of flagged hours](manual/img/approval-review-prompt.png)
 
 ## 2.2 Browsing someone's timesheets (before they submit)
 
@@ -467,7 +477,20 @@ own on Timesheet) and tap **Reopen (admin)**. The week returns to draft; the
 owner fixes it and it goes through submit and approve again. Use it for genuine
 mistakes discovered after the fact.
 
-## 3.4 Odds and ends
+## 3.4 Timesheet review settings
+
+In **More → Timesheet review settings**, admins can set the minimum minutes
+per entry, maximum hours per entry, and maximum total hours per day. Enter a
+fractional hour as a decimal, such as 8.5 for 8 hours and 30 minutes.
+
+![Timesheet review settings](manual/img/timesheet-review-settings.png)
+
+Changes apply to drafts and returned sheets. On a submitted sheet, the member
+keeps the review they confirmed and the approver sees the current thresholds.
+The review points out hours flagged or changed since submission. Approved
+sheets keep their approval review and use current settings if reopened.
+
+## 3.5 Odds and ends
 
 - **Reports from "Report a problem"** arrive by email at
   `apps-reports@oursabeel.com`, not in the app; nobody reviews them inside it.
@@ -579,7 +602,7 @@ Open that week → Reopen (admin) → the owner fixes it and resubmits.
 | "Choose who approves your hours above, then submit." | No approver chosen yet | Timesheet → Approver → pick one |
 | "This week is submitted, so it is closed for new hours" on Today | The current week is locked | Withdraw the submission on Timesheet (or ask an admin to reopen an approved week) |
 | "Clock out before you submit this week." | A session is still running | Clock out on Today, then submit |
-| An entry is shaded red: "Overlaps another entry" | Two entries on that day have overlapping times | Tap one and fix its times; submission unlocks once no entries overlap |
+| An entry is shaded red: "Overlaps another entry" | Two entries have overlapping times | Tap one and fix its times; submission unlocks once no entries overlap |
 | No push notifications arriving | Permission not granted on this device, or that kind is switched off | Allow notifications when the app asks (or in system settings), and check More → Notifications |
 | A red notice about live data at the top of a screen | The app couldn't load live data | Check connectivity; if it persists, tell the developer — it's also auto-reported |
 | A week's chip has a red dot | That week was rejected | Tap the red notice on Today → fix → resubmit |

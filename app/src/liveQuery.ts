@@ -83,6 +83,8 @@ interface LiveOptions<S, T> {
    * while loading told people there were no activities.
    */
   empty: T;
+  /** A cached query cannot prove that all rows for a newly opened range are known. */
+  waitForServer?: boolean;
 }
 
 /**
@@ -98,16 +100,21 @@ interface LiveOptions<S, T> {
 export function useLiveQuery<T>(
   make: () => Query | null,
   deps: readonly unknown[],
-  { label, map, empty }: LiveOptions<QuerySnapshot, T>,
+  { label, map, empty, waitForServer = false }: LiveOptions<QuerySnapshot, T>,
 ): T {
   const [value, setValue] = useState<T>(empty);
-  useResetOnChange(setValue, empty, deps);
+  const subscriptionInputs = [...deps, waitForServer];
+  useResetOnChange(setValue, empty, subscriptionInputs);
   useEffect(() => {
     const q = make();
     if (!q) return;
+    let ready = !waitForServer;
     return onSnapshot(
       q,
+      { includeMetadataChanges: waitForServer },
       (snap) => {
+        ready ||= !snap.metadata.fromCache;
+        if (!ready) return;
         setValue(map(snap));
         reportListenerSuccess(label);
       },
@@ -123,7 +130,7 @@ export function useLiveQuery<T>(
     // on every render of every live screen. Callers get no exemption: the rule
     // holds their `deps` to everything their `make` reads.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, deps);
+  }, subscriptionInputs);
   return value;
 }
 

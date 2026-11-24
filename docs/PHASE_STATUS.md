@@ -16,6 +16,13 @@ phase boundary.
 | 7 | Weekly timesheets: submit/approve workflow | **complete** (2026-07-16: full lifecycle e2e green; deployed to prod; greenfield wipe done — 2 test users + 8 docs removed, admin kept, approver=self) |
 | 8 | Push notifications (FCM) + overlap guard + activities rename | **complete** (2026-07-17: triggers for submit/decide/new-user + Tuesday-local weekly reminder w/ per-event prefs; overlap detection blocks submission; project/event distinction dropped; 85 emulator + 17 functions-unit + 33 shared tests + full e2e green) |
 
+## Pending release
+
+- Timesheet duration review adds configurable admin thresholds and a single
+  confirmation for flagged submissions and approvals. Pending approvers see
+  current thresholds and approved sheets retain their decision snapshot.
+  Deploy Firestore rules and functions before the updated clients.
+
 ## Deploy log
 
 Newest first, one entry per release, written with the version bump and

@@ -326,7 +326,7 @@ async function moreRows(page) {
 }
 
 const MEMBER_MORE = ['Notifications', 'Help', 'Report a problem', 'Privacy policy', 'Sign out'];
-const APPROVER_MORE = ['People', 'Activities', ...MEMBER_MORE];
+const ADMIN_MORE = ['People', 'Activities', 'Timesheet review settings', ...MEMBER_MORE];
 
 /** A member has no manager tab and nothing of the institute's tools in More. */
 async function expectMemberTools(page, who) {
@@ -674,6 +674,7 @@ async function main() {
   console.log('▸ Phase 4: period timesheet — edit an entry, delete an entry…');
   await tab(vol, 'timesheet');
   await logged(vol, '1h 31m').waitFor();
+  await firstOnScreen(vol.getByText('Short entry · less than 3m', { exact: true })).waitFor();
   await vol.screenshot({ path: join(shots, '9-timesheet.png'), animations: 'disabled', timeout: 8000 }).catch(() => {});
 
   // Edit the manual entry (found by its note) to end at 11:00 → total 2h 01m.
@@ -860,14 +861,41 @@ async function main() {
   await vol.getByText('Rejected by Admin: Tuesday hours belong to Food Drive.', { exact: false }).waitFor();
   await vol.screenshot({ path: join(shots, '12-rejected.png'), animations: 'disabled', timeout: 8000 }).catch(() => {});
 
-  console.log('▸ Phase 7: volunteer resubmits; approver adds hours on behalf + approves…');
-  await vol.getByRole('button', { name: 'Resubmit timesheet', exact: true }).click();
+  console.log('▸ timesheet review: draft thresholds, member confirmation, pending threshold changes and approver confirmation…');
+  async function setReviewLimits(minimum, maximum) {
+    await more(mgr, 'Timesheet review settings');
+    await mgr.getByRole('textbox', { name: 'Minimum time per entry (minutes)' }).fill(minimum);
+    await mgr.getByRole('textbox', { name: 'Maximum time per entry (hours)' }).fill(maximum);
+    await mgr.getByRole('button', { name: 'Save review settings', exact: true }).click();
+    await mgr.getByText('Review settings saved.', { exact: true }).waitFor();
+  }
+  await setReviewLimits('121', '8');
+  const shortEntry = firstOnScreen(vol.getByText('Short entry · less than 2h 01m', { exact: true }));
+  await shortEntry.waitFor();
+  const resubmit = vol.getByRole('button', { name: 'Resubmit timesheet', exact: true });
+  await resubmit.click();
+  const submitReview = dialogOf(vol);
+  await submitReview.getByText('Short entry · less than 2h 01m', { exact: true }).waitFor();
+  await submitReview.getByRole('button', { name: 'Cancel', exact: true }).click();
+  if (await storedSheetStatus(volUid, thisWeek.fromKey) !== 'rejected')
+    throw new Error('the canceled review resubmitted the timesheet');
+  await resubmit.click();
+  await submitReview.getByRole('button', { name: 'I’ve checked these entries — submit', exact: true }).click();
   await firstOnScreen(vol.getByText('Submitted', { exact: true })).waitFor();
+  await eventually(vol, 'the confirmed submission on the server',
+    () => storedSheetStatus(volUid, thisWeek.fromKey), (status) => status === 'submitted');
+
+  await setReviewLimits('3', '1.5');
+  await shortEntry.waitFor();
+  if (await onScreen(vol.getByText('Long entry · more than 1h 30m', { exact: true })).count())
+    throw new Error('the member’s submitted timesheet changed along with the settings');
 
   await mgr.goto(baseUrl + '/');
   await mgr.getByText('Salaam,', { exact: false }).waitFor({ timeout: 45000 });
   await tab(mgr, 'approvals');
   await mgr.getByRole('button', { name: "Review Volunteer's timesheet", exact: true }).click();
+  await firstOnScreen(mgr.getByText('Flagged since submission · Long entry · more than 1h 30m', { exact: true })).waitFor();
+  await firstOnScreen(mgr.getByText('Member confirmed the flagged hours on', { exact: false })).waitFor();
   // Add a 1h entry on the volunteer's behalf (approver correction path).
   await mgr.getByRole('button', { name: 'Add hours for Volunteer', exact: true }).click();
   await mgr.getByText('Adding hours for Volunteer', { exact: false }).waitFor();
@@ -879,8 +907,14 @@ async function main() {
   // Back on the review screen the live total includes the added hour.
   await logged(mgr, '3h 00m').waitFor({ timeout: 15000 });
   await mgr.getByRole('button', { name: 'Approve timesheet', exact: true }).click();
+  const approvalReview = dialogOf(mgr);
+  await approvalReview.getByText('Flagged since submission · Long entry · more than 1h 30m', { exact: true }).waitFor();
+  if (await storedSheetStatus(volUid, thisWeek.fromKey) !== 'submitted')
+    throw new Error('approval went through without confirmation');
+  await approvalReview.getByRole('button', { name: 'Confirm approval', exact: true }).click();
   await mgr.getByText('Nothing waiting for you.', { exact: false }).waitFor();
   await mgr.screenshot({ path: join(shots, '13-approved-queue-empty.png'), timeout: 8000 }).catch(() => {});
+  await setReviewLimits('3', '8');
 
   console.log('▸ Phase 7: approved week is locked for the volunteer…');
   await vol.goto(baseUrl + '/');
@@ -890,6 +924,7 @@ async function main() {
   await vol.getByText('This week is approved, so it is closed for new hours', { exact: false }).waitFor();
   await tab(vol, 'timesheet');
   await onScreen(vol.getByText('Approved, so this week is closed', { exact: false })).waitFor();
+  await firstOnScreen(vol.getByText('Long entry · more than 1h 30m', { exact: true })).waitFor();
   const editCount = await vol.getByRole('button', { name: 'Submit timesheet', exact: true }).count();
   if (editCount !== 0) throw new Error('approved sheet still offers Submit');
   await vol.screenshot({ path: join(shots, '14-approved-locked.png'), animations: 'disabled', timeout: 8000 }).catch(() => {});
@@ -1272,7 +1307,9 @@ async function main() {
   });
   await firstOnScreen(vol.getByTestId('tab-approvals')).waitFor({ timeout: 30000 });
   await firstOnScreen(vol.getByTestId('tab-reports')).waitFor();
-  if (!(await moreRows(vol)).includes('Activities')) throw new Error('a manager is not offered Activities in More');
+  const managerRows = await moreRows(vol);
+  if (!managerRows.includes('Activities') || managerRows.includes('Timesheet review settings'))
+    throw new Error('a manager should have Activities and only an admin can open review settings');
   await restoreVolunteer({
     tap: (page) => roleOption(page, 'Member').click(),
     asks: 'Change role to member?',
@@ -1290,8 +1327,8 @@ async function main() {
     shows: (line) => line.includes('Admin'),
   });
   await firstOnScreen(vol.getByTestId('tab-approvals')).waitFor({ timeout: 30000 });
-  if (JSON.stringify(await moreRows(vol)) !== JSON.stringify(APPROVER_MORE))
-    throw new Error('an admin is not offered People and Activities in More');
+  if (JSON.stringify(await moreRows(vol)) !== JSON.stringify(ADMIN_MORE))
+    throw new Error('the admin’s More menu is missing institute settings');
   await restoreVolunteer({
     tap: (page) => adminSwitch(page).click(),
     asks: 'Remove admin?',

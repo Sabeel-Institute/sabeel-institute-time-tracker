@@ -14,7 +14,7 @@ import {
   where,
 } from 'firebase/firestore';
 import { FirebaseError } from 'firebase/app';
-import { COLLECTIONS, type TimesheetDoc } from '@sabeel/shared';
+import { COLLECTIONS, type ReviewSnapshot, type TimesheetDoc } from '@sabeel/shared';
 import { db } from './firebase';
 import { useLiveDoc, useLiveQuery } from './liveQuery';
 import type { TimeEntry } from './entries';
@@ -60,6 +60,7 @@ export async function submitTimesheet(
   period: { fromKey: string; toKey: string },
   approverUid: string,
   entries: TimeEntry[],
+  submissionReview: ReviewSnapshot,
 ): Promise<void> {
   const now = Date.now();
   const sheet: TimesheetDoc = {
@@ -69,6 +70,7 @@ export async function submitTimesheet(
     status: 'submitted',
     approverUid,
     submittedAt: now,
+    submissionReview: { ...submissionReview, at: now },
     ...snapshotOf(entries),
     createdAt: now,
     updatedAt: now,
@@ -81,6 +83,7 @@ export async function resubmitTimesheet(
   ts: Timesheet,
   approverUid: string,
   entries: TimeEntry[],
+  submissionReview: ReviewSnapshot,
 ): Promise<void> {
   const now = Date.now();
   await weekWrite(
@@ -88,6 +91,7 @@ export async function resubmitTimesheet(
       status: 'submitted',
       approverUid,
       submittedAt: now,
+      submissionReview: { ...submissionReview, at: now },
       ...snapshotOf(entries),
       updatedAt: now,
       decidedAt: deleteField(),
@@ -107,6 +111,7 @@ export async function approveTimesheet(
   ts: Timesheet,
   deciderUid: string,
   entries: TimeEntry[],
+  approvalReview: ReviewSnapshot,
 ): Promise<void> {
   const now = Date.now();
   await weekWrite(
@@ -114,6 +119,7 @@ export async function approveTimesheet(
       status: 'approved',
       decidedAt: now,
       decidedBy: deciderUid,
+      approvalReview: { ...approvalReview, at: now },
       ...snapshotOf(entries),
       updatedAt: now,
     }),

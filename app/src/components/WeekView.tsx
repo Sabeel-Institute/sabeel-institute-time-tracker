@@ -167,17 +167,20 @@ function EntryRow({
   entry,
   onPress,
   conflict = false,
+  review,
 }: {
   entry: TimeEntry;
   onPress?: () => void;
   /** Overlaps another entry on the same day — flagged, must be fixed. */
   conflict?: boolean;
+  review?: string[];
 }) {
   const foreign = entry.timeZone !== deviceTimeZone();
   const times =
     entry.end === null
       ? `${timeOfDayFor(entry.start, entry.timeZone)} – still clocked in`
       : `${timeOfDayFor(entry.start, entry.timeZone)} – ${timeOfDayFor(entry.end, entry.timeZone)}`;
+  const conflictMessage = conflict ? 'Overlaps another entry' : undefined;
   const flags = [
     foreign ? tzLabelFor(entry.start, entry.timeZone) : null,
     entry.source === 'manual' ? 'added by hand' : null,
@@ -198,9 +201,10 @@ function EntryRow({
         </>
       }
       value={entry.durationMinutes != null ? formatDuration(entry.durationMinutes) : undefined}
-      warn={conflict ? 'Overlaps another entry' : undefined}
+      warn={conflictMessage}
+      review={review}
       onPress={entry.end !== null ? onPress : undefined}
-      accessibilityLabel={`${entry.activityName}, ${times}. Edit this entry.`}
+      accessibilityLabel={[`${entry.activityName}, ${times}`, conflictMessage, ...(review ?? []), 'Edit this entry.'].filter(Boolean).join('. ')}
     />
   );
 }
@@ -210,11 +214,13 @@ export function DayEntries({
   dayKey,
   entries,
   conflicts,
+  review,
   onOpen,
 }: {
   dayKey: string;
   entries: TimeEntry[];
   conflicts: Set<string>;
+  review?: ReadonlyMap<string, string[]>;
   /** Opens an entry to edit; absent while the week is closed to this viewer. */
   onOpen?: (entryId: string) => void;
 }) {
@@ -236,6 +242,7 @@ export function DayEntries({
               key={e.id}
               entry={e}
               conflict={conflicts.has(e.id)}
+              review={review?.get(e.id)}
               onPress={onOpen ? () => onOpen(e.id) : undefined}
             />
           ))}

@@ -7,17 +7,17 @@ import {
   dayKeyFor,
   deviceTimeZone,
   formatDuration,
-  overlappingEntryIds,
   periodHasStarted,
   periodLabel,
   periodRangeFor,
+  recordedReviewFor,
   periodsOfMonth,
   type TokenClaims,
   type UserDoc,
 } from '@sabeel/shared';
 import type { RootStackParamList } from '../nav';
 import { confirmAction } from '../confirm';
-import { copyPeriodEntries, useEntriesRange, useEntryPeriods, type TimeEntry } from '../entries';
+import { copyPeriodEntries, useEntryPeriods, type TimeEntry } from '../entries';
 import {
   submitTimesheet,
   resubmitTimesheet,
@@ -42,6 +42,8 @@ import {
   sheetStatus,
 } from '../components/ui';
 import { getTheme, spacing } from '../theme';
+import { useTimesheetReview } from '../timesheetReview';
+import { reviewHighlights, TimesheetReviewPrompt } from '../components/TimesheetReviewPrompt';
 
 const t = getTheme();
 
@@ -65,9 +67,12 @@ export function TimesheetScreen({
   const todayKey = dayKeyFor(Date.now(), deviceTimeZone());
   const [anchor, setAnchor] = useState(initialPeriodKey ?? todayKey);
   const [error, setError] = useState<string | null>(null);
+  const [confirming, setConfirming] = useState(false);
+  const [saving, setSaving] = useState(false);
   // An error is about the week it happened on; another week starts clear.
   const showWeek = (key: string) => {
     setAnchor(key);
+    setConfirming(false);
     setError(null);
   };
 
@@ -77,15 +82,14 @@ export function TimesheetScreen({
   useEffect(() => {
     if (initialPeriodKey) {
       setAnchor(initialPeriodKey);
+      setConfirming(false);
       setError(null);
     }
   }, [initialPeriodKey]);
 
   const period = periodRangeFor(anchor);
-  // undefined until the week's entries arrive: until then nothing here may say
-  // or act as if the week were empty.
-  const loaded = useEntriesRange(uid, period.fromKey, period.toKey);
-  const entries = useMemo(() => loaded ?? [], [loaded]);
+  // Wait for the entries before showing an empty week or enabling submission.
+  const { loaded, entries, conflicts, review } = useTimesheetReview(uid, period.fromKey, period.toKey);
   const sheet = useTimesheet(uid, period.fromKey);
   const status = sheet === undefined ? undefined : (sheet?.status ?? 'draft');
 
@@ -110,7 +114,7 @@ export function TimesheetScreen({
     return [...groups.entries()];
   }, [entries]);
 
-  // Submission preconditions (rules enforce them too; these make the UI honest).
+  // Submission needs an approver and a period with no open timers or overlaps.
   const approvers = useApproverChoices();
   // Rejections come from managers/admins, whose profiles every active user may
   // read, so the name resolves from the approver list.
@@ -118,8 +122,14 @@ export function TimesheetScreen({
   const approverUid = profile.approverUid ?? (claims.admin ? uid : null);
   const hasRunningInPeriod = entries.some((e) => e.end === null);
   const started = periodHasStarted(period.fromKey, todayKey);
-  const conflicts = useMemo(() => overlappingEntryIds(entries), [entries]);
-  const blocked = !loaded || !approverUid || hasRunningInPeriod || conflicts.size > 0;
+  const editable = status === 'draft' || status === 'rejected';
+  const submittedReview = recordedReviewFor(sheet?.submissionReview, sheet?.submittedAt);
+  const highlights = reviewHighlights(editable ? review : status === 'approved' ? recordedReviewFor(sheet?.approvalReview, sheet?.decidedAt) : submittedReview);
+  const blocked = !loaded || !review || !approverUid || hasRunningInPeriod || conflicts.size > 0;
+  const editEntry = (entryId: string) => {
+    setConfirming(false);
+    nav.navigate('EntryEdit', { entryId });
+  };
 
   const act = async (fn: () => Promise<void>) => {
     setError(null);
@@ -128,6 +138,26 @@ export function TimesheetScreen({
     } catch (e) {
       setError((e as Error).message);
     }
+  };
+
+  const submit = async () => {
+    if (blocked || saving || !editable || !approverUid || !review) return;
+    setError(null);
+    setSaving(true);
+    try {
+      if (sheet?.status === 'rejected') await resubmitTimesheet(sheet, approverUid, entries, review);
+      else await submitTimesheet(uid, period, approverUid, entries, review);
+      setConfirming(false);
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setSaving(false);
+    }
+  };
+  const startSubmission = () => {
+    setError(null);
+    if (review?.flags.length) setConfirming(true);
+    else void submit();
   };
 
   const shown = status ? sheetStatus(status) : null;
@@ -164,15 +194,17 @@ export function TimesheetScreen({
         </Notice>
       ) : null}
 
+      {highlights.days.map((message) => <Notice key={message} tone="info">{message}</Notice>)}
       {byDay.map(([dayKey, dayEntries]) => (
         <DayEntries
           key={dayKey}
           dayKey={dayKey}
           entries={dayEntries}
           conflicts={conflicts}
+          review={highlights.entries}
           // A submitted or approved week is closed to its owner: the rules
           // refuse the edit, so the rows do not offer one.
-          onOpen={status === 'draft' || status === 'rejected' ? (entryId) => nav.navigate('EntryEdit', { entryId }) : undefined}
+          onOpen={editable ? editEntry : undefined}
         />
       ))}
       {!loaded ? (
@@ -185,7 +217,7 @@ export function TimesheetScreen({
         </Empty>
       ) : null}
 
-      {status === 'draft' && started && loaded?.length === 0 ? (
+      {status === 'draft' && started && loaded && entries.length === 0 ? (
         <Button
           label="Copy last week's hours"
           kind="secondary"
@@ -226,19 +258,12 @@ export function TimesheetScreen({
           {conflicts.size > 0 ? (
             <Text style={styles.warn}>Some entries overlap. Fix the flagged times before you submit.</Text>
           ) : null}
-          {status === 'rejected' && sheet ? (
-            <Button
-              label="Resubmit timesheet"
-              onPress={() => act(() => resubmitTimesheet(sheet, approverUid!, entries))}
-              disabled={blocked}
-            />
-          ) : (
-            <Button
-              label={loaded && total === 0 ? 'Submit timesheet (no hours)' : 'Submit timesheet'}
-              onPress={() => act(() => submitTimesheet(uid, period, approverUid!, entries))}
-              disabled={blocked}
-            />
-          )}
+          <Button
+            label={status === 'rejected' ? 'Resubmit timesheet'
+              : loaded && total === 0 ? 'Submit timesheet (no hours)' : 'Submit timesheet'}
+            onPress={startSubmission}
+            disabled={blocked || saving}
+          />
         </>
       ) : null}
 
@@ -258,7 +283,18 @@ export function TimesheetScreen({
           ) : null}
         </>
       ) : null}
-      <ErrorText error={error} />
+      <ErrorText error={confirming && !blocked ? null : error} />
+      <TimesheetReviewPrompt
+        visible={confirming && editable && !blocked}
+        mode="submit"
+        highlights={highlights}
+        entries={entries}
+        busy={saving}
+        error={error}
+        onClose={() => setConfirming(false)}
+        onConfirm={submit}
+        onEdit={editEntry}
+      />
     </Screen>
   );
 }

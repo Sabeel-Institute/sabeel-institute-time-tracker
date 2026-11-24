@@ -319,8 +319,25 @@ service cloud.firestore {
     // Readable by anyone: it is one integer, and a signed-out read is the
     // point. Written by nobody but the Admin SDK (`scripts/set-min-version.mjs`).
     match /config/{doc} {
-      allow read: if true;
-      allow write: if false;
+      allow read: if doc != 'timesheetReview' || isActive();
+      allow create, update: if doc == 'timesheetReview' && isAdmin()
+        && reviewLimitsValid(request.resource.data);
+    }
+
+    function reviewLimitsValid(d) {
+      return d is map && d.keys().hasOnly(['minEntryMinutes', 'maxEntryMinutes', 'maxDayMinutes'])
+        && d.minEntryMinutes is int && d.minEntryMinutes >= 1
+        && d.maxEntryMinutes is int && d.maxEntryMinutes >= d.minEntryMinutes && d.maxEntryMinutes <= 1440
+        && d.maxDayMinutes is int && d.maxDayMinutes >= 1 && d.maxDayMinutes <= 1500;
+    }
+    function reviewLimitsCurrent(limits) {
+      let path = /databases/$(database)/documents/config/timesheetReview;
+      return exists(path) ? limits == get(path).data
+        : limits == {'minEntryMinutes': 3, 'maxEntryMinutes': 480, 'maxDayMinutes': 720};
+    }
+    function currentReview(review, at) {
+      return review is map && review.keys().hasOnly(['limits', 'flags', 'at'])
+        && review.at == at && review.flags is list && reviewLimitsCurrent(review.limits);
     }
 
     // Append-only timesheet history, written by the onTimesheetWritten trigger.
@@ -389,7 +406,9 @@ service cloud.firestore {
         && periodStarted(request.resource.data)
         && !('decidedAt' in request.resource.data)
         && !('decidedBy' in request.resource.data)
-        && !('rejectReason' in request.resource.data);
+        && !('rejectReason' in request.resource.data)
+        && !('approvalReview' in request.resource.data)
+        && (!('submissionReview' in request.resource.data) || currentReview(request.resource.data.submissionReview, request.resource.data.submittedAt));
 
       allow update: if isActive()
         && tsValid(request.resource.data)
@@ -405,8 +424,12 @@ service cloud.firestore {
             && !('decidedAt' in request.resource.data)
             && !('decidedBy' in request.resource.data)
             && !('rejectReason' in request.resource.data)
+            // Older apps leave any previous review on the doc. The review's
+            // own timestamp lets readers recognize it as a previous submission.
+            && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['submissionReview'])
+                || currentReview(request.resource.data.submissionReview, request.resource.data.submittedAt))
             && request.resource.data.diff(resource.data).affectedKeys().hasOnly(
-                 ['status', 'approverUid', 'submittedAt', 'totalMinutes',
+                 ['status', 'approverUid', 'submittedAt', 'submissionReview', 'totalMinutes',
                   'entryCount', 'updatedAt', 'decidedAt', 'decidedBy', 'rejectReason']))
           ||
           // DECIDE (submitted → approved | rejected): the stamped approver,
@@ -423,11 +446,12 @@ service cloud.firestore {
             && request.resource.data.decidedBy == request.auth.uid
             && request.resource.data.decidedAt is int
             && (request.resource.data.status == 'approved'
-                  ? !('rejectReason' in request.resource.data)
-                  : (request.resource.data.rejectReason is string
+                  ? (!('rejectReason' in request.resource.data)
+                     && (!('approvalReview' in request.resource.data) || currentReview(request.resource.data.approvalReview, request.resource.data.decidedAt)))
+                  : (!('approvalReview' in request.resource.data) && request.resource.data.rejectReason is string
                      && request.resource.data.rejectReason.size() > 0))
             && request.resource.data.diff(resource.data).affectedKeys().hasOnly(
-                 ['status', 'decidedAt', 'decidedBy', 'rejectReason',
+                 ['status', 'decidedAt', 'decidedBy', 'rejectReason', 'approvalReview',
                   'totalMinutes', 'entryCount', 'updatedAt']))
         );
 

@@ -139,6 +139,7 @@ export function useEntriesRange(
   uid: string,
   fromKey: string,
   toKey: string,
+  waitForServer = false,
 ): TimeEntry[] | undefined {
   return useLiveQuery<TimeEntry[] | undefined>(
     () =>
@@ -151,6 +152,7 @@ export function useEntriesRange(
     [uid, fromKey, toKey],
     {
       label: 'useEntriesRange',
+      waitForServer,
       map: (snap) => {
         const list = snap.docs.map((d) => ({ id: d.id, ...(d.data() as TimeEntryDoc) }));
         list.sort((a, b) => b.dayKey.localeCompare(a.dayKey) || b.start - a.start);

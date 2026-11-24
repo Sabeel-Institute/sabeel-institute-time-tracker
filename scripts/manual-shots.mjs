@@ -157,6 +157,16 @@ const SHOTS = [
     },
   },
   {
+    name: 'timesheet-review-prompt',
+    as: PEOPLE.sara.email,
+    before: (w) => w.entry('sara', 'mentoring', w.dayIn(w.weeks.CURRENT, 0), '18:00', '18:02'),
+    do: async (s) => {
+      await s.tab('timesheet');
+      await s.tap(s.btn('Submit timesheet'));
+      await s.see(s.btn('I’ve checked these entries — submit'));
+    },
+  },
+  {
     name: 'submitted',
     as: PEOPLE.yusuf.email,
     start: (w) => `timesheet?initialPeriodKey=${w.weeks.PREV.fromKey}`,
@@ -214,6 +224,17 @@ const SHOTS = [
       await s.see(s.btn('Approve timesheet'));
     },
   },
+  {
+    name: 'approval-review-prompt',
+    as: PEOPLE.omar.email,
+    before: (w) => w.entry('yusuf', 'mentoring', w.dayIn(w.weeks.PREV, 0), '07:00', '07:02'),
+    do: async (s) => {
+      await s.tab('approvals');
+      await s.tap(s.text('Yusuf Khan'));
+      await s.tap(s.btn('Approve timesheet'));
+      await s.see(s.btn('Confirm approval'));
+    },
+  },
   { name: 'activities', as: PEOPLE.omar.email, do: (s) => s.more('Activities').then(() => s.see(s.text(/^Archived/i))) },
   // All time, so the hours the world approved are counted whatever today's date.
   {
@@ -237,6 +258,11 @@ const SHOTS = [
     },
   },
   // Part 3: admins.
+  {
+    name: 'timesheet-review-settings',
+    as: PEOPLE.amina.email,
+    do: (s) => s.more('Timesheet review settings').then(() => s.see(s.label('Maximum total per day (hours)'))),
+  },
   { name: 'people', as: PEOPLE.amina.email, do: (s) => s.more('People').then(() => s.see(s.text('Layla Hassan'))) },
   {
     name: 'person',

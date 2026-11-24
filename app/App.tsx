@@ -41,6 +41,7 @@ import { PersonDetailScreen } from './src/screens/PersonDetailScreen';
 import { ApprovalsScreen } from './src/screens/ApprovalsScreen';
 import { TimesheetReviewScreen } from './src/screens/TimesheetReviewScreen';
 import { NeedsAttentionScreen } from './src/screens/NeedsAttentionScreen';
+import { TimesheetReviewSettingsScreen } from './src/screens/TimesheetReviewSettingsScreen';
 import { NotificationSettingsScreen } from './src/screens/NotificationSettingsScreen';
 import { ReportProblemScreen } from './src/screens/ReportProblemScreen';
 import { RulesScreen } from './src/screens/RulesScreen';
@@ -134,6 +135,7 @@ const linkingFor = (screens: Record<string, string>): LinkingOptions<RootStackPa
 // Built once, not per render: the container treats `linking` as an input.
 const MEMBER_LINKING = linkingFor(MEMBER_PATHS);
 const APPROVER_LINKING = linkingFor(APPROVER_PATHS);
+const ADMIN_LINKING = linkingFor({ ...APPROVER_PATHS, TimesheetReviewSettings: 'timesheet-review-settings' });
 
 // Chrome is ivory with a dark title, deliberately not a raspberry app bar.
 const navTheme = {
@@ -252,7 +254,7 @@ export default function App() {
     const { profile, claims, user } = session;
     content = (
       <Shell uid={user.uid} approver={isApprover} admin={claims.admin === true}>
-        <Navigator linking={isApprover ? APPROVER_LINKING : MEMBER_LINKING}>
+        <Navigator linking={claims.admin === true ? ADMIN_LINKING : isApprover ? APPROVER_LINKING : MEMBER_LINKING}>
         <Stack.Navigator
           screenOptions={{
             headerTintColor: t.text.primary,
@@ -302,6 +304,13 @@ export default function App() {
           >
             {() => <NeedsAttentionScreen uid={user.uid} />}
           </Stack.Screen>
+          {claims.admin === true ? (
+            <Stack.Screen
+              name="TimesheetReviewSettings"
+              options={screenOptions('TimesheetReviewSettings', 'Timesheet review settings')}
+              component={TimesheetReviewSettingsScreen}
+            />
+          ) : null}
           <Stack.Screen
             name="NotificationSettings"
             options={screenOptions('NotificationSettings', 'Notifications')}

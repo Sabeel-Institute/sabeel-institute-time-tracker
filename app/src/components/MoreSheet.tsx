@@ -55,6 +55,14 @@ export function MoreSheet({
             testID="more-activities"
             onPress={() => onNavigate('Activities')}
           />
+          {admin ? (
+            <SheetOption
+              label="Timesheet review settings"
+              detail="Set which durations prompt a second look"
+              testID="more-timesheet-review-settings"
+              onPress={() => onNavigate('TimesheetReviewSettings')}
+            />
+          ) : null}
           {/* A label only when there is another section to tell it from. */}
           <SheetSection label="You" />
         </>

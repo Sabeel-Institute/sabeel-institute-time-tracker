@@ -1,7 +1,7 @@
 // Timesheet lifecycle rules: submit (owner create) → approve/reject (stamped
 // approver or admin) → resubmit (owner, after rejection); withdraw = owner
 // delete pre-approval; admin delete = reopen. See firestore.rules /timesheets.
-import { describe, it, beforeAll, afterAll, beforeEach } from 'vitest';
+import { describe, expect, it, beforeAll, afterAll, beforeEach } from 'vitest';
 import { readFileSync } from 'node:fs';
 import {
   initializeTestEnvironment,
@@ -393,5 +393,45 @@ describe('timesheets — reads', () => {
   it('listener on one’s own not-yet-submitted (missing) sheet is allowed; on others’ not', async () => {
     await assertSucceeds(getDoc(doc(alice().firestore(), 'timesheets/alice_2026-07-19')));
     await assertFails(getDoc(doc(bob().firestore(), 'timesheets/alice_2026-07-19')));
+  });
+});
+
+describe('timesheets — review snapshots', () => {
+  const limits = { minEntryMinutes: 3, maxEntryMinutes: 480, maxDayMinutes: 720 };
+  const submitted = { limits, flags: [], at: T0 };
+  const next = { ...limits, maxEntryMinutes: 120 };
+  const sheetPath = `timesheets/${TS_ID}`;
+
+  it('uses the new settings at decision time and preserves the member’s review', async () => {
+    const member = doc(alice().firestore(), sheetPath);
+    const admin = adm().firestore();
+    const settings = doc(admin, 'config/timesheetReview');
+    const reviewing = doc(mgr().firestore(), sheetPath);
+    await assertFails(setDoc(member, { ...submitDoc, submissionReview: { ...submitted, at: T0 + 1 } }));
+    await assertFails(setDoc(member, { ...submitDoc, submissionReview: submitted, approvalReview: submitted }));
+    await assertSucceeds(setDoc(member, { ...submitDoc, submissionReview: submitted }));
+    await assertSucceeds(setDoc(settings, next));
+    const decision = { status: 'approved', decidedAt: T0 + 2, decidedBy: 'mgr', updatedAt: T0 + 2 };
+    await assertFails(updateDoc(reviewing, { ...decision, approvalReview: { ...submitted, at: T0 + 2 } }));
+    const approved = { limits: next, flags: [], at: T0 + 2 };
+    await assertFails(updateDoc(reviewing, { ...decision, approvalReview: approved, submissionReview: approved }));
+    await assertSucceeds(updateDoc(reviewing, { ...decision, approvalReview: approved }));
+    await assertSucceeds(setDoc(settings, limits));
+    const sheet = (await assertSucceeds(getDoc(member))).data();
+    expect(sheet?.submissionReview).toEqual(submitted);
+    expect(sheet?.approvalReview).toEqual(approved);
+  });
+
+  it('supports a resubmission from an older app after settings change', async () => {
+    await seed({ status: 'rejected', submissionReview: submitted, decidedBy: 'mgr', decidedAt: T0 + 1, rejectReason: 'Check hours' });
+    await assertSucceeds(setDoc(doc(adm().firestore(), 'config/timesheetReview'), next));
+    const member = doc(alice().firestore(), sheetPath);
+    const resubmit = {
+      status: 'submitted', submittedAt: T0 + 2, updatedAt: T0 + 2,
+      decidedBy: deleteField(), decidedAt: deleteField(), rejectReason: deleteField(),
+    };
+    await assertFails(updateDoc(member, { ...resubmit, submissionReview: { ...submitted, at: T0 + 2 } }));
+    await assertSucceeds(updateDoc(member, resubmit));
+    expect((await assertSucceeds(getDoc(member))).data()?.submissionReview).toEqual(submitted);
   });
 });
