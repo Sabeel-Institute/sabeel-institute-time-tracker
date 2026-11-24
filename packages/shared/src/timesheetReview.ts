@@ -77,13 +77,17 @@ export function reviewEntryRange(period: ReviewPeriod): ReviewPeriod {
   return { fromKey: addDays(period.fromKey, -3), toKey: addDays(period.toKey, 3) };
 }
 
-/** Stable values from the entries the approver sees, including note-only edits. */
+/** Stable values from an entry on screen, including note-only edits. */
+export function timeEntryRevision(entry: ReviewEntry): string {
+  return JSON.stringify([
+    entry.id, entry.uid, entry.createdAt, entry.updatedAt, entry.start, entry.end, entry.dayKey,
+    entry.periodKey, entry.durationMinutes, entry.timeZone, entry.activityId, entry.activityName,
+    entry.source, entry.note, entry.autoClosed, entry.lastEditedBy,
+  ]);
+}
+
 export function timesheetEntriesVersion(entries: ReviewEntry[]): string {
-  return JSON.stringify(entries.map((entry) => JSON.stringify([
-    entry.id, entry.updatedAt, entry.start, entry.end, entry.dayKey, entry.durationMinutes,
-    entry.timeZone, entry.activityId, entry.activityName, entry.source, entry.note,
-    entry.autoClosed, entry.lastEditedBy,
-  ])).sort());
+  return JSON.stringify(entries.map(timeEntryRevision).sort());
 }
 
 export function timesheetReviewVersion(review?: ReviewSnapshot): string {

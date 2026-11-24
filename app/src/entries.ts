@@ -1,30 +1,27 @@
 import {
   addDoc,
   collection,
-  deleteDoc,
   doc,
-  getDocs,
   query,
   runTransaction,
-  updateDoc,
   where,
   writeBatch,
 } from 'firebase/firestore';
 import { useLiveDoc, useLiveQuery } from './liveQuery';
 import {
-  addDays,
   COLLECTIONS,
   dayKeyFor,
   deviceTimeZone,
   entryMinutes,
-  epochFor,
   periodKeyFor,
-  timeOfDayFor,
+  timeEntryRevision,
   type TimeEntryDoc,
   type UserDoc,
 } from '@sabeel/shared';
 import { FirebaseError } from 'firebase/app';
-import { db } from './firebase';
+import { httpsCallable } from 'firebase/functions';
+import type { DocumentData, UpdateData } from 'firebase/firestore';
+import { db, functions } from './firebase';
 import type { Activity } from './activities';
 
 export type TimeEntry = TimeEntryDoc & { id: string };
@@ -133,7 +130,7 @@ export function useEntry(entryId: string | null): TimeEntry | null {
     [entryId],
     {
       label: 'useEntry',
-      map: (snap) => (snap.exists() ? { id: snap.id, ...(snap.data() as TimeEntryDoc) } : null),
+      map: (snap) => (snap.exists() ? { ...(snap.data() as TimeEntryDoc), id: snap.id } : null),
       empty: null,
     },
   );
@@ -162,13 +159,27 @@ export function useEntriesRange(
       label: 'useEntriesRange',
       waitForServer,
       map: (snap) => {
-        const list = snap.docs.map((d) => ({ id: d.id, ...(d.data() as TimeEntryDoc) }));
+        const list = snap.docs.map((d) => ({ ...(d.data() as TimeEntryDoc), id: d.id }));
         list.sort((a, b) => b.dayKey.localeCompare(a.dayKey) || b.start - a.start);
         return list;
       },
       empty: undefined,
     },
   );
+}
+
+export const ENTRY_CHANGED = 'This entry changed while you were editing. Load the latest entry and review it again.';
+
+function changeEntry(entry: TimeEntry, patch?: UpdateData<DocumentData>): Promise<void> {
+  const ref = doc(db, COLLECTIONS.timeEntries, entry.id);
+  return runTransaction(db, async (tx) => {
+    const current = (await tx.get(ref)).data() as TimeEntryDoc | undefined;
+    if (!current || timeEntryRevision({ ...current, id: entry.id }) !== timeEntryRevision(entry)) {
+      throw new Error(ENTRY_CHANGED);
+    }
+    if (patch) tx.update(ref, patch);
+    else tx.delete(ref);
+  });
 }
 
 /** Edit a closed entry's fields; recomputes duration/dayKey from the new times. */
@@ -185,7 +196,7 @@ export async function updateEntry(
 ): Promise<void> {
   const timeZone = changes.timeZone ?? entry.timeZone;
   const dayKey = dayKeyFor(changes.start, timeZone);
-  await updateDoc(doc(db, COLLECTIONS.timeEntries, entry.id), {
+  await changeEntry(entry, {
     ...(changes.activity
       ? { activityId: changes.activity.id, activityName: changes.activity.name }
       : {}),
@@ -201,63 +212,16 @@ export async function updateEntry(
   });
 }
 
-export function deleteEntry(entryId: string): Promise<void> {
-  return deleteDoc(doc(db, COLLECTIONS.timeEntries, entryId));
+export function deleteEntry(entry: TimeEntry): Promise<void> {
+  return changeEntry(entry);
 }
 
-/**
- * Copy last week's closed entries into a (still empty) week, one weekday later
- * by exactly seven days, preserving each entry's wall-clock start time and
- * duration in its own timezone (a +7d epoch shift would drift across DST).
- * Entries whose target day falls outside the destination period are skipped —
- * month-clipped weeks are shorter than the source week.
- */
-export async function copyPeriodEntries(
-  uid: string,
-  fromPeriod: { fromKey: string; toKey: string },
-  toPeriod: { fromKey: string; toKey: string },
-): Promise<{ copied: number; skipped: number }> {
-  const snap = await getDocs(
-    query(
-      collection(db, COLLECTIONS.timeEntries),
-      where('uid', '==', uid),
-      where('dayKey', '>=', fromPeriod.fromKey),
-      where('dayKey', '<=', fromPeriod.toKey),
-    ),
-  );
-  const now = Date.now();
-  const batch = writeBatch(db);
-  let copied = 0;
-  let skipped = 0;
-  for (const d of snap.docs) {
-    const e = d.data() as TimeEntryDoc;
-    if (e.end === null) continue; // never copy a running session
-    const dayKey = addDays(e.dayKey, 7);
-    if (dayKey < toPeriod.fromKey || dayKey > toPeriod.toKey) {
-      skipped++;
-      continue;
-    }
-    const start = epochFor(dayKey, timeOfDayFor(e.start, e.timeZone), e.timeZone);
-    const copy: TimeEntryDoc = {
-      uid,
-      activityId: e.activityId,
-      activityName: e.activityName,
-      start,
-      end: start + (e.end - e.start),
-      durationMinutes: e.durationMinutes ?? entryMinutes(e.start, e.end),
-      timeZone: e.timeZone,
-      dayKey,
-      periodKey: periodKeyFor(dayKey),
-      source: 'manual',
-      ...(e.note ? { note: e.note } : {}),
-      createdAt: now,
-      updatedAt: now,
-    };
-    batch.set(doc(collection(db, COLLECTIONS.timeEntries)), copy);
-    copied++;
-  }
-  if (copied > 0) await batch.commit();
-  return { copied, skipped };
+/** Copy only if the destination remains an empty draft at commit time. */
+export async function copyPeriodEntries(periodKey: string): Promise<{ copied: number; skipped: number }> {
+  const response = await httpsCallable<{ periodKey: string }, { copied: number; skipped: number }>(
+    functions, 'copyPreviousTimesheetWeek',
+  )({ periodKey });
+  return response.data;
 }
 
 /**

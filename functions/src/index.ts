@@ -11,6 +11,7 @@ export { acceptRules } from './acceptRules';
 export { reportProblem } from './reportProblem';
 export { exportCsv, reportTotals } from './reporting';
 export { approveReviewedTimesheet } from './timesheetApproval';
+export { copyPreviousTimesheetWeek } from './timesheetCopy';
 export { autoCloseStaleSessions } from './sessions';
 export { healthCheck } from './health';
 export { notifyNewUser, notifyTimesheet, weeklyReminder } from './notify';

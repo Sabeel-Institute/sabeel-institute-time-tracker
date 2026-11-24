@@ -185,21 +185,22 @@ async function settled(page, landing) {
  * however fast the server made it. Auth is not held, so the account lookups
  * the app makes meanwhile are answered.
  */
-async function holdRequests(page, url) {
+async function holdRequests(page, url, scope = page.context()) {
   let release;
   const held = new Promise((r) => (release = r));
-  await page.context().route(url, async (route) => {
+  await scope.route(url, async (route) => {
     await held;
     await route.continue().catch(() => {});
   });
   return async () => {
     release();
-    await page.context().unroute(url);
+    await scope.unroute(url);
   };
 }
 
 const holdFirestore = (page) => holdRequests(page, 'http://' + EMULATOR_HOSTS.firestore + '/**');
 const approvalEndpoint = 'http://' + EMULATOR_HOSTS.functions + '/' + PROJECT + '/us-central1/approveReviewedTimesheet';
+const copyEndpoint = 'http://' + EMULATOR_HOSTS.functions + '/' + PROJECT + '/us-central1/copyPreviousTimesheetWeek';
 
 /**
  * Open `address` with every Firestore request slowed, and prove the screen never
@@ -683,6 +684,26 @@ async function main() {
   await entryRow(vol, vol.getByText('Math tutoring with the kids', { exact: true })).click();
   await formFields(vol).to.fill('11:00');
   await vol.getByRole('button', { name: 'Save changes', exact: true }).click();
+  await logged(vol, '2h 01m').waitFor();
+
+  // Two editors of the same entry. Reload the current record explicitly before
+  // allowing a new save, so the note on the first screen is never applied to
+  // the changed record underneath the form.
+  await entryRow(vol, vol.getByText('Math tutoring with the kids', { exact: true })).click();
+  await vol.waitForURL('**/entry/**');
+  await admin2.goto(vol.url());
+  await noteField(admin2, 'Note').fill('Updated from a second session');
+  await admin2.getByRole('button', { name: 'Save changes', exact: true }).click();
+  const reloadEntry = vol.getByRole('button', { name: /This entry changed while you were editing/ });
+  await reloadEntry.waitFor();
+  const staleSave = vol.getByRole('button', { name: 'Save changes', exact: true });
+  if (!(await staleSave.isDisabled()) || !(await vol.getByRole('button', { name: 'Delete entry', exact: true }).isDisabled()))
+    throw new Error('the stale edit screen still allows a write');
+  await reloadEntry.click();
+  if ((await noteField(vol, 'Note').inputValue()) !== 'Updated from a second session')
+    throw new Error('reloading the edit form did not load the current note');
+  await noteField(vol, 'Note').fill('Math tutoring with the kids');
+  await staleSave.click();
   await logged(vol, '2h 01m').waitFor();
 
   // A note alone saves on the clock entry, and leaves its minutes alone. The
@@ -1184,9 +1205,19 @@ async function main() {
   if ((await storedEntries(adminUid, copyTo.fromKey, copyTo.toKey)).length !== 0)
     throw new Error('a declined copy copied entries');
   await onScreen(mgr.getByText(EMPTY_WEEK)).waitFor({ timeout: 1000 });
-  // Accepted: every entry arrives a week later, same times and notes; the
-  // source week keeps its own.
+  // Both sessions initiate the copy from an empty view. One request arrives
+  // late, after the second has filled the week, and must leave it alone.
+  await admin2.goto(mgr.url());
+  await onScreen(admin2.getByText(EMPTY_WEEK)).waitFor({ timeout: 45000 });
+  const releaseCopy = await holdRequests(mgr, copyEndpoint, mgr);
+  const lateCopy = mgr.waitForResponse((res) => res.url() === copyEndpoint && res.request().method() === 'POST');
   await tapAndAnswer(mgr, () => copyButton.click(), true);
+  const secondCopy = admin2.getByRole('button', { name: "Copy last week's hours", exact: true });
+  await tapAndAnswer(admin2, () => secondCopy.click(), true);
+  await logged(admin2, '2h 30m').waitFor({ timeout: 15000 });
+  await releaseCopy();
+  if ((await lateCopy).ok()) throw new Error('the late copy accepted a populated destination');
+  await firstOnScreen(mgr.getByText('You can only copy hours into an empty draft week.', { exact: true })).waitFor();
   await logged(mgr, '2h 30m').waitFor({ timeout: 15000 });
   for (const h of copyHours) await firstOnScreen(mgr.getByText(h.note, { exact: true })).waitFor();
   if ((await copyButton.count()) !== 0) throw new Error('Copy last week is still offered on a week with hours');
@@ -1616,7 +1647,7 @@ async function main() {
     (/^(slow|stuck|outsider)$/.test(e.label) &&
       /Could not reach Cloud Firestore backend|status of 400/.test(e.text)) ||
     // The email form's refusals: Auth answers a sign-in it will not make with a 400.
-    (e.label === 'admin' && e.url === approvalEndpoint && /status of 400/.test(e.text)) ||
+    (e.label === 'admin' && [approvalEndpoint, copyEndpoint].includes(e.url) && /status of 400/.test(e.text)) ||
     (e.label === 'email' &&
       /status of 400/.test(e.text) &&
       e.url.startsWith(`http://${EMULATOR_HOSTS.auth}/`));

@@ -172,9 +172,13 @@ The **Timesheet** tab, top to bottom:
   **Tap an entry to change or delete it** (activity, date, times, note). Times
   you leave alone stay exactly as they were clocked. On a session that ran past
   midnight, a **To** earlier than **From** is the next morning. Deleting asks
-  first.
+  first. If someone else changes the entry while you are editing, tap the
+  notice to load the latest version before saving or deleting.
 - Weeks not yet begun are dimmed. Wandered off? **Back to this week** returns
   you.
+
+You can **Copy last week’s hours** into an empty draft. If hours appear in the
+destination before the copy finishes, review the hours that appeared in Timesheet.
 
 ### Overlapping entries
 

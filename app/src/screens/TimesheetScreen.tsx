@@ -232,8 +232,8 @@ export function TimesheetScreen({
                 ))
               )
                 return;
-              const { copied, skipped } = await copyPeriodEntries(uid, prev, period);
-              if (copied === 0) throw new Error('Last week has no entries to copy.');
+              const { copied, skipped } = await copyPeriodEntries(period.fromKey);
+              if (copied === 0) throw new Error(skipped ? 'None of last week’s entries fit this week.' : 'Last week has no entries to copy.');
               if (skipped > 0)
                 throw new Error(`Copied ${copied}; skipped ${skipped} that fall outside this (shorter) week.`);
             })

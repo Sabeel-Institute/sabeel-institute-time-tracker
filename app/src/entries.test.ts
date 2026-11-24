@@ -9,7 +9,7 @@ vi.mock('firebase/firestore', () => ({
 vi.mock('./firebase', () => ({ db: {} }));
 vi.mock('./liveQuery', () => ({ useLiveDoc: vi.fn(), useLiveQuery: vi.fn() }));
 
-const { clockOut } = await import('./entries');
+const { clockOut, deleteEntry, ENTRY_CHANGED, updateEntry } = await import('./entries');
 
 const entry = {
   uid: 'member', id: 'old', start: 1000, end: null, dayKey: '2026-07-12', periodKey: '2026-07-12',
@@ -38,4 +38,22 @@ it('can clear a dangling pointer without overwriting the already closed hours', 
   const tx = transactionWith('old');
   await clockOut('member', entry);
   expect(tx.update.mock.calls).toEqual([['users/member', { activeEntryId: null }]]);
+});
+
+it('rejects a stale correction and a stale deletion of changed hours', async () => {
+  const original = { ...entry, end: 121000, durationMinutes: 2 };
+  for (const act of [
+    () => updateEntry(original, { start: original.start, end: original.end, editorUid: 'member' }),
+    () => deleteEntry(original),
+  ]) {
+    const tx = {
+      get: vi.fn(async () => ({ data: () => ({ ...original, note: 'Corrected on another device' }) })),
+      update: vi.fn(),
+      delete: vi.fn(),
+    };
+    vi.mocked(runTransaction).mockImplementationOnce((_db, operation) => operation(tx as unknown as Transaction));
+    await expect(act()).rejects.toThrow(ENTRY_CHANGED);
+    expect(tx.update).not.toHaveBeenCalled();
+    expect(tx.delete).not.toHaveBeenCalled();
+  }
 });

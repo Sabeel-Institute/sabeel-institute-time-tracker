@@ -9,10 +9,11 @@ import {
   entryDisplayTimeZone,
   entryFormTimes,
   entryTimesValid,
+  timeEntryRevision,
   tzLabelFor,
 } from '@sabeel/shared';
 import { useActivities } from '../activities';
-import { useEntry, updateEntry, deleteEntry, explainEntryWriteError } from '../entries';
+import { useEntry, updateEntry, deleteEntry, explainEntryWriteError, ENTRY_CHANGED, type TimeEntry } from '../entries';
 import { confirmAction } from '../confirm';
 import { EntryForm } from '../components/EntryForm';
 import { Button, ErrorText, Notice, Screen } from '../components/ui';
@@ -22,7 +23,7 @@ const t = getTheme();
 
 export function EntryEditScreen({ entryId, editorUid }: { entryId: string; editorUid: string }) {
   const nav = useNavigation();
-  const entry = useEntry(entryId);
+  const latest = useEntry(entryId);
   const activities = useActivities({ includeArchived: false });
 
   const [activityId, setActivityId] = useState<string | null>(null);
@@ -30,30 +31,38 @@ export function EntryEditScreen({ entryId, editorUid }: { entryId: string; edito
   const [from, setFrom] = useState('');
   const [to, setTo] = useState('');
   const [note, setNote] = useState('');
-  const [loaded, setLoaded] = useState(false);
+  const [entry, setEntry] = useState<TimeEntry | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
 
-  const timeZone = entryDisplayTimeZone(entry?.timeZone ?? 'UTC');
-  const originalDay = entry && timeZone !== entry.timeZone ? dayKeyFor(entry.start, timeZone) : entry?.dayKey;
+  const load = (current: TimeEntry) => {
+    if (current.end === null) return;
+    const zone = entryDisplayTimeZone(current.timeZone);
+    const day = zone === current.timeZone ? current.dayKey : dayKeyFor(current.start, zone);
+    const values = entryFormTimes({ ...current, dayKey: day, timeZone: zone, end: current.end });
+    setEntry(current);
+    setActivityId(current.activityId);
+    setDateKey(values.dateKey);
+    setFrom(values.from);
+    setTo(values.to);
+    setNote(current.note ?? '');
+    setError(null);
+  };
 
-  // Seed the form once from the live entry.
   useEffect(() => {
-    if (entry && originalDay && entry.end !== null && !loaded) {
-      const seed = entryFormTimes({ ...entry, dayKey: originalDay, timeZone, end: entry.end });
-      setActivityId(entry.activityId);
-      setDateKey(seed.dateKey);
-      setFrom(seed.from);
-      setTo(seed.to);
-      setNote(entry.note ?? '');
-      setLoaded(true);
-    }
-  }, [entry, loaded, originalDay, timeZone]);
+    if (latest?.id === entryId && entry?.id !== entryId) load(latest);
+  }, [entry?.id, entryId, latest]);
 
-  if (!entry) return <Screen width="read">{null}</Screen>;
+  if (!entry || entry.id !== entryId) return <Screen width="read">{null}</Screen>;
+  if (!latest) return <Screen width="read"><Notice tone="info">This entry is no longer available.</Notice></Screen>;
+
+  const stale = timeEntryRevision(latest) !== timeEntryRevision(entry);
+  const timeZone = entryDisplayTimeZone(entry.timeZone);
+  const originalDay = timeZone !== entry.timeZone ? dayKeyFor(entry.start, timeZone) : entry.dayKey;
 
   // Untouched times keep the entry's own instants (editedEntryTimes says why).
   const times =
-    loaded && originalDay && entry.end !== null
+    entry.end !== null
       ? editedEntryTimes({ ...entry, dayKey: originalDay, timeZone, end: entry.end }, { dateKey, from, to })
       : null;
   const activity = activities?.find((a) => a.id === activityId) ?? null;
@@ -61,7 +70,8 @@ export function EntryEditScreen({ entryId, editorUid }: { entryId: string; edito
   const endKey = times ? dayKeyFor(times.end, timeZone) : null;
 
   const save = async () => {
-    if (!valid || times === null) return;
+    if (!valid || times === null || stale || saving) return;
+    setSaving(true);
     setError(null);
     try {
       await updateEntry(entry, {
@@ -75,16 +85,21 @@ export function EntryEditScreen({ entryId, editorUid }: { entryId: string; edito
       leaveIfShowing(nav);
     } catch (e) {
       setError(explainEntryWriteError(e));
+    } finally {
+      setSaving(false);
     }
   };
 
   const remove = async () => {
+    setSaving(true);
     setError(null);
     try {
-      await deleteEntry(entry.id);
+      await deleteEntry(entry);
       leaveIfShowing(nav);
     } catch (e) {
       setError(explainEntryWriteError(e));
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -103,6 +118,9 @@ export function EntryEditScreen({ entryId, editorUid }: { entryId: string; edito
         timeZone,
       )}${entry.uid !== editorUid ? ' · you are editing as a manager' : ''}`}
     >
+      {stale && !saving ? (
+        <Notice tone="info" onPress={() => load(latest)}>{ENTRY_CHANGED}</Notice>
+      ) : null}
       {timeZone !== entry.timeZone ? (
         <Notice tone="info">The stored time zone is unavailable. Saving uses UTC.</Notice>
       ) : null}
@@ -126,15 +144,15 @@ export function EntryEditScreen({ entryId, editorUid }: { entryId: string; edito
         <Text style={styles.hint}>This moves the entry to {dayLabel(movedTo)}.</Text>
       ) : null}
 
-      <Button label="Save changes" onPress={save} disabled={!valid} />
-      {loaded && !valid ? (
+      <Button label="Save changes" onPress={save} disabled={!valid || stale || saving} />
+      {!valid ? (
         <Text style={styles.hint}>The end has to be after the start, and at most 24 hours later.</Text>
       ) : null}
       <ErrorText error={error} />
       {/* Apart from Save, so a destructive button is never the one you hit by
           habit; and it asks once. */}
       <View style={styles.dangerZone}>
-        <Button label="Delete entry" kind="remove" onPress={confirmRemove} />
+        <Button label="Delete entry" kind="remove" disabled={stale || saving} onPress={confirmRemove} />
       </View>
     </Screen>
   );
