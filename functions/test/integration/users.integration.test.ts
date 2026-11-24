@@ -184,6 +184,30 @@ describe('applyUserAccess — approver pointer cleanup', () => {
     expect(await approverOf(alice)).toBe(reviewer);
   });
 
+  it('clears every page of assignments without changing submitted or approved records', async () => {
+    const db = getFirestore();
+    const former = freshUid('former');
+    const users = db.collection('users');
+    const pending = db.doc('timesheets/' + former + '-pending');
+    const approved = db.doc('timesheets/' + former + '-approved');
+    const pendingData = { status: 'submitted', approverUid: former };
+    const approvedData = { status: 'approved', approverUid: former, decidedBy: former };
+    const batch = db.batch();
+    batch.set(users.doc(former), { status: 'active', role: 'member' });
+    for (let i = 0; i < 401; i++) {
+      batch.set(users.doc(former + '-report-' + i), { approverUid: former, displayName: 'Volunteer ' + i });
+    }
+    batch.set(pending, pendingData);
+    batch.set(approved, approvedData);
+    await batch.commit();
+
+    expect(await clearIneligibleApproverPointers(former)).toBe(401);
+    expect((await users.where('approverUid', '==', former).get()).empty).toBe(true);
+    expect((await users.doc(former + '-report-400').get()).data()).toEqual({ approverUid: null, displayName: 'Volunteer 400' });
+    expect((await pending.get()).data()).toEqual(pendingData);
+    expect((await approved.get()).data()).toEqual(approvedData);
+  });
+
   it('disabling an approver clears pointers even though the role is untouched', async () => {
     const admin = freshUid('admin');
     const mgr = freshUid('mgr');
