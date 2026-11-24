@@ -422,6 +422,23 @@ describe('timesheets — review snapshots', () => {
     expect(sheet?.approvalReview).toEqual(approved);
   });
 
+  it('clears the earlier review when a rejected week is resubmitted empty, even after the limits change', async () => {
+    await seed({ status: 'rejected', submissionReview: submitted, decidedBy: 'mgr', decidedAt: T0 + 1, rejectReason: 'Check hours' });
+    await assertSucceeds(setDoc(doc(adm().firestore(), 'config/timesheetReview'), next));
+    const member = doc(alice().firestore(), sheetPath);
+    await assertSucceeds(updateDoc(member, {
+      status: 'submitted', submittedAt: T0 + 2, updatedAt: T0 + 2, entryCount: 0, totalMinutes: 0,
+      decidedBy: deleteField(), decidedAt: deleteField(), rejectReason: deleteField(), submissionReview: deleteField(),
+    }));
+    await assertSucceeds(updateDoc(doc(mgr().firestore(), sheetPath), {
+      status: 'approved', decidedAt: T0 + 3, decidedBy: 'mgr', updatedAt: T0 + 3,
+    }));
+    const approved = (await assertSucceeds(getDoc(member))).data();
+    expect(approved).toMatchObject({ status: 'approved', entryCount: 0, totalMinutes: 0 });
+    expect(approved?.submissionReview).toBeUndefined();
+    expect(approved?.approvalReview).toBeUndefined();
+  });
+
   it('supports a resubmission from an older app after settings change', async () => {
     await seed({ status: 'rejected', submissionReview: submitted, decidedBy: 'mgr', decidedAt: T0 + 1, rejectReason: 'Check hours' });
     await assertSucceeds(setDoc(doc(adm().firestore(), 'config/timesheetReview'), next));

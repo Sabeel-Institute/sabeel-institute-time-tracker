@@ -461,6 +461,7 @@ export function Field({
   placeholder,
   multiline,
   inputMode,
+  editable,
 }: {
   label: string;
   value: string;
@@ -468,6 +469,7 @@ export function Field({
   placeholder?: string;
   multiline?: boolean;
   inputMode?: 'numeric' | 'decimal';
+  editable?: boolean;
 }) {
   return (
     <View style={styles.field}>
@@ -481,6 +483,7 @@ export function Field({
         placeholderTextColor={t.text.muted}
         multiline={multiline}
         inputMode={inputMode}
+        editable={editable}
         numberOfLines={multiline ? 4 : undefined}
         textAlignVertical={multiline ? 'top' : undefined}
       />

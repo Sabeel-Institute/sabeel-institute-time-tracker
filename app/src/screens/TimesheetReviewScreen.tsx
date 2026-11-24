@@ -11,12 +11,12 @@ import {
   recordedReviewFor,
 } from '@sabeel/shared';
 import { leaveIfShowing, type RootStackParamList } from '../nav';
-import { approveTimesheet, rejectTimesheet, reopenTimesheet, useTimesheet } from '../timesheets';
+import { approveTimesheet, rejectTimesheet, reopenTimesheet, timesheetRevision, useTimesheet } from '../timesheets';
 import { DayEntries, WeekStepper, openingDay, stepPeriod } from '../components/WeekView';
 import { Sheet } from '../components/Sheet';
 import { Button, ErrorText, Field, Notice, Screen, Spinner, StatusChip, sheetStatus } from '../components/ui';
 import { getTheme, spacing } from '../theme';
-import { useTimesheetReview } from '../timesheetReview';
+import { useReviewConfirmation, useTimesheetReview } from '../timesheetReview';
 import { reviewHighlights, TimesheetReviewPrompt } from '../components/TimesheetReviewPrompt';
 
 const t = getTheme();
@@ -49,11 +49,10 @@ export function TimesheetReviewScreen({
   const sheet = useTimesheet(uid, period.fromKey);
   const status = sheet === undefined ? undefined : (sheet?.status ?? 'draft');
   // Wait for the entries before showing empty days or enabling approval.
-  const { loaded, entries, conflicts, review } = useTimesheetReview(uid, period.fromKey, period.toKey);
-  const [rejecting, setRejecting] = useState(false);
+  const { loaded, entries, conflicts, needsReview, review } = useTimesheetReview(uid, period.fromKey, period.toKey);
+  const [rejecting, setRejecting] = useState<string | null>(null);
   const [reason, setReason] = useState('');
   const [error, setError] = useState<string | null>(null);
-  const [confirming, setConfirming] = useState(false);
   const [saving, setSaving] = useState(false);
   // A second submission notification can re-target this screen (another person,
   // another week) while it is mounted — navigate() swaps the params in place —
@@ -61,24 +60,25 @@ export function TimesheetReviewScreen({
   // sheet left open would otherwise reject the new week with the old reason.
   useEffect(() => {
     setAnchor(periodKey);
-    setConfirming(false);
-    setRejecting(false);
+    setRejecting(null);
     setReason('');
     setError(null);
   }, [uid, periodKey]);
   // An error is about the week it happened on; another week starts clear.
   const showWeek = (key: string) => {
     setAnchor(key);
-    setConfirming(false);
+    setRejecting(null);
     setError(null);
   };
 
   const submittedReview = recordedReviewFor(sheet?.submissionReview, sheet?.submittedAt);
   const shownReview = status === 'approved' ? recordedReviewFor(sheet?.approvalReview, sheet?.decidedAt) : review;
   const highlights = reviewHighlights(shownReview, status === 'submitted' ? submittedReview : undefined);
-  const canApprove = loaded && review !== undefined && conflicts.size === 0;
+  const canApprove = loaded && (!needsReview || review !== undefined) && conflicts.size === 0;
+  const target = JSON.stringify([uid, period.fromKey, sheet ? timesheetRevision(sheet) : status]);
+  const confirmation = useReviewConfirmation(JSON.stringify([target, canApprove]), review, setError);
   const editEntry = (entryId: string) => {
-    setConfirming(false);
+    confirmation.close();
     nav.navigate('EntryEdit', { entryId });
   };
   const total = useMemo(() => entries.reduce((s, e) => s + (e.durationMinutes ?? 0), 0), [entries]);
@@ -94,8 +94,7 @@ export function TimesheetReviewScreen({
     setError(null);
     try {
       await fn();
-      setRejecting(false);
-      setConfirming(false);
+      setRejecting(null);
       leaveIfShowing(nav);
     } catch (e) {
       setError((e as Error).message);
@@ -103,7 +102,8 @@ export function TimesheetReviewScreen({
   };
 
   const approve = async () => {
-    if (!sheet || sheet.status !== 'submitted' || !review || !canApprove || saving) return;
+    if (!sheet || sheet.status !== 'submitted' || !canApprove || saving) return;
+    confirmation.close();
     setSaving(true);
     try {
       await decide(() => approveTimesheet(sheet, reviewerUid, entries, review));
@@ -113,7 +113,7 @@ export function TimesheetReviewScreen({
   };
   const startApproval = () => {
     setError(null);
-    if (review?.flags.length) setConfirming(true);
+    if (review?.flags.length) confirmation.open();
     else void approve();
   };
 
@@ -164,7 +164,7 @@ export function TimesheetReviewScreen({
             disabled={saving}
             onPress={() => {
               setError(null);
-              setRejecting(true);
+              setRejecting(target);
             }}
           />
         </View>
@@ -189,7 +189,7 @@ export function TimesheetReviewScreen({
         </View>
       ) : null}
       {/* Under the buttons it answers, not below the whole week. */}
-      <ErrorText error={confirming && canApprove ? null : error} />
+      <ErrorText error={confirmation.visible ? null : error} />
       {highlights.days.map((message) => <Notice key={message} tone="info">{message}</Notice>)}
 
       {!loaded ? <Spinner label="Loading this week…" /> : null}
@@ -216,17 +216,17 @@ export function TimesheetReviewScreen({
       )}
 
       <TimesheetReviewPrompt
-        visible={confirming && status === 'submitted' && canApprove}
+        visible={confirmation.visible && status === 'submitted' && canApprove}
         mode="approve"
         highlights={highlights}
         entries={entries}
         busy={saving}
         error={error}
-        onClose={() => setConfirming(false)}
+        onClose={confirmation.close}
         onConfirm={approve}
         onEdit={editEntry}
       />
-      <Sheet visible={rejecting} title="Reject timesheet" onClose={() => setRejecting(false)} closeLabel="Cancel">
+      <Sheet visible={rejecting === target} title="Reject timesheet" onClose={() => setRejecting(null)} closeLabel="Cancel">
         <Field
           label={`What does ${displayName} need to fix?`}
           value={reason}

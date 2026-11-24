@@ -66,7 +66,7 @@ describe('timesheet duration review', () => {
     const overnight = work('night', '2026-10-31', '23:00', 240);
     const day = work('day', sunday, '09:00', 541);
     const { flags } = reviewTimesheet(limits, [overnight, day], period);
-    expect(flags).toContainEqual({ kind: 'dayTotal', dayKey: sunday, minutes: 721 });
+    expect(flags).toContainEqual(expect.objectContaining({ kind: 'dayTotal', dayKey: sunday, minutes: 721 }));
     expect(flags).toContainEqual(expect.objectContaining({ kind: 'long', entryId: 'day' }));
     expect(flags).toHaveLength(2);
   });
@@ -79,7 +79,16 @@ describe('timesheet duration review', () => {
       work('next week', '2026-11-09', '10:00', 121),
     ];
     expect(reviewTimesheet(limits, entries, period).flags)
-      .toEqual([{ kind: 'dayTotal', dayKey: '2026-11-08', minutes: 121 }]);
+      .toEqual([expect.objectContaining({ kind: 'dayTotal', dayKey: '2026-11-08', minutes: 121 })]);
+  });
+
+  it('does not flag a neighboring day when an overnight timer credits it zero minutes', () => {
+    const start = epochFor(period.toKey, '23:59', timeZone) + 20_000;
+    const timer = entry('overnight', start, start + 50_000);
+    const neighbor = work('next period', '2026-11-08', '10:00', 120);
+    const limits = { ...DEFAULT_REVIEW_LIMITS, maxDayMinutes: 60 };
+    expect(reviewTimesheet(limits, [timer, neighbor], period).flags)
+      .toEqual([expect.objectContaining({ kind: 'short', entryId: 'overnight', minutes: 1 })]);
   });
 
   it('identifies flags added by a config change and previously flagged entries edited after submission', () => {
@@ -100,6 +109,35 @@ describe('timesheet duration review', () => {
     const saved = { ...review, flags: [...review.flags, null as never], at: 1 };
     expect(recordedReviewFor(saved, 2)).toBeUndefined();
     expect(recordedReviewFor(saved, 1)).toEqual({ ...review, at: 1 });
+  });
+
+  it('leaves an empty week valid even with odd or long entries in a neighboring week', () => {
+    const neighbor = work('old', '2026-10-31', '23:00', 120, { timeZone: 'unrecognized' });
+    const limits = { ...DEFAULT_REVIEW_LIMITS, minEntryMinutes: 120, maxDayMinutes: 1 };
+    expect(reviewTimesheet(limits, [neighbor], period)).toEqual({ limits, flags: [] });
+  });
+
+  it('keeps legacy rows with bad zones and out-of-range spans from crashing a populated review', () => {
+    const limits = { ...DEFAULT_REVIEW_LIMITS, maxDayMinutes: 120 };
+    const neighbor = work('old', '2026-10-31', '23:00', 120, { timeZone: 'unrecognized' });
+    const start = epochFor(sunday, '07:00', timeZone);
+    const legacy = entry('long span', start, start + 100 * 86400000, { durationMinutes: 120 });
+    const normal = work('normal', sunday, '13:00', 1);
+    const { flags } = reviewTimesheet(limits, [neighbor, legacy, normal], period);
+    expect(flags).toContainEqual(expect.objectContaining({ kind: 'dayTotal', dayKey: sunday, minutes: 121 }));
+    expect(flags).toHaveLength(2);
+  });
+
+  it('detects changes to a flagged day with the same total, independent of entry order', () => {
+    const limits = { ...DEFAULT_REVIEW_LIMITS, maxDayMinutes: 120 };
+    const morning = work('morning', sunday, '09:00', 90);
+    const afternoon = work('afternoon', sunday, '13:00', 45);
+    const original = reviewTimesheet(limits, [morning, afternoon], period);
+    const reordered = reviewTimesheet(limits, [afternoon, morning], period);
+    const replacement = work('replacement', sunday, '14:00', 45);
+    const revised = reviewTimesheet(limits, [morning, replacement], period);
+    expect(reviewFlagChange(reordered.flags[0], original)).toBeUndefined();
+    expect(reviewFlagChange(revised.flags[0], original)).toBe('edited');
   });
 
   it('validates whole minutes and ordered entry thresholds', () => {

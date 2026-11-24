@@ -427,6 +427,7 @@ service cloud.firestore {
             // Older apps leave any previous review on the doc. The review's
             // own timestamp lets readers recognize it as a previous submission.
             && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['submissionReview'])
+                || !('submissionReview' in request.resource.data)
                 || currentReview(request.resource.data.submissionReview, request.resource.data.submittedAt))
             && request.resource.data.diff(resource.data).affectedKeys().hasOnly(
                  ['status', 'approverUid', 'submittedAt', 'submissionReview', 'totalMinutes',

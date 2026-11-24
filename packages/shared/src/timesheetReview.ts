@@ -1,5 +1,5 @@
 import { MAX_ENTRY_HOURS, SESSION_CAP_HOURS } from './constants';
-import { dayKeyFor, entryMinutes } from './time';
+import { dayKeyFor, entryMinutes, isDayKey } from './time';
 import type { TimeEntryDoc } from './types';
 
 const MINUTE = 60_000;
@@ -28,7 +28,7 @@ export function validReviewLimits(limits: ReviewLimits): boolean {
 
 export type ReviewFlag =
   | { kind: 'short' | 'long' | 'autoClosed'; entryId: string; dayKey: string; minutes: number; updatedAt: number }
-  | { kind: 'dayTotal'; dayKey: string; minutes: number };
+  | { kind: 'dayTotal'; dayKey: string; minutes: number; entryVersions?: string[] };
 
 export interface ReviewSnapshot {
   limits: ReviewLimits;
@@ -45,8 +45,9 @@ export function recordedReviewFor(review?: RecordedReview, at?: number): Recorde
       || !validReviewLimits(review.limits) || !Array.isArray(review.flags)) return undefined;
   // The snapshot was written by a client. Ignore malformed flags on read.
   const flags = review.flags.filter((flag) => {
-    if (!flag || !/^\d{4}-\d{2}-\d{2}$/.test(flag.dayKey) || !Number.isInteger(flag.minutes) || flag.minutes < 1) return false;
-    return flag.kind === 'dayTotal' || (
+    if (!flag || !isDayKey(flag.dayKey) || !Number.isInteger(flag.minutes) || flag.minutes < 1) return false;
+    return (flag.kind === 'dayTotal' && (flag.entryVersions === undefined
+      || (Array.isArray(flag.entryVersions) && flag.entryVersions.every((version) => typeof version === 'string')))) || (
       (flag.kind === 'short' || flag.kind === 'long' || flag.kind === 'autoClosed')
       && typeof flag.entryId === 'string' && Number.isInteger(flag.updatedAt)
     );
@@ -69,6 +70,30 @@ function endOfLocalDay(start: number, end: number, dayKey: string, timeZone: str
   return laterDay;
 }
 
+/** Allocate logged minutes across local midnight without rounding the parts
+ * independently. Older/imported rows can have an unrecognized time zone or
+ * a span outside the app's entry limit. Keep those hours on their recorded
+ * work date and bound the amount of calendar work for a rollup.
+ */
+function minutesByLocalDay(start: number, end: number, minutes: number, entry: ReviewEntry): [string, number][] {
+  const recordedDay: [string, number][] = [[entry.dayKey, minutes]];
+  if (end - start > MAX_ENTRY_HOURS * 60 * MINUTE) return recordedDay;
+  try {
+    const parts: [string, number][] = [];
+    const shareAt = (time: number) => Math.round(minutes * (time - start) / (end - start));
+    for (let cursor = start; cursor < end;) {
+      const day = dayKeyFor(cursor, entry.timeZone);
+      const boundary = endOfLocalDay(cursor, end, day, entry.timeZone);
+      parts.push([day, shareAt(boundary) - shareAt(cursor)]);
+      cursor = boundary;
+    }
+    return parts;
+  } catch (e) {
+    if (e instanceof RangeError) return recordedDay;
+    throw e;
+  }
+}
+
 /**
  * Flags for the reviewed period. Nearby entries contribute to a shared local
  * day's total, but only days containing some work from this sheet are flagged.
@@ -79,15 +104,18 @@ export function reviewTimesheet(
   period: { fromKey: string; toKey: string },
 ): ReviewSnapshot {
   const flags: ReviewFlag[] = [];
-  const dayTotals = new Map<string, number>();
+  const localDays = new Map<string, { minutes: number; entryVersions: string[] }>();
   const daysInReview = new Set<string>();
+  const isInPeriod = (dayKey: string) => dayKey >= period.fromKey && dayKey <= period.toKey;
+  if (!entries.some((entry) => entry.end !== null && isInPeriod(entry.dayKey))) return { limits, flags };
+
   for (const entry of entries) {
     const { start, end } = entry;
-    if (end === null || end <= start) continue;
-    const inPeriod = entry.dayKey >= period.fromKey && entry.dayKey <= period.toKey;
+    if (end === null || !Number.isFinite(start) || !Number.isFinite(end) || end <= start) continue;
+    const inPeriod = isInPeriod(entry.dayKey);
     const minutes = entry.durationMinutes ?? entryMinutes(start, end);
+    const updatedAt = Number.isInteger(entry.updatedAt) ? entry.updatedAt : start;
     if (inPeriod) {
-      const updatedAt = Number.isInteger(entry.updatedAt) ? entry.updatedAt : start;
       const details = { entryId: entry.id, dayKey: entry.dayKey, minutes, updatedAt };
       if (minutes < limits.minEntryMinutes) flags.push({ kind: 'short', ...details });
       if (minutes > limits.maxEntryMinutes) flags.push({ kind: 'long', ...details });
@@ -96,20 +124,20 @@ export function reviewTimesheet(
       }
     }
 
-    // Allocate the logged minutes proportionally across midnight. Rounding the
-    // accumulated share keeps the split additive, even for a one-minute timer.
-    const shareAt = (time: number) => Math.round(minutes * (time - start) / (end - start));
-    for (let cursor = start; cursor < end;) {
-      const day = dayKeyFor(cursor, entry.timeZone);
-      const boundary = endOfLocalDay(cursor, end, day, entry.timeZone);
-      dayTotals.set(day, (dayTotals.get(day) ?? 0) + shareAt(boundary) - shareAt(cursor));
+    for (const [day, share] of minutesByLocalDay(start, end, minutes, entry)) {
+      if (share <= 0) continue;
+      const total = localDays.get(day) ?? { minutes: 0, entryVersions: [] };
+      total.minutes += share;
+      total.entryVersions.push(JSON.stringify([entry.id, start, end, updatedAt, share]));
+      localDays.set(day, total);
       if (inPeriod) daysInReview.add(day);
-      cursor = boundary;
     }
   }
   for (const dayKey of daysInReview) {
-    const minutes = dayTotals.get(dayKey)!;
-    if (minutes > limits.maxDayMinutes) flags.push({ kind: 'dayTotal', dayKey, minutes });
+    const { minutes, entryVersions } = localDays.get(dayKey)!;
+    if (minutes > limits.maxDayMinutes) {
+      flags.push({ kind: 'dayTotal', dayKey, minutes, entryVersions: entryVersions.sort() });
+    }
   }
   flags.sort((a, b) => a.dayKey.localeCompare(b.dayKey) || reviewFlagKey(a).localeCompare(reviewFlagKey(b)));
   return { limits, flags };
@@ -126,5 +154,7 @@ export function reviewFlagChange(flag: ReviewFlag, submitted?: ReviewSnapshot): 
   if (!earlier) return 'new';
   if (earlier.minutes !== flag.minutes || earlier.dayKey !== flag.dayKey) return 'edited';
   if ('updatedAt' in flag && 'updatedAt' in earlier && flag.updatedAt !== earlier.updatedAt) return 'edited';
+  if (flag.kind === 'dayTotal' && earlier.kind === 'dayTotal'
+      && JSON.stringify(flag.entryVersions) !== JSON.stringify(earlier.entryVersions)) return 'edited';
   return undefined;
 }

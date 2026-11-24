@@ -1,16 +1,17 @@
-// Timesheet lifecycle writes + live hooks. All transitions are plain client
-// writes validated by firestore.rules (see /timesheets there): submit = create,
+// Timesheet lifecycle writes + live hooks. Firestore rules authorize the
+// transitions (see /timesheets there): submit = create,
 // decide = update by the stamped approver/admin, resubmit = update after
 // rejection, withdraw/reopen = delete. totalMinutes/entryCount are informational
 // snapshots — the live truth is always the period's entries.
 import {
   collection,
-  deleteDoc,
   deleteField,
   doc,
   query,
+  runTransaction,
   setDoc,
-  updateDoc,
+  type DocumentData,
+  type UpdateData,
   where,
 } from 'firebase/firestore';
 import { FirebaseError } from 'firebase/app';
@@ -23,16 +24,14 @@ export type Timesheet = TimesheetDoc & { id: string };
 
 const tsId = (uid: string, periodKey: string) => `${uid}_${periodKey}`;
 
+export function timesheetRevision(sheet: TimesheetDoc): string {
+  return JSON.stringify([sheet.status, sheet.createdAt, sheet.submittedAt, sheet.decidedAt, sheet.updatedAt]);
+}
+
 /** What a refused week action says. */
 export const WEEK_CHANGED = "This week changed a moment ago, so that didn't go through. It now shows where it stands.";
 
-/**
- * The rules refuse a submit, withdrawal, decision or reopen once the week is no
- * longer in the state the screen showed: someone acted on it first (an approver
- * approving as its owner withdraws, two approvers deciding at once), and the
- * live screen catches up a moment later. Their raw refusal reads like a fault,
- * so it is said in words; any other failure keeps its own message.
- */
+/** Explain a stale or refused week action while the live screen catches up. */
 export function weekWriteError(e: unknown): unknown {
   return e instanceof FirebaseError && e.code === 'permission-denied' ? new Error(WEEK_CHANGED) : e;
 }
@@ -43,6 +42,19 @@ async function weekWrite(write: Promise<void>): Promise<void> {
   } catch (e) {
     throw weekWriteError(e);
   }
+}
+
+/** Bind the action to the revision the person saw. A withdrawn and
+ * resubmitted sheet has the same id and status as the original.
+ */
+function changeTimesheet(ts: Timesheet, changes?: UpdateData<DocumentData>): Promise<void> {
+  const ref = doc(db, COLLECTIONS.timesheets, ts.id);
+  return weekWrite(runTransaction(db, async (tx) => {
+    const current = (await tx.get(ref)).data() as TimesheetDoc | undefined;
+    if (!current || timesheetRevision(current) !== timesheetRevision(ts)) throw new Error(WEEK_CHANGED);
+    if (changes) tx.update(ref, changes);
+    else tx.delete(ref);
+  }));
 }
 
 /** Snapshot totals over a period's entries (closed only — a running one has no duration). */
@@ -60,7 +72,7 @@ export async function submitTimesheet(
   period: { fromKey: string; toKey: string },
   approverUid: string,
   entries: TimeEntry[],
-  submissionReview: ReviewSnapshot,
+  submissionReview?: ReviewSnapshot,
 ): Promise<void> {
   const now = Date.now();
   const sheet: TimesheetDoc = {
@@ -70,7 +82,7 @@ export async function submitTimesheet(
     status: 'submitted',
     approverUid,
     submittedAt: now,
-    submissionReview: { ...submissionReview, at: now },
+    ...(submissionReview ? { submissionReview: { ...submissionReview, at: now } } : {}),
     ...snapshotOf(entries),
     createdAt: now,
     updatedAt: now,
@@ -83,27 +95,25 @@ export async function resubmitTimesheet(
   ts: Timesheet,
   approverUid: string,
   entries: TimeEntry[],
-  submissionReview: ReviewSnapshot,
+  submissionReview?: ReviewSnapshot,
 ): Promise<void> {
   const now = Date.now();
-  await weekWrite(
-    updateDoc(doc(db, COLLECTIONS.timesheets, ts.id), {
-      status: 'submitted',
-      approverUid,
-      submittedAt: now,
-      submissionReview: { ...submissionReview, at: now },
-      ...snapshotOf(entries),
-      updatedAt: now,
-      decidedAt: deleteField(),
-      decidedBy: deleteField(),
-      rejectReason: deleteField(),
-    }),
-  );
+  await changeTimesheet(ts, {
+    status: 'submitted',
+    approverUid,
+    submittedAt: now,
+    submissionReview: submissionReview ? { ...submissionReview, at: now } : deleteField(),
+    ...snapshotOf(entries),
+    updatedAt: now,
+    decidedAt: deleteField(),
+    decidedBy: deleteField(),
+    rejectReason: deleteField(),
+  });
 }
 
 /** Withdraw a not-yet-approved submission — the period returns to draft. */
 export function withdrawTimesheet(ts: Timesheet): Promise<void> {
-  return weekWrite(deleteDoc(doc(db, COLLECTIONS.timesheets, ts.id)));
+  return changeTimesheet(ts);
 }
 
 /** Approve (stamped approver or admin). Refreshes the snapshot to what was reviewed. */
@@ -111,19 +121,17 @@ export async function approveTimesheet(
   ts: Timesheet,
   deciderUid: string,
   entries: TimeEntry[],
-  approvalReview: ReviewSnapshot,
+  approvalReview?: ReviewSnapshot,
 ): Promise<void> {
   const now = Date.now();
-  await weekWrite(
-    updateDoc(doc(db, COLLECTIONS.timesheets, ts.id), {
-      status: 'approved',
-      decidedAt: now,
-      decidedBy: deciderUid,
-      approvalReview: { ...approvalReview, at: now },
-      ...snapshotOf(entries),
-      updatedAt: now,
-    }),
-  );
+  await changeTimesheet(ts, {
+    status: 'approved',
+    decidedAt: now,
+    decidedBy: deciderUid,
+    ...(approvalReview ? { approvalReview: { ...approvalReview, at: now } } : {}),
+    ...snapshotOf(entries),
+    updatedAt: now,
+  });
 }
 
 /** Reject with a required reason — the sheet goes back to the owner. */
@@ -133,20 +141,18 @@ export async function rejectTimesheet(
   reason: string,
 ): Promise<void> {
   const now = Date.now();
-  await weekWrite(
-    updateDoc(doc(db, COLLECTIONS.timesheets, ts.id), {
-      status: 'rejected',
-      decidedAt: now,
-      decidedBy: deciderUid,
-      rejectReason: reason,
-      updatedAt: now,
-    }),
-  );
+  await changeTimesheet(ts, {
+    status: 'rejected',
+    decidedAt: now,
+    decidedBy: deciderUid,
+    rejectReason: reason,
+    updatedAt: now,
+  });
 }
 
 /** Admin only: reopen any sheet (approved included) back to draft. */
 export function reopenTimesheet(ts: Timesheet): Promise<void> {
-  return weekWrite(deleteDoc(doc(db, COLLECTIONS.timesheets, ts.id)));
+  return changeTimesheet(ts);
 }
 
 /**
