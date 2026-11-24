@@ -12,84 +12,65 @@ import { reportError, reportMessage, sentryDsn } from './sentry';
 const CAP_MS = SESSION_CAP_HOURS * 60 * 60 * 1000;
 
 /**
- * Closing an entry changes a period's hours — which is fine while the period is a
- * draft, and is NOT fine once its timesheet has been submitted or approved. Rules
- * forbid every client from touching an approved period; this job runs on the
- * admin SDK and bypasses them, so it has to honour that boundary itself.
- *
- * It cannot simply skip: leaving someone clocked in forever is worse than a
- * corrected total, and the entry would be re-examined every hour. So it closes
- * the entry, then repairs the sheet's stored snapshot so it stops contradicting
- * its own entries, and tells a human — an approved period changing after the fact
- * is exactly the kind of silent edit nobody would otherwise notice.
+ * Recheck a candidate after the scan. Clock-out, the active pointer and a
+ * legacy sealed sheet's snapshot must agree at the end of the same write.
  */
-async function reconcileSealedPeriod(uid: string, periodKey: string, entryId: string) {
+export async function closeStaleSession(entryId: string, now: number): Promise<boolean> {
   const db = getFirestore();
-  const ref = db.collection(COLLECTIONS.timesheets).doc(`${uid}_${periodKey}`);
-  const snap = await ref.get();
-  if (!snap.exists) return; // draft period — nothing sealed, nothing to say
-  const sheet = snap.data() as TimesheetDoc;
-  if (sheet.status !== 'submitted' && sheet.status !== 'approved') return;
+  const entryRef = db.collection(COLLECTIONS.timeEntries).doc(entryId);
+  const result = await db.runTransaction(async (tx) => {
+    const entry = (await tx.get(entryRef)).data() as TimeEntryDoc | undefined;
+    if (!entry || entry.end !== null || entry.start > now - CAP_MS) return null;
 
-  const entries = await db
-    .collection(COLLECTIONS.timeEntries)
-    .where('uid', '==', uid)
-    .where('dayKey', '>=', sheet.periodKey)
-    .where('dayKey', '<=', sheet.toKey)
-    .get();
-  const closed = entries.docs
-    .map((d) => d.data() as TimeEntryDoc)
-    .filter((e) => e.end !== null);
-  const totalMinutes = closed.reduce((s, e) => s + (e.durationMinutes ?? 0), 0);
-
-  await ref.update({ totalMinutes, entryCount: closed.length, updatedAt: Date.now() });
-  await reportMessage(`Auto-close touched a ${sheet.status} timesheet`, {
-    uid,
-    periodKey,
-    entryId,
-    status: sheet.status,
-    totalMinutes,
-    previousTotalMinutes: sheet.totalMinutes,
+    const userRef = db.collection(COLLECTIONS.users).doc(entry.uid);
+    const sheetRef = db.collection(COLLECTIONS.timesheets).doc(entry.uid + '_' + entry.periodKey);
+    const [user, sheetSnap] = await tx.getAll(userRef, sheetRef);
+    const sheet = sheetSnap.data() as TimesheetDoc | undefined;
+    const sealed = sheet?.status === 'submitted' || sheet?.status === 'approved';
+    const end = entry.start + CAP_MS;
+    const durationMinutes = Math.max(1, minutesBetween(entry.start, end));
+    let reconciled: { totalMinutes: number; entryCount: number } | undefined;
+    if (sealed) {
+      const entries = await tx.get(db.collection(COLLECTIONS.timeEntries)
+        .where('uid', '==', entry.uid)
+        .where('dayKey', '>=', sheet.periodKey)
+        .where('dayKey', '<=', sheet.toKey));
+      const closed = entries.docs.flatMap((doc) => {
+        if (doc.id === entryId) return [durationMinutes];
+        const row = doc.data() as TimeEntryDoc;
+        return row.end === null ? [] : [row.durationMinutes ?? 0];
+      });
+      reconciled = { totalMinutes: closed.reduce((sum, minutes) => sum + minutes, 0), entryCount: closed.length };
+    }
+    tx.update(entryRef, { end, durationMinutes, autoClosed: true, updatedAt: now });
+    if (user.data()?.activeEntryId === entryId) tx.update(userRef, { activeEntryId: null });
+    if (reconciled) tx.update(sheetRef, { ...reconciled, updatedAt: now });
+    return { entry, sheet, reconciled };
   });
+
+  if (result?.reconciled && result.sheet) {
+    const { entry, sheet, reconciled } = result;
+    await reportMessage('Auto-close touched a ' + sheet.status + ' timesheet', {
+      uid: entry.uid,
+      periodKey: entry.periodKey,
+      entryId,
+      status: sheet.status,
+      totalMinutes: reconciled.totalMinutes,
+      previousTotalMinutes: sheet.totalMinutes,
+    });
+  }
+  return result !== null;
 }
 
-/**
- * Close clock sessions left running past the cap. Caps the entry at start+cap,
- * marks it autoClosed, and clears the owner's activeEntryId pointer — so a
- * forgotten clock-in can't inflate someone's hours indefinitely. Pure core for
- * unit testing; the schedule wrapper injects `now`.
- */
+/** Close only entries that are still stale when the write commits. */
 export async function closeStaleSessions(now: number): Promise<number> {
-  const db = getFirestore();
-  // Running sessions have end == null; only those older than the cap qualify.
-  const cutoff = now - CAP_MS;
-  const snap = await db
-    .collection('timeEntries')
+  const snap = await getFirestore().collection(COLLECTIONS.timeEntries)
     .where('end', '==', null)
-    .where('start', '<=', cutoff)
+    .where('start', '<=', now - CAP_MS)
     .get();
-
   let closed = 0;
-  for (const docSnap of snap.docs) {
-    const entry = docSnap.data() as TimeEntryDoc;
-    const cappedEnd = entry.start + CAP_MS;
-    const batch = db.batch();
-    batch.update(docSnap.ref, {
-      end: cappedEnd,
-      durationMinutes: Math.max(1, minutesBetween(entry.start, cappedEnd)),
-      autoClosed: true,
-      updatedAt: now,
-    });
-    // Clear the pointer only if it still points at this entry.
-    const userRef = db.collection('users').doc(entry.uid);
-    const user = await userRef.get();
-    if (user.exists && user.data()?.activeEntryId === docSnap.id) {
-      batch.update(userRef, { activeEntryId: null });
-    }
-    await batch.commit();
-    // After the entry is closed, not before: the repair must see the new total.
-    await reconcileSealedPeriod(entry.uid, entry.periodKey, docSnap.id);
-    closed++;
+  for (const doc of snap.docs) {
+    if (await closeStaleSession(doc.id, now)) closed++;
   }
   return closed;
 }

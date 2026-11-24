@@ -9,9 +9,11 @@ import {
   formatDuration,
   periodRangeFor,
   recordedReviewFor,
+  timesheetEntriesVersion,
+  timesheetRevision,
 } from '@sabeel/shared';
 import { leaveIfShowing, type RootStackParamList } from '../nav';
-import { approveTimesheet, rejectTimesheet, reopenTimesheet, timesheetRevision, useTimesheet } from '../timesheets';
+import { approveTimesheet, rejectTimesheet, reopenTimesheet, useTimesheet } from '../timesheets';
 import { DayEntries, WeekStepper, openingDay, stepPeriod } from '../components/WeekView';
 import { Sheet } from '../components/Sheet';
 import { Button, ErrorText, Field, Notice, Screen, Spinner, StatusChip, sheetStatus } from '../components/ui';
@@ -49,7 +51,7 @@ export function TimesheetReviewScreen({
   const sheet = useTimesheet(uid, period.fromKey);
   const status = sheet === undefined ? undefined : (sheet?.status ?? 'draft');
   // Wait for the entries before showing empty days or enabling approval.
-  const { loaded, entries, conflicts, needsReview, review } = useTimesheetReview(uid, period.fromKey, period.toKey);
+  const { loaded, entries, conflicts, needsReview, review, hasRunning } = useTimesheetReview(uid, period.fromKey, period.toKey);
   const [rejecting, setRejecting] = useState<string | null>(null);
   const [reason, setReason] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -74,9 +76,9 @@ export function TimesheetReviewScreen({
   const submittedReview = recordedReviewFor(sheet?.submissionReview, sheet?.submittedAt);
   const shownReview = status === 'approved' ? recordedReviewFor(sheet?.approvalReview, sheet?.decidedAt) : review;
   const highlights = reviewHighlights(shownReview, status === 'submitted' ? submittedReview : undefined);
-  const canApprove = loaded && (!needsReview || review !== undefined) && conflicts.size === 0;
+  const canApprove = loaded && (!needsReview || review !== undefined) && conflicts.size === 0 && !hasRunning;
   const target = JSON.stringify([uid, period.fromKey, sheet ? timesheetRevision(sheet) : status]);
-  const confirmation = useReviewConfirmation(JSON.stringify([target, canApprove]), review, setError);
+  const confirmation = useReviewConfirmation(JSON.stringify([target, canApprove, timesheetEntriesVersion(entries)]), review, setError);
   const editEntry = (entryId: string) => {
     confirmation.close();
     nav.navigate('EntryEdit', { entryId });
@@ -106,7 +108,7 @@ export function TimesheetReviewScreen({
     confirmation.close();
     setSaving(true);
     try {
-      await decide(() => approveTimesheet(sheet, reviewerUid, entries, review));
+      await decide(() => approveTimesheet(sheet, entries, review));
     } finally {
       setSaving(false);
     }
@@ -152,6 +154,7 @@ export function TimesheetReviewScreen({
           {submittedReview && submittedReview.flags.length > 0 ? (
             <Text style={styles.hint}>Member confirmed the flagged hours on {new Date(submittedReview.at).toLocaleDateString()}.</Text>
           ) : null}
+          {hasRunning ? <Notice tone="info">This week still has a running timer. Wait for it to close before approving.</Notice> : null}
           {conflicts.size > 0 ? <Notice tone="error">Fix overlapping entries before approving.</Notice> : null}
           <Button
             label="Approve timesheet"

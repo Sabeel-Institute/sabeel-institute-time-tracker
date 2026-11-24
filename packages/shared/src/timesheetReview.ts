@@ -1,6 +1,7 @@
 import { MAX_ENTRY_HOURS, SESSION_CAP_HOURS } from './constants';
-import { dayKeyFor, entryMinutes, isDayKey } from './time';
-import type { TimeEntryDoc } from './types';
+import { addDays, dayKeyFor, entryMinutes, isDayKey } from './time';
+import { overlappingEntryIds } from './overlap';
+import type { TimeEntryDoc, TimesheetDoc } from './types';
 
 const MINUTE = 60_000;
 
@@ -55,7 +56,56 @@ export function recordedReviewFor(review?: RecordedReview, at?: number): Recorde
   return { ...review, flags };
 }
 
+export interface ApprovalRequest {
+  uid: string;
+  periodKey: string;
+  sheetVersion: string;
+  entriesVersion: string;
+  reviewVersion: string;
+}
+
+export const WEEK_CHANGED = "This week changed a moment ago, so that didn't go through. It now shows where it stands.";
+
+export function timesheetRevision(sheet: TimesheetDoc): string {
+  return JSON.stringify([sheet.status, sheet.createdAt, sheet.submittedAt, sheet.decidedAt, sheet.updatedAt]);
+}
+
+type ReviewPeriod = { fromKey: string; toKey: string };
+
+/** Include overlapping entries even when the locations differ by up to 26 hours. */
+export function reviewEntryRange(period: ReviewPeriod): ReviewPeriod {
+  return { fromKey: addDays(period.fromKey, -3), toKey: addDays(period.toKey, 3) };
+}
+
+/** Stable values from the entries the approver sees, including note-only edits. */
+export function timesheetEntriesVersion(entries: ReviewEntry[]): string {
+  return JSON.stringify(entries.map((entry) => JSON.stringify([
+    entry.id, entry.updatedAt, entry.start, entry.end, entry.dayKey, entry.durationMinutes,
+    entry.timeZone, entry.activityId, entry.activityName, entry.source, entry.note,
+    entry.autoClosed, entry.lastEditedBy,
+  ])).sort());
+}
+
+export function timesheetReviewVersion(review?: ReviewSnapshot): string {
+  if (!review) return '[]';
+  const { minEntryMinutes, maxEntryMinutes, maxDayMinutes } = review.limits;
+  return JSON.stringify([minEntryMinutes, maxEntryMinutes, maxDayMinutes, review.flags]);
+}
+
 type ReviewEntry = TimeEntryDoc & { id: string };
+
+export function timesheetReviewEntries(nearby: ReviewEntry[], period: ReviewPeriod, limits?: ReviewLimits) {
+  const entries = nearby.filter((entry) => entry.dayKey >= period.fromKey && entry.dayKey <= period.toKey);
+  const needsReview = entries.some((entry) => entry.end !== null);
+  const overlaps = needsReview ? overlappingEntryIds(nearby) : new Set<string>();
+  return {
+    entries,
+    needsReview,
+    conflicts: new Set(entries.filter((entry) => overlaps.has(entry.id)).map((entry) => entry.id)),
+    hasRunning: entries.some((entry) => entry.end === null),
+    review: needsReview && limits ? reviewTimesheet(limits, nearby, period) : undefined,
+  };
+}
 
 /** Find the first instant on the following local day, including DST changes. */
 function endOfLocalDay(start: number, end: number, dayKey: string, timeZone: string): number {

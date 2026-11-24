@@ -5,6 +5,7 @@ import {
   doc,
   getDocs,
   query,
+  runTransaction,
   updateDoc,
   where,
   writeBatch,
@@ -20,6 +21,7 @@ import {
   periodKeyFor,
   timeOfDayFor,
   type TimeEntryDoc,
+  type UserDoc,
 } from '@sabeel/shared';
 import { FirebaseError } from 'firebase/app';
 import { db } from './firebase';
@@ -66,17 +68,23 @@ export async function clockIn(uid: string, activity: Activity): Promise<void> {
   await batch.commit();
 }
 
-/** Clock out: close the running entry and clear the pointer, atomically. */
+/** End the timer only if both it and the latest pointer still agree. */
 export async function clockOut(uid: string, entry: TimeEntry): Promise<void> {
   const now = Date.now();
-  const batch = writeBatch(db);
-  batch.update(doc(db, COLLECTIONS.timeEntries, entry.id), {
-    end: now,
-    durationMinutes: entryMinutes(entry.start, now),
-    updatedAt: now,
+  const entryRef = doc(db, COLLECTIONS.timeEntries, entry.id);
+  const userRef = doc(db, COLLECTIONS.users, uid);
+  await runTransaction(db, async (tx) => {
+    const [currentSnap, userSnap] = await Promise.all([tx.get(entryRef), tx.get(userRef)]);
+    const current = currentSnap.data() as TimeEntryDoc | undefined;
+    const user = userSnap.data() as UserDoc | undefined;
+    // A scheduler or another device may have closed this session and started
+    // a new one while this screen was still showing the previous timer.
+    if (user?.activeEntryId !== entry.id) return;
+    if (current?.uid === uid && current.end === null) {
+      tx.update(entryRef, { end: now, durationMinutes: entryMinutes(current.start, now), updatedAt: now });
+    }
+    tx.update(userRef, { activeEntryId: null });
   });
-  batch.update(doc(db, COLLECTIONS.users, uid), { activeEntryId: null });
-  await batch.commit();
 }
 
 export async function createManualEntry(input: {
@@ -171,14 +179,17 @@ export async function updateEntry(
     start: number;
     end: number;
     note?: string;
+    timeZone?: string;
     editorUid: string;
   },
 ): Promise<void> {
-  const dayKey = dayKeyFor(changes.start, entry.timeZone);
+  const timeZone = changes.timeZone ?? entry.timeZone;
+  const dayKey = dayKeyFor(changes.start, timeZone);
   await updateDoc(doc(db, COLLECTIONS.timeEntries, entry.id), {
     ...(changes.activity
       ? { activityId: changes.activity.id, activityName: changes.activity.name }
       : {}),
+    ...(timeZone !== entry.timeZone ? { timeZone } : {}),
     start: changes.start,
     end: changes.end,
     durationMinutes: entryMinutes(changes.start, changes.end),

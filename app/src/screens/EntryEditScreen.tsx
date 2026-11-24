@@ -6,6 +6,7 @@ import {
   dayKeyFor,
   dayLabel,
   editedEntryTimes,
+  entryDisplayTimeZone,
   entryFormTimes,
   entryTimesValid,
   tzLabelFor,
@@ -14,7 +15,7 @@ import { useActivities } from '../activities';
 import { useEntry, updateEntry, deleteEntry, explainEntryWriteError } from '../entries';
 import { confirmAction } from '../confirm';
 import { EntryForm } from '../components/EntryForm';
-import { Button, ErrorText, Screen } from '../components/ui';
+import { Button, ErrorText, Notice, Screen } from '../components/ui';
 import { getTheme, spacing } from '../theme';
 
 const t = getTheme();
@@ -32,10 +33,13 @@ export function EntryEditScreen({ entryId, editorUid }: { entryId: string; edito
   const [loaded, setLoaded] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Seed the form once from the live entry (times shown in the entry's own tz).
+  const timeZone = entryDisplayTimeZone(entry?.timeZone ?? 'UTC');
+  const originalDay = entry && timeZone !== entry.timeZone ? dayKeyFor(entry.start, timeZone) : entry?.dayKey;
+
+  // Seed the form once from the live entry.
   useEffect(() => {
-    if (entry && entry.end !== null && !loaded) {
-      const seed = entryFormTimes({ ...entry, end: entry.end });
+    if (entry && originalDay && entry.end !== null && !loaded) {
+      const seed = entryFormTimes({ ...entry, dayKey: originalDay, timeZone, end: entry.end });
       setActivityId(entry.activityId);
       setDateKey(seed.dateKey);
       setFrom(seed.from);
@@ -43,18 +47,18 @@ export function EntryEditScreen({ entryId, editorUid }: { entryId: string; edito
       setNote(entry.note ?? '');
       setLoaded(true);
     }
-  }, [entry, loaded]);
+  }, [entry, loaded, originalDay, timeZone]);
 
   if (!entry) return <Screen width="read">{null}</Screen>;
 
   // Untouched times keep the entry's own instants (editedEntryTimes says why).
   const times =
-    loaded && entry.end !== null
-      ? editedEntryTimes({ ...entry, end: entry.end }, { dateKey, from, to })
+    loaded && originalDay && entry.end !== null
+      ? editedEntryTimes({ ...entry, dayKey: originalDay, timeZone, end: entry.end }, { dateKey, from, to })
       : null;
   const activity = activities?.find((a) => a.id === activityId) ?? null;
   const valid = times !== null && entryTimesValid(times);
-  const endKey = times ? dayKeyFor(times.end, entry.timeZone) : null;
+  const endKey = times ? dayKeyFor(times.end, timeZone) : null;
 
   const save = async () => {
     if (!valid || times === null) return;
@@ -64,6 +68,7 @@ export function EntryEditScreen({ entryId, editorUid }: { entryId: string; edito
         activity: activity && activity.id !== entry.activityId ? activity : undefined,
         start: times.start,
         end: times.end,
+        timeZone,
         note,
         editorUid,
       });
@@ -89,15 +94,18 @@ export function EntryEditScreen({ entryId, editorUid }: { entryId: string; edito
     }
   };
 
-  const movedTo = times !== null ? dayKeyFor(times.start, entry.timeZone) : null;
+  const movedTo = times !== null ? dayKeyFor(times.start, timeZone) : null;
   return (
     <Screen
       width="read"
       subtitle={`${entry.source === 'clock' ? 'Clocked in and out' : 'Added by hand'} · times in ${tzLabelFor(
         entry.start,
-        entry.timeZone,
+        timeZone,
       )}${entry.uid !== editorUid ? ' · you are editing as a manager' : ''}`}
     >
+      {timeZone !== entry.timeZone ? (
+        <Notice tone="info">The stored time zone is unavailable. Saving uses UTC.</Notice>
+      ) : null}
       <EntryForm
         activities={activities}
         activityId={activityId}

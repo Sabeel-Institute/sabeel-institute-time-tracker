@@ -105,6 +105,7 @@ beforeEach(async () => {
       displayName: 'Mgr',
       role: 'manager',
     });
+    await setDoc(doc(db, 'users/adm'), { ...aliceUserDoc(null), admin: true });
     await setDoc(doc(db, 'activities/act1'), {
       name: 'Tutoring',
       status: 'active',
@@ -441,6 +442,19 @@ describe('timeEntries — submitted period lock', () => {
     );
     await assertFails(deleteDoc(doc(mgr2Db, 'timeEntries/e1')));
     await assertSucceeds(deleteDoc(doc(mgrDb, 'timeEntries/e1')));
+  });
+
+  it('a demoted stamped approver loses entry edits even with a stale manager token', async () => {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await updateDoc(doc(ctx.firestore(), 'users/mgr'), { role: 'member' });
+    });
+    const renewed = testEnv.authenticatedContext('mgr', { status: 'active', role: 'member' }).firestore();
+    const stale = manager().firestore();
+    for (const db of [renewed, stale]) {
+      await assertFails(updateDoc(doc(db, 'timeEntries/e1'), { note: 'Correction', lastEditedBy: 'mgr' }));
+      await assertFails(setDoc(doc(db, 'timeEntries/new-entry'), { ...closedEntry, lastEditedBy: 'mgr' }));
+      await assertFails(deleteDoc(doc(db, 'timeEntries/e1')));
+    }
   });
 
   // Self-approval does NOT weaken the freeze: canTouchPeriod excludes the owner

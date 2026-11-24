@@ -15,21 +15,24 @@ import {
   where,
 } from 'firebase/firestore';
 import { FirebaseError } from 'firebase/app';
-import { COLLECTIONS, type ReviewSnapshot, type TimesheetDoc } from '@sabeel/shared';
-import { db } from './firebase';
+import { httpsCallable } from 'firebase/functions';
+import {
+  COLLECTIONS,
+  timesheetEntriesVersion,
+  timesheetReviewVersion,
+  timesheetRevision,
+  WEEK_CHANGED,
+  type ApprovalRequest,
+  type ReviewSnapshot,
+  type TimesheetDoc,
+} from '@sabeel/shared';
+import { db, functions } from './firebase';
 import { useLiveDoc, useLiveQuery } from './liveQuery';
 import type { TimeEntry } from './entries';
 
 export type Timesheet = TimesheetDoc & { id: string };
 
 const tsId = (uid: string, periodKey: string) => `${uid}_${periodKey}`;
-
-export function timesheetRevision(sheet: TimesheetDoc): string {
-  return JSON.stringify([sheet.status, sheet.createdAt, sheet.submittedAt, sheet.decidedAt, sheet.updatedAt]);
-}
-
-/** What a refused week action says. */
-export const WEEK_CHANGED = "This week changed a moment ago, so that didn't go through. It now shows where it stands.";
 
 /** Explain a stale or refused week action while the live screen catches up. */
 export function weekWriteError(e: unknown): unknown {
@@ -116,21 +119,18 @@ export function withdrawTimesheet(ts: Timesheet): Promise<void> {
   return changeTimesheet(ts);
 }
 
-/** Approve (stamped approver or admin). Refreshes the snapshot to what was reviewed. */
+/** The server compares this exact review to the hours it seals. */
 export async function approveTimesheet(
   ts: Timesheet,
-  deciderUid: string,
   entries: TimeEntry[],
-  approvalReview?: ReviewSnapshot,
+  review?: ReviewSnapshot,
 ): Promise<void> {
-  const now = Date.now();
-  await changeTimesheet(ts, {
-    status: 'approved',
-    decidedAt: now,
-    decidedBy: deciderUid,
-    ...(approvalReview ? { approvalReview: { ...approvalReview, at: now } } : {}),
-    ...snapshotOf(entries),
-    updatedAt: now,
+  await httpsCallable<ApprovalRequest, object>(functions, 'approveReviewedTimesheet')({
+    uid: ts.uid,
+    periodKey: ts.periodKey,
+    sheetVersion: timesheetRevision(ts),
+    entriesVersion: timesheetEntriesVersion(entries),
+    reviewVersion: timesheetReviewVersion(review),
   });
 }
 

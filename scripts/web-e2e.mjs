@@ -185,10 +185,9 @@ async function settled(page, landing) {
  * however fast the server made it. Auth is not held, so the account lookups
  * the app makes meanwhile are answered.
  */
-async function holdFirestore(page) {
+async function holdRequests(page, url) {
   let release;
   const held = new Promise((r) => (release = r));
-  const url = `http://${EMULATOR_HOSTS.firestore}/**`;
   await page.context().route(url, async (route) => {
     await held;
     await route.continue().catch(() => {});
@@ -198,6 +197,9 @@ async function holdFirestore(page) {
     await page.context().unroute(url);
   };
 }
+
+const holdFirestore = (page) => holdRequests(page, 'http://' + EMULATOR_HOSTS.firestore + '/**');
+const approvalEndpoint = 'http://' + EMULATOR_HOSTS.functions + '/' + PROJECT + '/us-central1/approveReviewedTimesheet';
 
 /**
  * Open `address` with every Firestore request slowed, and prove the screen never
@@ -821,7 +823,10 @@ async function main() {
   await logged(mgr, '2h 00m').waitFor();
   // Hold the first approval until the member has withdrawn and replaced the
   // sheet. The replacement has the same document id and submitted status.
-  const releaseApproval = await holdFirestore(mgr);
+  const approvalResponse = () => mgr.waitForResponse((res) =>
+    res.url() === approvalEndpoint && res.request().method() === 'POST');
+  const releaseApproval = await holdRequests(mgr, approvalEndpoint);
+  const replacedResponse = approvalResponse();
   await mgr.getByRole('button', { name: 'Approve timesheet', exact: true }).click();
   await onScreen(vol.getByRole('button', { name: 'Withdraw submission', exact: true })).click();
   await eventually(vol, 'the withdrawal on the server',
@@ -830,12 +835,28 @@ async function main() {
   await eventually(vol, 'the replacement submission on the server',
     () => storedSheetStatus(volUid, thisWeek.fromKey), (status) => status === 'submitted');
   await releaseApproval();
+  if ((await replacedResponse).ok()) throw new Error('the approval accepted a replacement submission');
   const weekChanged = firstOnScreen(mgr.getByText(/^This week changed a moment ago/));
   await weekChanged.waitFor({ timeout: 30000 });
   if (!(await weekChanged.evaluate((e) => e.getBoundingClientRect().bottom <= innerHeight)))
     throw new Error('the refused approval is explained out of sight');
   if (await storedSheetStatus(volUid, thisWeek.fromKey) !== 'submitted')
     throw new Error('a stale approval affected a replacement submission');
+  // This time the sheet remains submitted throughout. An edit to its hours
+  // from the second tab must still invalidate the first tab's approval.
+  const releaseEntryRace = await holdRequests(mgr, approvalEndpoint);
+  const editedResponse = approvalResponse();
+  await mgr.getByRole('button', { name: 'Approve timesheet', exact: true }).click();
+  await admin2.goto(mgr.url());
+  await entryRow(admin2, admin2.getByText('Math tutoring with the kids', { exact: true })).click();
+  await noteField(admin2, 'Note').fill('Math tutoring with the kids, corrected');
+  await admin2.getByRole('button', { name: 'Save changes', exact: true }).click();
+  await firstOnScreen(admin2.getByText('Math tutoring with the kids, corrected', { exact: true })).waitFor();
+  await releaseEntryRace();
+  if ((await editedResponse).ok()) throw new Error('the approval accepted changed hours');
+  await weekChanged.waitFor();
+  if (await storedSheetStatus(volUid, thisWeek.fromKey) !== 'submitted')
+    throw new Error('changed hours were approved');
   await mgr.getByRole('button', { name: 'Reject timesheet…', exact: true }).waitFor({ timeout: 30000 });
   await mgr.getByRole('button', { name: 'Reject timesheet…', exact: true }).click();
   // The reason is required: Reject is dead until something is typed.
@@ -1302,6 +1323,33 @@ async function main() {
   if (empty.entryCount.integerValue !== '0' || empty.totalMinutes.integerValue !== '0'
       || empty.submissionReview || empty.approvalReview) throw new Error('the empty timesheet saved review data or hours');
 
+  console.log('▸ a legacy timezone can be displayed and repaired without changing its actual times…');
+  const legacyPath = FIRESTORE_DOCS + '/timeEntries/legacy-zone';
+  const legacyStart = shared.epochFor(todayKey, '12:30', shared.deviceTimeZone());
+  const legacyEnd = legacyStart + 120000;
+  const legacyFields = Object.fromEntries(Object.entries({
+    uid: volUid, dayKey: todayKey, periodKey: thisWeek.fromKey, activityId: 'legacy-zone-activity',
+    activityName: 'Legacy setup', timeZone: 'unavailable', start: legacyStart, end: legacyEnd,
+    durationMinutes: 2, source: 'manual', note: 'Legacy zone recovery', createdAt: legacyStart, updatedAt: legacyStart,
+  }).map(([key, value]) => [key, typeof value === 'number' ? { integerValue: String(value) } : { stringValue: value }]));
+  const seededLegacy = await fetch(legacyPath, {
+    method: 'PATCH',
+    headers: { Authorization: 'Bearer owner', 'Content-Type': 'application/json' },
+    body: JSON.stringify({ fields: legacyFields }),
+  });
+  if (!seededLegacy.ok) throw new Error('could not seed the legacy timezone case');
+  await vol.goto(baseUrl + '/timesheet?initialPeriodKey=' + thisWeek.fromKey);
+  await firstOnScreen(vol.getByText('Stored time zone unavailable', { exact: false })).waitFor();
+  await entryRow(vol, vol.getByText('Legacy zone recovery', { exact: true })).click();
+  await firstOnScreen(vol.getByText('The stored time zone is unavailable. Saving uses UTC.', { exact: true })).waitFor();
+  await vol.getByRole('button', { name: 'Save changes', exact: true }).click();
+  const repaired = await eventually(vol, 'repaired legacy timezone', async () => {
+    const response = await fetch(legacyPath, { headers: { Authorization: 'Bearer owner' } });
+    return (await response.json()).fields;
+  }, (fields) => fields.timeZone.stringValue === 'UTC');
+  if (repaired.start.integerValue !== String(legacyStart) || repaired.end.integerValue !== String(legacyEnd))
+    throw new Error('repairing only the time zone changed the recorded instants');
+
   console.log('▸ People: role, admin and active each ask first, and a reload keeps the answer…');
   const VOL = 'volunteer@oursabeel.com';
   const volAccess = () => storedAccess(volUid);
@@ -1568,6 +1616,7 @@ async function main() {
     (/^(slow|stuck|outsider)$/.test(e.label) &&
       /Could not reach Cloud Firestore backend|status of 400/.test(e.text)) ||
     // The email form's refusals: Auth answers a sign-in it will not make with a 400.
+    (e.label === 'admin' && e.url === approvalEndpoint && /status of 400/.test(e.text)) ||
     (e.label === 'email' &&
       /status of 400/.test(e.text) &&
       e.url.startsWith(`http://${EMULATOR_HOSTS.auth}/`));

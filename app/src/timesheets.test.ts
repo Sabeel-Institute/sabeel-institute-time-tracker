@@ -1,13 +1,13 @@
 import { describe, expect, it, vi } from 'vitest';
 import { FirebaseError } from 'firebase/app';
 import { runTransaction, type Transaction } from 'firebase/firestore';
-import type { TimesheetDoc } from '@sabeel/shared';
+import { WEEK_CHANGED, type TimesheetDoc } from '@sabeel/shared';
 
 vi.mock('firebase/firestore', () => ({ doc: vi.fn(), runTransaction: vi.fn() }));
 vi.mock('./firebase', () => ({ db: {} }));
 vi.mock('./liveQuery', () => ({ useLiveDoc: () => undefined, useLiveQuery: () => [] }));
 
-const { approveTimesheet, rejectTimesheet, withdrawTimesheet, reopenTimesheet, WEEK_CHANGED, weekWriteError } = await import('./timesheets');
+const { rejectTimesheet, withdrawTimesheet, reopenTimesheet, weekWriteError } = await import('./timesheets');
 
 describe('weekWriteError', () => {
   it('says in words that the week changed when the rules refuse the write', () => {
@@ -37,7 +37,6 @@ describe('timesheet actions bind to the displayed revision', () => {
   }
 
   it.each([
-    ['approve', () => approveTimesheet(submitted, 'manager', [])],
     ['reject', () => rejectTimesheet(submitted, 'manager', 'Please check.')],
     ['withdraw', () => withdrawTimesheet(submitted)],
   ])('refuses to %s a replacement that still says submitted', async (_, act) => {
@@ -54,12 +53,4 @@ describe('timesheet actions bind to the displayed revision', () => {
     expect(tx.delete).not.toHaveBeenCalled();
   });
 
-  it('allows an approval of the reviewed, empty revision', async () => {
-    const tx = transactionReading(submitted);
-    await approveTimesheet(submitted, 'manager', []);
-    expect(tx.update).toHaveBeenCalledWith(undefined, expect.objectContaining({
-      status: 'approved', totalMinutes: 0, entryCount: 0,
-    }));
-    expect(tx.update.mock.calls[0][1]).not.toHaveProperty('approvalReview');
-  });
 });

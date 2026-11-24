@@ -11,6 +11,7 @@ import {
   periodLabel,
   periodRangeFor,
   recordedReviewFor,
+  timesheetRevision,
   periodsOfMonth,
   type TokenClaims,
   type UserDoc,
@@ -20,7 +21,6 @@ import { confirmAction } from '../confirm';
 import { copyPeriodEntries, useEntryPeriods, type TimeEntry } from '../entries';
 import {
   submitTimesheet,
-  timesheetRevision,
   resubmitTimesheet,
   withdrawTimesheet,
   reopenTimesheet,

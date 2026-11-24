@@ -28,6 +28,17 @@ export function timeOfDayFor(epochMs: number, timeZone: string): string {
   }).format(new Date(epochMs));
 }
 
+/** Use UTC for display when an older stored timezone is unavailable. */
+export function entryDisplayTimeZone(timeZone: string): string {
+  try {
+    new Intl.DateTimeFormat('en', { timeZone });
+    return timeZone;
+  } catch (e) {
+    if (e instanceof RangeError) return 'UTC';
+    throw e;
+  }
+}
+
 /** Short timezone label (e.g. 'PDT', 'GMT+8') for display next to times. */
 export function tzLabelFor(epochMs: number, timeZone: string): string {
   const parts = new Intl.DateTimeFormat('en-US', {

@@ -70,7 +70,17 @@ service cloud.firestore {
         ? (request.auth.uid == entryUid || isManager() || isAdmin())
         : (st == 'submitted'
             && request.auth.uid != entryUid
-            && (isAdmin() || get(tsPath(entryUid, periodKey)).data.approverUid == request.auth.uid));
+            && ((isAdmin() && hasCurrentReviewRole(true)) || (isManager()
+                && get(tsPath(entryUid, periodKey)).data.approverUid == request.auth.uid
+                && hasCurrentReviewRole(false))));
+    }
+
+    // An old sheet keeps its stamped approver even after demotion. Check the
+    // current profile too, since an issued manager token can outlive the role.
+    function hasCurrentReviewRole(adminRole) {
+      let profile = get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+      return profile.status == 'active'
+        && (adminRole ? profile.get('admin', false) == true : profile.role == 'manager');
     }
 
     // approverUid may be null (unset) or point at an active manager-or-admin.
@@ -442,7 +452,8 @@ service cloud.firestore {
           // applyUserAccess clears dangling pointers when eligibility is lost; this
           // is the braces to that belt, on the surface that actually enforces.
           (resource.data.status == 'submitted'
-            && (isAdmin() || (isManager() && resource.data.approverUid == request.auth.uid))
+            && ((isAdmin() && hasCurrentReviewRole(true)) || (isManager()
+                && resource.data.approverUid == request.auth.uid && hasCurrentReviewRole(false)))
             && request.resource.data.status in ['approved', 'rejected']
             && request.resource.data.decidedBy == request.auth.uid
             && request.resource.data.decidedAt is int
@@ -459,7 +470,7 @@ service cloud.firestore {
       // WITHDRAW (owner, before approval) and REOPEN (admin, any state).
       allow delete: if isActive()
         && ((resource.data.uid == request.auth.uid && resource.data.status != 'approved')
-            || isAdmin());
+            || (isAdmin() && hasCurrentReviewRole(true)));
     }
   }
 }

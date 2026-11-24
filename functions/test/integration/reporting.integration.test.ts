@@ -210,6 +210,20 @@ describe('buildCsv', () => {
     expect(csv).not.toContain('20:00'); // running session excluded
   });
 
+  it('does not cover entries outside the approved date range on a shortened historical sheet', async () => {
+    await getFirestore().doc('timesheets/alice_2026-07-12').update({ toKey: '2026-07-14' });
+    const filter = { uid: 'alice', fromKey: '2026-07-12', toKey: '2026-07-18' };
+    expect((await computeTotals(filter)).totalMinutes).toBe(120);
+    expect(await buildCsv(filter)).not.toContain('2026-07-15');
+  });
+
+  it('exports legacy entries with invalid zones using explicitly labeled UTC times', async () => {
+    const entries = await getFirestore().collection('timeEntries').where('activityName', '==', 'Tutoring').get();
+    await Promise.all(entries.docs.map((doc) => doc.ref.update({ timeZone: 'unknown' })));
+    const csv = await buildCsv({ uid: 'alice', fromKey: '2026-07-12', toKey: '2026-07-18' });
+    expect(csv).toContain('14:00,16:00,UTC (stored time zone unavailable)');
+  });
+
   it('excludes unapproved weeks by default; includes them when asked', async () => {
     const official = await buildCsv({ fromKey: '2026-07-01', toKey: '2026-07-31' });
     expect(official).not.toContain('2026-07-20');

@@ -4,6 +4,7 @@ import {
   dayKeyFor,
   dayLabel,
   deviceTimeZone,
+  entryDisplayTimeZone,
   formatDuration,
   monthLabel,
   parseDayKey,
@@ -175,14 +176,15 @@ function EntryRow({
   conflict?: boolean;
   review?: string[];
 }) {
-  const foreign = entry.timeZone !== deviceTimeZone();
+  const zone = entryDisplayTimeZone(entry.timeZone);
+  const foreign = zone !== deviceTimeZone();
   const times =
     entry.end === null
-      ? `${timeOfDayFor(entry.start, entry.timeZone)} – still clocked in`
-      : `${timeOfDayFor(entry.start, entry.timeZone)} – ${timeOfDayFor(entry.end, entry.timeZone)}`;
+      ? `${timeOfDayFor(entry.start, zone)} – still clocked in`
+      : `${timeOfDayFor(entry.start, zone)} – ${timeOfDayFor(entry.end, zone)}`;
   const conflictMessage = conflict ? 'Overlaps another entry' : undefined;
   const flags = [
-    foreign ? tzLabelFor(entry.start, entry.timeZone) : null,
+    zone !== entry.timeZone ? 'Stored time zone unavailable · shown in UTC' : foreign ? tzLabelFor(entry.start, zone) : null,
     entry.source === 'manual' ? 'added by hand' : null,
     entry.autoClosed ? 'closed automatically' : null,
     entry.lastEditedBy ? 'corrected' : null,

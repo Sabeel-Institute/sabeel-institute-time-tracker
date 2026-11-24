@@ -222,6 +222,18 @@ describe('timesheets — decide', () => {
     );
   });
 
+  it('a revoked reviewer cannot decide or reopen through a stale token', async () => {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      const db = ctx.firestore();
+      await updateDoc(doc(db, 'users/mgr'), { role: 'member' });
+      await updateDoc(doc(db, 'users/adm'), { admin: false });
+    });
+    await assertFails(updateDoc(doc(mgr().firestore(), 'timesheets/' + TS_ID), approvePatch));
+    const staleAdmin = doc(adm().firestore(), 'timesheets/' + TS_ID);
+    await assertFails(updateDoc(staleAdmin, { ...approvePatch, decidedBy: 'adm' }));
+    await assertFails(deleteDoc(staleAdmin));
+  });
+
   it('non-stamped manager cannot decide; admin can', async () => {
     await assertFails(
       updateDoc(doc(mgr2().firestore(), `timesheets/${TS_ID}`), {

@@ -1,5 +1,6 @@
 import {
   dayLabel,
+  entryDisplayTimeZone,
   entryMinutes,
   formatDuration,
   reviewFlagChange,
@@ -80,7 +81,9 @@ export function TimesheetReviewPrompt({
           {entries.map((entry) => {
             const messages = highlights.entries.get(entry.id);
             if (!messages || entry.end === null) return null;
-            const times = `${dayLabel(entry.dayKey)} · ${timeOfDayFor(entry.start, entry.timeZone)}–${timeOfDayFor(entry.end, entry.timeZone)}`;
+            const zone = entryDisplayTimeZone(entry.timeZone);
+            const suffix = zone === entry.timeZone ? '' : ' UTC';
+            const times = `${dayLabel(entry.dayKey)} · ${timeOfDayFor(entry.start, zone)}–${timeOfDayFor(entry.end, zone)}${suffix}`;
             return (
               <Row
                 key={entry.id}

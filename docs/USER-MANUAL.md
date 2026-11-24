@@ -362,7 +362,8 @@ Tap a submission to review it:
   what the person actually did, whoever typed it in.
 - Then either:
   - **Approve timesheet**. If there are flags, check the highlighted hours and
-    tap **Confirm approval**. The week becomes official and locks, or
+    tap **Confirm approval**. A running timer has to close first. The approved
+    week becomes official and locks, or
   - **Reject timesheet…** — it asks what they need to fix, then returns the
     week to them with your reason word for word. A reason is required; "fix it"
     helps nobody.

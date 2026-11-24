@@ -1,11 +1,11 @@
 import { useLayoutEffect, useMemo, useState } from 'react';
 import { doc, runTransaction } from 'firebase/firestore';
 import {
-  addDays,
   APP_CONFIG_COLLECTION,
   DEFAULT_REVIEW_LIMITS,
-  overlappingEntryIds,
-  reviewTimesheet,
+  reviewEntryRange,
+  timesheetReviewEntries,
+  timesheetReviewVersion,
   TIMESHEET_REVIEW_CONFIG_DOC,
   validReviewLimits,
   type ReviewLimits,
@@ -38,23 +38,13 @@ export function saveReviewLimits(changes: Partial<ReviewLimits>): Promise<void> 
 }
 
 export function useTimesheetReview(uid: string, fromKey: string, toKey: string) {
-  // Account for entries in other periods that overlap or contribute to an
-  // overnight total. Zone offsets can differ by up to 26 hours, and an
-  // entry may span 24 hours, so include three start dates on either side.
-  const nearby = useEntriesRange(uid, addDays(fromKey, -3), addDays(toKey, 3), true);
+  const range = reviewEntryRange({ fromKey, toKey });
+  const nearby = useEntriesRange(uid, range.fromKey, range.toKey, true);
   const limits = useReviewLimits();
-  return useMemo(() => {
-    const entries = (nearby ?? []).filter((e) => e.dayKey >= fromKey && e.dayKey <= toKey);
-    const needsReview = entries.some((entry) => entry.end !== null);
-    const overlaps = needsReview ? overlappingEntryIds(nearby ?? []) : new Set<string>();
-    return {
-      loaded: nearby !== undefined,
-      needsReview,
-      entries,
-      conflicts: new Set(entries.filter((e) => overlaps.has(e.id)).map((e) => e.id)),
-      review: needsReview && nearby && limits ? reviewTimesheet(limits, nearby, { fromKey, toKey }) : undefined,
-    };
-  }, [nearby, fromKey, toKey, limits]);
+  return useMemo(() => ({
+    loaded: nearby !== undefined,
+    ...timesheetReviewEntries(nearby ?? [], { fromKey, toKey }, limits),
+  }), [nearby, fromKey, toKey, limits]);
 }
 
 /** The confirmation is for the version on screen when it opened. */
@@ -64,7 +54,7 @@ export function useReviewConfirmation(
   onInvalidated: (message: string) => void,
 ) {
   const [openedFor, setOpenedFor] = useState<string | null>(null);
-  const version = JSON.stringify([target, review]);
+  const version = JSON.stringify([target, timesheetReviewVersion(review)]);
   const stale = openedFor !== null && openedFor !== version;
   useLayoutEffect(() => {
     if (stale) {
