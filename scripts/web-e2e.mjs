@@ -202,6 +202,7 @@ const holdFirestore = (page) => holdRequests(page, 'http://' + EMULATOR_HOSTS.fi
 const approvalEndpoint = 'http://' + EMULATOR_HOSTS.functions + '/' + PROJECT + '/us-central1/approveReviewedTimesheet';
 const submissionEndpoint = 'http://' + EMULATOR_HOSTS.functions + '/' + PROJECT + '/us-central1/submitReviewedTimesheet';
 const copyEndpoint = 'http://' + EMULATOR_HOSTS.functions + '/' + PROJECT + '/us-central1/copyPreviousTimesheetWeek';
+const isCallablePost = (url) => (request) => request.url() === url && request.method() === 'POST';
 
 /**
  * Open `address` with every Firestore request slowed, and prove the screen never
@@ -838,14 +839,18 @@ async function main() {
   await firstOnScreen(vol.getByText('Admin', { exact: true })).waitFor();
   // Hold a submission while another session edits an entry in the draft.
   const releaseSubmit = await holdRequests(vol, submissionEndpoint, vol);
-  const staleSubmit = vol.waitForResponse((response) =>
-    response.url() === submissionEndpoint && response.request().method() === 'POST');
+  const isSubmit = isCallablePost(submissionEndpoint);
+  const submitStarted = vol.waitForRequest(isSubmit);
+  const staleSubmit = vol.waitForResponse((response) => isSubmit(response.request()));
   await submit.click();
+  await submitStarted;
   await admin2.goto(baseUrl + '/approvals/review?uid=' + volUid + '&displayName=Volunteer&periodKey=' + thisWeek.fromKey);
   await entryRow(admin2, admin2.getByText('Math tutoring with the kids', { exact: true })).click();
   await noteField(admin2, 'Note').fill('Math tutoring before submitting');
   await admin2.getByRole('button', { name: 'Save changes', exact: true }).click();
-  await firstOnScreen(admin2.getByText('Math tutoring before submitting', { exact: true })).waitFor();
+  await eventually(admin2, 'the draft note edit on the server',
+    () => storedEntries(volUid, thisWeek.fromKey, thisWeek.toKey),
+    (entries) => entries.some((entry) => entry.note === 'Math tutoring before submitting'));
   await releaseSubmit();
   if ((await staleSubmit).ok()) throw new Error('submission accepted hours changed in another session');
   await firstOnScreen(vol.getByText(/^This week changed a moment ago/)).waitFor();
@@ -873,11 +878,13 @@ async function main() {
   await logged(mgr, '2h 00m').waitFor();
   // Hold the first approval until the member has withdrawn and replaced the
   // sheet. The replacement has the same document id and submitted status.
-  const approvalResponse = () => mgr.waitForResponse((res) =>
-    res.url() === approvalEndpoint && res.request().method() === 'POST');
-  const releaseApproval = await holdRequests(mgr, approvalEndpoint);
+  const isApproval = isCallablePost(approvalEndpoint);
+  const approvalResponse = () => mgr.waitForResponse((response) => isApproval(response.request()));
+  const releaseApproval = await holdRequests(mgr, approvalEndpoint, mgr);
+  const firstApprovalStarted = mgr.waitForRequest(isApproval);
   const replacedResponse = approvalResponse();
   await mgr.getByRole('button', { name: 'Approve timesheet', exact: true }).click();
+  await firstApprovalStarted;
   await onScreen(vol.getByRole('button', { name: 'Withdraw submission', exact: true })).click();
   await eventually(vol, 'the withdrawal on the server',
     () => storedSheetStatus(volUid, thisWeek.fromKey), (status) => status === null);
@@ -894,14 +901,18 @@ async function main() {
     throw new Error('a stale approval affected a replacement submission');
   // This time the sheet remains submitted throughout. An edit to its hours
   // from the second tab must still invalidate the first tab's approval.
-  const releaseEntryRace = await holdRequests(mgr, approvalEndpoint);
+  const releaseEntryRace = await holdRequests(mgr, approvalEndpoint, mgr);
+  const editedApprovalStarted = mgr.waitForRequest(isApproval);
   const editedResponse = approvalResponse();
   await mgr.getByRole('button', { name: 'Approve timesheet', exact: true }).click();
+  await editedApprovalStarted;
   await admin2.goto(mgr.url());
   await entryRow(admin2, admin2.getByText('Math tutoring before submitting', { exact: true })).click();
   await noteField(admin2, 'Note').fill('Math tutoring with the kids, corrected');
   await admin2.getByRole('button', { name: 'Save changes', exact: true }).click();
-  await firstOnScreen(admin2.getByText('Math tutoring with the kids, corrected', { exact: true })).waitFor();
+  await eventually(admin2, 'the submitted note edit on the server',
+    () => storedEntries(volUid, thisWeek.fromKey, thisWeek.toKey),
+    (entries) => entries.some((entry) => entry.note === 'Math tutoring with the kids, corrected'));
   await releaseEntryRace();
   if ((await editedResponse).ok()) throw new Error('the approval accepted changed hours');
   await weekChanged.waitFor();
