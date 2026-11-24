@@ -56,12 +56,21 @@ export function recordedReviewFor(review?: RecordedReview, at?: number): Recorde
   return { ...review, flags };
 }
 
-export interface ApprovalRequest {
-  uid: string;
+interface ReviewedTimesheet {
   periodKey: string;
-  sheetVersion: string;
   entriesVersion: string;
   reviewVersion: string;
+}
+
+export interface ApprovalRequest extends ReviewedTimesheet {
+  uid: string;
+  sheetVersion: string;
+}
+
+export interface SubmissionRequest extends ReviewedTimesheet {
+  approverUid: string;
+  /** null represents a draft with no timesheet document. */
+  sheetVersion: string | null;
 }
 
 export const WEEK_CHANGED = "This week changed a moment ago, so that didn't go through. It now shows where it stands.";

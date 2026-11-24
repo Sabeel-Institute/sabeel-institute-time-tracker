@@ -3,7 +3,7 @@ import { initializeApp, getApps } from 'firebase-admin/app';
 import { getAuth } from 'firebase-admin/auth';
 import { getFirestore } from 'firebase-admin/firestore';
 import { HttpsError } from 'firebase-functions/v2/https';
-import { applyUserAccess } from '../../src/users';
+import { applyUserAccess, clearIneligibleApproverPointers } from '../../src/users';
 import { EMULATOR_PROJECT_ID } from '@sabeel/shared';
 
 // Runs under `firebase emulators:exec` — FIRESTORE_EMULATOR_HOST and
@@ -148,6 +148,40 @@ describe('applyUserAccess — approver pointer cleanup', () => {
 
     expect(await approverOf(mgr)).toBeNull();
     expect(await approverOf(alice)).toBeNull();
+  });
+
+  it('a retry cleans up a pointer left after the role was already removed', async () => {
+    const admin = freshUid('admin');
+    const former = freshUid('former');
+    const alice = freshUid('alice');
+    await seedUser(admin, { status: 'active', admin: true });
+    await seedUser(former, { status: 'active', role: 'member' });
+    await seedUser(alice, { status: 'active', approverUid: former });
+    await applyUserAccess(admin, { uid: former, role: 'member' });
+    expect(await approverOf(alice)).toBeNull();
+  });
+
+  it('preserves a new assignment racing with cleanup', async () => {
+    const former = freshUid('former');
+    const replacement = freshUid('reviewer');
+    const alice = freshUid('alice');
+    await seedUser(former, { status: 'disabled', role: 'manager' });
+    await seedUser(replacement, { status: 'active', role: 'manager' });
+    await seedUser(alice, { status: 'active', approverUid: former });
+    await Promise.all([
+      clearIneligibleApproverPointers(former),
+      getFirestore().doc('users/' + alice).update({ approverUid: replacement }),
+    ]);
+    expect(await approverOf(alice)).toBe(replacement);
+  });
+
+  it('does not clear assignments if the approver is already eligible again', async () => {
+    const reviewer = freshUid('restored');
+    const alice = freshUid('alice');
+    await seedUser(reviewer, { status: 'active', role: 'manager' });
+    await seedUser(alice, { status: 'active', approverUid: reviewer });
+    expect(await clearIneligibleApproverPointers(reviewer)).toBe(0);
+    expect(await approverOf(alice)).toBe(reviewer);
   });
 
   it('disabling an approver clears pointers even though the role is untouched', async () => {

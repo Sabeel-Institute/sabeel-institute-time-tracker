@@ -12,7 +12,7 @@ import {
   type TimesheetDoc,
   type TimeEntryDoc,
 } from '@sabeel/shared';
-import { approveReviewed } from '../../src/timesheetApproval';
+import { approveReviewed } from '../../src/timesheetActions';
 
 const period = periodRangeFor('2026-07-13');
 const sheet: TimesheetDoc = {

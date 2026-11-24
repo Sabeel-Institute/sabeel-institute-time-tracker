@@ -97,6 +97,13 @@ describe('timesheets — submit', () => {
     await assertSucceeds(setDoc(doc(alice().firestore(), `timesheets/${TS_ID}`), submitDoc));
   });
 
+  it('cannot use an old client to stamp a demoted reviewer whose pointer remains', async () => {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await updateDoc(doc(ctx.firestore(), 'users/mgr'), { role: 'member' });
+    });
+    await assertFails(setDoc(doc(alice().firestore(), 'timesheets/' + TS_ID), submitDoc));
+  });
+
   it('zero-hour submission is allowed', async () => {
     await assertSucceeds(
       setDoc(doc(alice().firestore(), `timesheets/${TS_ID}`), {

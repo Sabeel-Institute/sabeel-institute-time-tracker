@@ -385,9 +385,9 @@ service cloud.firestore {
       // themselves; admins may stamp themselves without having chosen it (top of
       // the chain). See PRODUCTION-REVIEW M5.
       function stampOk(d) {
-        return d.approverUid ==
-            get(/databases/$(database)/documents/users/$(request.auth.uid)).data.approverUid
-          || (isAdmin() && d.approverUid == request.auth.uid);
+        return approverOk(d.approverUid)
+          && (d.approverUid == get(/databases/$(database)/documents/users/$(request.auth.uid)).data.approverUid
+              || (isAdmin() && d.approverUid == request.auth.uid));
       }
       // No future periods. Rules can't format request.time into a local dayKey,
       // so allow UTC+14 slack; the client enforces the device-local boundary.

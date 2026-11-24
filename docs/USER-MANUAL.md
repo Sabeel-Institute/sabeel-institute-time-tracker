@@ -212,7 +212,8 @@ above, then submit."* and Submit stays unavailable.
 1. Open the week on **Timesheet** and give it a once-over.
 2. Tap **Submit timesheet**. If any hours are flagged, the app shows them
    together with the reason for each flag. Tap an entry to edit it, or tap
-   **I’ve checked these entries — submit** if the hours are correct.
+   **I’ve checked these entries — submit** if the hours are correct. If the
+   hours change while you submit, check the updated week and try again.
 3. The status turns **Submitted** and the week locks while your approver has it.
    **Withdraw submission** unlocks it until approval.
 

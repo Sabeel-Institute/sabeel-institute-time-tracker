@@ -10,7 +10,7 @@ export { setUserAccess } from './users';
 export { acceptRules } from './acceptRules';
 export { reportProblem } from './reportProblem';
 export { exportCsv, reportTotals } from './reporting';
-export { approveReviewedTimesheet } from './timesheetApproval';
+export { approveReviewedTimesheet, submitReviewedTimesheet } from './timesheetActions';
 export { copyPreviousTimesheetWeek } from './timesheetCopy';
 export { autoCloseStaleSessions } from './sessions';
 export { healthCheck } from './health';

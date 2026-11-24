@@ -1,15 +1,12 @@
 // Timesheet lifecycle writes + live hooks. Firestore rules authorize the
-// transitions (see /timesheets there): submit = create,
-// decide = update by the stamped approver/admin, resubmit = update after
-// rejection, withdraw/reopen = delete. totalMinutes/entryCount are informational
-// snapshots — the live truth is always the period's entries.
+// legacy transitions. Current clients submit and approve through callables to
+// check the reviewed rows at commit time. Reject, withdraw, and reopen check
+// the displayed timesheet revision before writing.
 import {
   collection,
-  deleteField,
   doc,
   query,
   runTransaction,
-  setDoc,
   type DocumentData,
   type UpdateData,
   where,
@@ -24,6 +21,7 @@ import {
   WEEK_CHANGED,
   type ApprovalRequest,
   type ReviewSnapshot,
+  type SubmissionRequest,
   type TimesheetDoc,
 } from '@sabeel/shared';
 import { db, functions } from './firebase';
@@ -60,57 +58,20 @@ function changeTimesheet(ts: Timesheet, changes?: UpdateData<DocumentData>): Pro
   }));
 }
 
-/** Snapshot totals over a period's entries (closed only — a running one has no duration). */
-function snapshotOf(entries: TimeEntry[]): { totalMinutes: number; entryCount: number } {
-  const closed = entries.filter((e) => e.end !== null);
-  return {
-    totalMinutes: closed.reduce((s, e) => s + (e.durationMinutes ?? 0), 0),
-    entryCount: closed.length,
-  };
-}
-
-/** Submit the period (draft → submitted). Zero-hour submissions are fine. */
+/** Submit a reviewed draft or resubmit a rejected revision. Empty weeks are valid. */
 export async function submitTimesheet(
-  uid: string,
-  period: { fromKey: string; toKey: string },
+  periodKey: string,
   approverUid: string,
   entries: TimeEntry[],
-  submissionReview?: ReviewSnapshot,
+  review?: ReviewSnapshot,
+  rejected?: Timesheet,
 ): Promise<void> {
-  const now = Date.now();
-  const sheet: TimesheetDoc = {
-    uid,
-    periodKey: period.fromKey,
-    toKey: period.toKey,
-    status: 'submitted',
+  await httpsCallable<SubmissionRequest, object>(functions, 'submitReviewedTimesheet')({
+    periodKey,
     approverUid,
-    submittedAt: now,
-    ...(submissionReview ? { submissionReview: { ...submissionReview, at: now } } : {}),
-    ...snapshotOf(entries),
-    createdAt: now,
-    updatedAt: now,
-  };
-  await weekWrite(setDoc(doc(db, COLLECTIONS.timesheets, tsId(uid, period.fromKey)), sheet));
-}
-
-/** Resubmit after rejection — re-stamps the approver, clears the decision. */
-export async function resubmitTimesheet(
-  ts: Timesheet,
-  approverUid: string,
-  entries: TimeEntry[],
-  submissionReview?: ReviewSnapshot,
-): Promise<void> {
-  const now = Date.now();
-  await changeTimesheet(ts, {
-    status: 'submitted',
-    approverUid,
-    submittedAt: now,
-    submissionReview: submissionReview ? { ...submissionReview, at: now } : deleteField(),
-    ...snapshotOf(entries),
-    updatedAt: now,
-    decidedAt: deleteField(),
-    decidedBy: deleteField(),
-    rejectReason: deleteField(),
+    sheetVersion: rejected ? timesheetRevision(rejected) : null,
+    entriesVersion: timesheetEntriesVersion(entries),
+    reviewVersion: timesheetReviewVersion(review),
   });
 }
 

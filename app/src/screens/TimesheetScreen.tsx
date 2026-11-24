@@ -11,6 +11,7 @@ import {
   periodLabel,
   periodRangeFor,
   recordedReviewFor,
+  timesheetEntriesVersion,
   timesheetRevision,
   periodsOfMonth,
   type TokenClaims,
@@ -21,7 +22,6 @@ import { confirmAction } from '../confirm';
 import { copyPeriodEntries, useEntryPeriods, type TimeEntry } from '../entries';
 import {
   submitTimesheet,
-  resubmitTimesheet,
   withdrawTimesheet,
   reopenTimesheet,
   useMyTimesheetsRange,
@@ -125,7 +125,7 @@ export function TimesheetScreen({
   const highlights = reviewHighlights(editable ? review : status === 'approved' ? recordedReviewFor(sheet?.approvalReview, sheet?.decidedAt) : submittedReview);
   const blocked = !loaded || (needsReview && !review) || !approverUid || hasRunningInPeriod || conflicts.size > 0;
   const confirmation = useReviewConfirmation(
-    JSON.stringify([uid, period.fromKey, sheet ? timesheetRevision(sheet) : status, blocked, approverUid]), review, setError,
+    JSON.stringify([uid, period.fromKey, sheet ? timesheetRevision(sheet) : status, blocked, approverUid, timesheetEntriesVersion(entries)]), review, setError,
   );
   const editEntry = (entryId: string) => {
     confirmation.close();
@@ -147,8 +147,7 @@ export function TimesheetScreen({
     setError(null);
     setSaving(true);
     try {
-      if (sheet?.status === 'rejected') await resubmitTimesheet(sheet, approverUid, entries, review);
-      else await submitTimesheet(uid, period, approverUid, entries, review);
+      await submitTimesheet(period.fromKey, approverUid, entries, review, sheet?.status === 'rejected' ? sheet : undefined);
     } catch (e) {
       setError((e as Error).message);
     } finally {

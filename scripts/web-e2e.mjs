@@ -200,6 +200,7 @@ async function holdRequests(page, url, scope = page.context()) {
 
 const holdFirestore = (page) => holdRequests(page, 'http://' + EMULATOR_HOSTS.firestore + '/**');
 const approvalEndpoint = 'http://' + EMULATOR_HOSTS.functions + '/' + PROJECT + '/us-central1/approveReviewedTimesheet';
+const submissionEndpoint = 'http://' + EMULATOR_HOSTS.functions + '/' + PROJECT + '/us-central1/submitReviewedTimesheet';
 const copyEndpoint = 'http://' + EMULATOR_HOSTS.functions + '/' + PROJECT + '/us-central1/copyPreviousTimesheetWeek';
 
 /**
@@ -823,6 +824,22 @@ async function main() {
   // The field echoes the selection once the profile listener catches up — wait
   // for it so Submit isn't clicked while still disabled.
   await firstOnScreen(vol.getByText('Admin', { exact: true })).waitFor();
+  // Hold a submission while another session edits an entry in the draft.
+  const releaseSubmit = await holdRequests(vol, submissionEndpoint, vol);
+  const staleSubmit = vol.waitForResponse((response) =>
+    response.url() === submissionEndpoint && response.request().method() === 'POST');
+  await submit.click();
+  await admin2.goto(baseUrl + '/approvals/review?uid=' + volUid + '&displayName=Volunteer&periodKey=' + thisWeek.fromKey);
+  await entryRow(admin2, admin2.getByText('Math tutoring with the kids', { exact: true })).click();
+  await noteField(admin2, 'Note').fill('Math tutoring before submitting');
+  await admin2.getByRole('button', { name: 'Save changes', exact: true }).click();
+  await firstOnScreen(admin2.getByText('Math tutoring before submitting', { exact: true })).waitFor();
+  await releaseSubmit();
+  if ((await staleSubmit).ok()) throw new Error('submission accepted hours changed in another session');
+  await firstOnScreen(vol.getByText(/^This week changed a moment ago/)).waitFor();
+  if (await storedSheetStatus(volUid, thisWeek.fromKey) !== null)
+    throw new Error('a stale submission locked the draft');
+  await firstOnScreen(vol.getByText('Math tutoring before submitting', { exact: true })).waitFor();
   await submit.click();
   await firstOnScreen(vol.getByText('Submitted', { exact: true })).waitFor();
   await vol.screenshot({ path: join(shots, '11-submitted.png'), animations: 'disabled', timeout: 8000 }).catch(() => {});
@@ -869,7 +886,7 @@ async function main() {
   const editedResponse = approvalResponse();
   await mgr.getByRole('button', { name: 'Approve timesheet', exact: true }).click();
   await admin2.goto(mgr.url());
-  await entryRow(admin2, admin2.getByText('Math tutoring with the kids', { exact: true })).click();
+  await entryRow(admin2, admin2.getByText('Math tutoring before submitting', { exact: true })).click();
   await noteField(admin2, 'Note').fill('Math tutoring with the kids, corrected');
   await admin2.getByRole('button', { name: 'Save changes', exact: true }).click();
   await firstOnScreen(admin2.getByText('Math tutoring with the kids, corrected', { exact: true })).waitFor();
@@ -1648,6 +1665,7 @@ async function main() {
       /Could not reach Cloud Firestore backend|status of 400/.test(e.text)) ||
     // The email form's refusals: Auth answers a sign-in it will not make with a 400.
     (e.label === 'admin' && [approvalEndpoint, copyEndpoint].includes(e.url) && /status of 400/.test(e.text)) ||
+    (e.label === 'volunteer' && e.url === submissionEndpoint && /status of 400/.test(e.text)) ||
     (e.label === 'email' &&
       /status of 400/.test(e.text) &&
       e.url.startsWith(`http://${EMULATOR_HOSTS.auth}/`));
