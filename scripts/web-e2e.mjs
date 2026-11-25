@@ -664,10 +664,23 @@ async function main() {
   await tab(vol, 'today');
   await vol.getByText('CLOCKED IN').waitFor();
 
+  // Clock out with no connection: Today moves on at once, and the clock-out
+  // lands when the device is back, as the session's finished entry.
+  offlineLabels.add('volunteer');
+  await vol.context().setOffline(true);
   await doubleTap(vol.getByRole('button', { name: 'Clock out', exact: true }));
   await vol.getByText('What are you working on?').waitFor();
   await vol.waitForTimeout(1500);
   if ((await vol.getByText('CLOCKED IN').count()) !== 0) throw new Error('a double tap on Clock out clocked in again');
+  await vol.context().setOffline(false);
+  const asOwner = { headers: { Authorization: 'Bearer owner' } };
+  await eventually(vol, 'the offline clock-out on the server', async () => {
+    const session = await fetch(`${FIRESTORE_DOCS}/timeEntries/running_${volUid}`, asOwner);
+    const all = await (await fetch(`${FIRESTORE_DOCS}/timeEntries?pageSize=300`, asOwner)).json();
+    const finished = (all.documents ?? []).filter((d) => d.name.split('/').pop().startsWith(`clock_${volUid}_`));
+    return { session: session.status, finished: finished.length };
+  }, (state) => state.session === 404 && state.finished === 1, 45000);
+  offlineLabels.delete('volunteer');
   // The 1-minute floor on clock sessions must show up in today's total.
   await soFarRow(vol, 'Today', '1m').waitFor();
 

@@ -74,6 +74,7 @@ import { getFirestore } from 'firebase-admin/firestore';
 import {
   addDays,
   COLLECTIONS,
+  runningEntryId,
   dayKeyFor,
   deviceTimeZone,
   epochFor,
@@ -448,7 +449,7 @@ for (const [id, doc] of entryDocs) {
 
 /** The admin is CLOCKED IN right now — the running card is its own Home layout. */
 const runningStart = Date.now() - 95 * 60 * 1000;
-await db.doc(`${COLLECTIONS.timeEntries}/sw_e_running`).set({
+await db.doc(`${COLLECTIONS.timeEntries}/${runningEntryId(adminUid)}`).set({
   uid: adminUid,
   activityId: TUTORING[0],
   activityName: TUTORING[1],
@@ -461,7 +462,6 @@ await db.doc(`${COLLECTIONS.timeEntries}/sw_e_running`).set({
   createdAt: runningStart,
   updatedAt: runningStart,
 });
-await db.doc(`${COLLECTIONS.users}/${adminUid}`).update({ activeEntryId: 'sw_e_running' });
 
 const minutesIn = (period, uid) =>
   entryDocs

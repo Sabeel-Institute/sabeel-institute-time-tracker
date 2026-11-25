@@ -172,3 +172,22 @@ export const MAX_ENTRY_HOURS = 24;
  */
 export const PUSH_CHANNEL_ID = 'sabeel-alerts';
 export const PUSH_CHANNEL_NAME = 'Timesheet alerts and reminders';
+
+/**
+ * The id of a person's clock session in progress, in timeEntries. Fixed, so a
+ * person has at most one (a second clock-in finds it taken) and nothing points
+ * at a session that is gone; only a session in progress has it (rules). The
+ * finished entry gets a new id at clock-out.
+ */
+export function runningEntryId(uid: string): string {
+  return 'running_' + uid;
+}
+
+/**
+ * The id of the finished entry a clock session becomes: fixed by the session,
+ * so clocking out the same session twice (a retry, a queued offline write)
+ * names one entry, and the rules can tie deleting the session to creating it.
+ */
+export function finishedClockEntryId(uid: string, start: number): string {
+  return 'clock_' + uid + '_' + start;
+}

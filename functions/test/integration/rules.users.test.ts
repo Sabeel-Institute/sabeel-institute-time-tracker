@@ -94,7 +94,8 @@ describe('firestore.rules — users privilege escalation', () => {
     await assertFails(updateDoc(me, { status: 'active', role: 'manager' }));
     // But the allowed self-service fields work:
     await assertSucceeds(updateDoc(me, { displayName: 'Alice A.' }));
-    await assertSucceeds(updateDoc(me, { activeEntryId: 'entry1' }));
+    // The clock session is its own document now; a profile pointer to one is refused.
+    await assertFails(updateDoc(me, { activeEntryId: 'entry1' }));
   });
 
   it('pending users (no active claim) cannot even self-update cosmetics', async () => {

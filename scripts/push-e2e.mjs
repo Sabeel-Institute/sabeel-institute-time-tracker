@@ -95,7 +95,7 @@ async function main() {
   const db = getFirestore();
   const profile = (email, displayName, status) => ({
     displayName, email, photoURL: null, status, role: 'member', admin: false,
-    activeEntryId: null, approverUid: null, createdAt: Date.now(),
+    approverUid: null, createdAt: Date.now(),
   });
   const PENDING = { uid: 'push_pending', email: 'pending-push@oursabeel.com', name: 'Pending Colleague' };
   const MEMBER = { uid: 'push_member', email: 'member-push@oursabeel.com', name: 'Week To Decide' };

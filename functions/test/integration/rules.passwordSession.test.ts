@@ -49,7 +49,6 @@ beforeEach(async () => {
       status: 'active',
       role: 'member',
       admin: false,
-      activeEntryId: null,
       approverUid: null,
       createdAt: 1,
       ...extra,

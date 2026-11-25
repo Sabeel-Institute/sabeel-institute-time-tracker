@@ -1,7 +1,8 @@
-// Timesheet lifecycle rules: submit (owner create) → approve/reject (stamped
-// approver or admin) → resubmit (owner, after rejection); withdraw = owner
-// delete pre-approval; admin delete = reopen. See firestore.rules /timesheets.
-import { describe, expect, it, beforeAll, afterAll, beforeEach } from 'vitest';
+// Timesheet rules: submission and approval are the callables' alone
+// (timesheetSubmission/timesheetApproval integration tests); clients reject
+// (stamped approver or admin), withdraw (owner, before approval) and reopen
+// (admin). See firestore.rules /timesheets.
+import { describe, it, beforeAll, afterAll, beforeEach } from 'vitest';
 import { readFileSync } from 'node:fs';
 import {
   initializeTestEnvironment,
@@ -9,7 +10,7 @@ import {
   assertSucceeds,
   type RulesTestEnvironment,
 } from '@firebase/rules-unit-testing';
-import { doc, getDoc, setDoc, updateDoc, deleteDoc, deleteField, writeBatch } from 'firebase/firestore';
+import { doc, getDoc, setDoc, updateDoc, deleteDoc, deleteField } from 'firebase/firestore';
 import { EMULATOR_PROJECT_ID } from '@sabeel/shared';
 
 let testEnv: RulesTestEnvironment;
@@ -38,7 +39,6 @@ const userDoc = (over: Record<string, unknown>) => ({
   status: 'active',
   role: 'member',
   admin: false,
-  activeEntryId: null,
   approverUid: null,
   createdAt: 1,
   ...over,
@@ -92,368 +92,85 @@ const seed = (over: Record<string, unknown>) =>
     await setDoc(doc(ctx.firestore(), `timesheets/${TS_ID}`), { ...submitDoc, ...over });
   });
 
-async function seedActiveEntry(periodKey = PERIOD, end: number | null = null) {
-  await testEnv.withSecurityRulesDisabled(async (ctx) => {
-    const db = ctx.firestore();
-    await setDoc(doc(db, 'timeEntries/active-timer'), { uid: 'alice', periodKey, end });
-    await updateDoc(doc(db, 'users/alice'), { activeEntryId: 'active-timer' });
-  });
-}
+const sheetPath = `timesheets/${TS_ID}`;
+const decided = { decidedAt: T0 + 1, decidedBy: 'mgr', updatedAt: T0 + 1 };
+const rejection = { ...decided, status: 'rejected', rejectReason: 'Wrong activity on Tuesday.' };
 
-describe('timesheets — submit', () => {
-  it('owner submits with the stamped approver from their profile', async () => {
-    await assertSucceeds(setDoc(doc(alice().firestore(), `timesheets/${TS_ID}`), submitDoc));
+describe('timesheets — submission and approval go through the callables only', () => {
+  it('refuses every client submission, including an empty week and an admin self-stamp', async () => {
+    await assertFails(setDoc(doc(alice().firestore(), sheetPath), submitDoc));
+    await assertFails(setDoc(doc(alice().firestore(), sheetPath), { ...submitDoc, totalMinutes: 0, entryCount: 0 }));
+    await assertFails(setDoc(doc(adm().firestore(), 'timesheets/adm_' + PERIOD), { ...submitDoc, uid: 'adm', approverUid: 'adm' }));
   });
 
-  it('cannot use an old client to stamp a demoted reviewer whose pointer remains', async () => {
-    await testEnv.withSecurityRulesDisabled(async (ctx) => {
-      await updateDoc(doc(ctx.firestore(), 'users/mgr'), { role: 'member' });
-    });
-    await assertFails(setDoc(doc(alice().firestore(), 'timesheets/' + TS_ID), submitDoc));
-  });
-
-  it('zero-hour submission is allowed', async () => {
-    await assertSucceeds(
-      setDoc(doc(alice().firestore(), `timesheets/${TS_ID}`), {
-        ...submitDoc,
-        totalMinutes: 0,
-        entryCount: 0,
-      }),
-    );
-  });
-
-  it('refuses a stale zero-hour submission until the period’s running timer closes', async () => {
-    const ref = doc(alice().firestore(), 'timesheets/' + TS_ID);
-    await seedActiveEntry();
-    await assertFails(setDoc(ref, { ...submitDoc, totalMinutes: 0, entryCount: 0 }));
-    expect((await getDoc(ref)).exists()).toBe(false);
-    await seedActiveEntry(PERIOD, T0);
-    await assertSucceeds(setDoc(ref, submitDoc));
-  });
-
-  it('still accepts a zero-hour week while a different week has a running timer', async () => {
-    await seedActiveEntry('2026-07-19');
-    await assertSucceeds(setDoc(doc(alice().firestore(), 'timesheets/' + TS_ID), {
-      ...submitDoc, totalMinutes: 0, entryCount: 0,
+  it('refuses a client resubmission of a rejected week', async () => {
+    await seed({ status: 'rejected', decidedAt: T0, decidedBy: 'mgr', rejectReason: 'fix' });
+    await assertFails(updateDoc(doc(alice().firestore(), sheetPath), {
+      status: 'submitted', submittedAt: T0 + 2, updatedAt: T0 + 2,
+      decidedAt: deleteField(), decidedBy: deleteField(), rejectReason: deleteField(),
     }));
   });
 
-  it('cannot clear the pointer and submit in one batch while leaving the timer open', async () => {
-    await seedActiveEntry();
-    const db = alice().firestore();
-    const batch = writeBatch(db);
-    batch.update(doc(db, 'users/alice'), { activeEntryId: null });
-    batch.set(doc(db, 'timesheets/' + TS_ID), submitDoc);
-    await assertFails(batch.commit());
-  });
-
-  it('cannot clear the pointer in an earlier write and then submit with the timer still open', async () => {
-    await seedActiveEntry();
-    const db = alice().firestore();
-    await assertFails(updateDoc(doc(db, 'users/alice'), { activeEntryId: null }));
-    await assertFails(updateDoc(doc(db, 'users/alice'), { activeEntryId: 'some-closed-entry' }));
-    await assertFails(setDoc(doc(db, 'timesheets/' + TS_ID), submitDoc));
-    // Closing the timer in the same write releases it (clock-out), and a
-    // pointer to a closed or missing entry may be cleared (a stale screen).
-    await seedActiveEntry(PERIOD, T0);
-    await assertSucceeds(updateDoc(doc(db, 'users/alice'), { activeEntryId: null }));
-    await testEnv.withSecurityRulesDisabled(async (ctx) => {
-      await updateDoc(doc(ctx.firestore(), 'users/alice'), { activeEntryId: 'gone' });
-    });
-    await assertSucceeds(updateDoc(doc(db, 'users/alice'), { activeEntryId: null }));
-    await assertSucceeds(setDoc(doc(db, 'timesheets/' + TS_ID), submitDoc));
-  });
-
-  it('rejects: mismatched doc id, non-canonical periodKey, cross-period toKey', async () => {
-    const db = alice().firestore();
-    await assertFails(setDoc(doc(db, 'timesheets/alice_2026-07-13'), submitDoc)); // id ≠ uid_periodKey
-    await assertFails(
-      setDoc(doc(db, 'timesheets/alice_2026-07-15'), {
-        ...submitDoc,
-        periodKey: '2026-07-15', // Wednesday — not a canonical period start
-        toKey: '2026-07-18',
-      }),
-    );
-    await assertFails(
-      setDoc(doc(db, `timesheets/${TS_ID}`), { ...submitDoc, toKey: '2026-07-19' }), // next period
-    );
-  });
-
-  it('rejects a stamp that is not the current profile approver', async () => {
-    await assertFails(
-      setDoc(doc(alice().firestore(), `timesheets/${TS_ID}`), {
-        ...submitDoc,
-        approverUid: 'mgr2',
-      }),
-    );
-  });
-
-  it('cannot submit with no approver set (profile approverUid null)', async () => {
-    await testEnv.withSecurityRulesDisabled(async (ctx) => {
-      await setDoc(doc(ctx.firestore(), 'users/alice'), userDoc({ displayName: 'Alice' }));
-    });
-    await assertFails(setDoc(doc(alice().firestore(), `timesheets/${TS_ID}`), submitDoc));
-  });
-
-  it('manager self-stamps when they are their own approver (M5 policy)', async () => {
-    await testEnv.withSecurityRulesDisabled(async (ctx) => {
-      await setDoc(
-        doc(ctx.firestore(), 'users/mgr'),
-        userDoc({ displayName: 'Mgr', role: 'manager', approverUid: 'mgr' }),
-      );
-    });
-    await assertSucceeds(
-      setDoc(doc(mgr().firestore(), `timesheets/mgr_${PERIOD}`), {
-        ...submitDoc,
-        uid: 'mgr',
-        approverUid: 'mgr',
-      }),
-    );
-  });
-
-  it('admin self-stamps (top of chain)', async () => {
-    await assertSucceeds(
-      setDoc(doc(adm().firestore(), `timesheets/adm_${PERIOD}`), {
-        ...submitDoc,
-        uid: 'adm',
-        approverUid: 'adm',
-      }),
-    );
-  });
-
-  it('cannot submit a future period or someone else’s, or create pre-decided', async () => {
-    // 2027-07-11 is a Sunday a year out — canonical but not started.
-    await assertFails(
-      setDoc(doc(alice().firestore(), 'timesheets/alice_2027-07-11'), {
-        ...submitDoc,
-        periodKey: '2027-07-11',
-        toKey: '2027-07-17',
-      }),
-    );
-    await assertFails(
-      setDoc(doc(mgr().firestore(), `timesheets/${TS_ID}`), submitDoc), // not the owner
-    );
-    await assertFails(
-      setDoc(doc(alice().firestore(), `timesheets/${TS_ID}`), {
-        ...submitDoc,
-        status: 'approved',
-      }),
-    );
-    await assertFails(
-      setDoc(doc(alice().firestore(), `timesheets/${TS_ID}`), {
-        ...submitDoc,
-        decidedAt: T0,
-        decidedBy: 'alice',
-      }),
-    );
+  it('refuses a client approval, by the stamped approver or an admin', async () => {
+    await seed({});
+    const approval = { ...decided, status: 'approved' };
+    await assertFails(updateDoc(doc(mgr().firestore(), sheetPath), approval));
+    await assertFails(updateDoc(doc(adm().firestore(), sheetPath), { ...approval, decidedBy: 'adm' }));
+    await assertFails(updateDoc(doc(mgr().firestore(), sheetPath), { ...approval, approvalReview: { limits: {}, flags: [], at: T0 + 1 } }));
   });
 });
 
-describe('timesheets — decide', () => {
+describe('timesheets — reject', () => {
   beforeEach(() => seed({}));
 
-  const approvePatch = {
-    status: 'approved',
-    decidedAt: T0 + 1,
-    decidedBy: 'mgr',
-    updatedAt: T0 + 1,
-  };
-
-  it('stamped approver approves; rejects require a reason', async () => {
-    await assertSucceeds(updateDoc(doc(mgr().firestore(), `timesheets/${TS_ID}`), approvePatch));
+  it('the stamped approver rejects with a reason, never without one', async () => {
+    const reviewing = doc(mgr().firestore(), sheetPath);
+    await assertFails(updateDoc(reviewing, { ...decided, status: 'rejected' }));
+    await assertFails(updateDoc(reviewing, { ...rejection, rejectReason: '' }));
+    await assertSucceeds(updateDoc(reviewing, rejection));
   });
 
-  it('stamped approver rejects with reason ✓, without ✗', async () => {
-    await assertFails(
-      updateDoc(doc(mgr().firestore(), `timesheets/${TS_ID}`), {
-        ...approvePatch,
-        status: 'rejected',
-      }),
-    );
-    await assertSucceeds(
-      updateDoc(doc(mgr().firestore(), `timesheets/${TS_ID}`), {
-        ...approvePatch,
-        status: 'rejected',
-        rejectReason: 'Wrong activity on Tuesday.',
-      }),
-    );
+  it('an admin rejects; another manager and the owner cannot', async () => {
+    await assertFails(updateDoc(doc(mgr2().firestore(), sheetPath), { ...rejection, decidedBy: 'mgr2' }));
+    await assertFails(updateDoc(doc(alice().firestore(), sheetPath), { ...rejection, decidedBy: 'alice' }));
+    await assertSucceeds(updateDoc(doc(adm().firestore(), sheetPath), { ...rejection, decidedBy: 'adm' }));
   });
 
-  it('a revoked reviewer cannot decide or reopen through a stale token', async () => {
+  it('a revoked reviewer cannot reject or reopen through a stale token', async () => {
     await testEnv.withSecurityRulesDisabled(async (ctx) => {
       const db = ctx.firestore();
       await updateDoc(doc(db, 'users/mgr'), { role: 'member' });
       await updateDoc(doc(db, 'users/adm'), { admin: false });
     });
-    await assertFails(updateDoc(doc(mgr().firestore(), 'timesheets/' + TS_ID), approvePatch));
-    const staleAdmin = doc(adm().firestore(), 'timesheets/' + TS_ID);
-    await assertFails(updateDoc(staleAdmin, { ...approvePatch, decidedBy: 'adm' }));
+    await assertFails(updateDoc(doc(mgr().firestore(), sheetPath), rejection));
+    const staleAdmin = doc(adm().firestore(), sheetPath);
+    await assertFails(updateDoc(staleAdmin, { ...rejection, decidedBy: 'adm' }));
     await assertFails(deleteDoc(staleAdmin));
   });
 
-  it('non-stamped manager cannot decide; admin can', async () => {
-    await assertFails(
-      updateDoc(doc(mgr2().firestore(), `timesheets/${TS_ID}`), {
-        ...approvePatch,
-        decidedBy: 'mgr2',
-      }),
-    );
-    await assertSucceeds(
-      updateDoc(doc(adm().firestore(), `timesheets/${TS_ID}`), {
-        ...approvePatch,
-        decidedBy: 'adm',
-      }),
-    );
-  });
-
-  it('a manager approves their own sheet when self-stamped (M5 policy)', async () => {
-    await testEnv.withSecurityRulesDisabled(async (ctx) => {
-      await setDoc(doc(ctx.firestore(), `timesheets/mgr_${PERIOD}`), {
-        ...submitDoc,
-        uid: 'mgr',
-        approverUid: 'mgr',
-      });
-    });
-    await assertSucceeds(
-      updateDoc(doc(mgr().firestore(), `timesheets/mgr_${PERIOD}`), approvePatch),
-    );
-  });
-
-  // A stamp is written once and never revisited, so the role must be re-checked
-  // at decide time — otherwise losing the role leaves the authority behind.
-  it('a stamped approver who has since been demoted or disabled cannot decide', async () => {
-    const demoted = testEnv.authenticatedContext('mgr', { status: 'active', role: 'member' });
-    await assertFails(updateDoc(doc(demoted.firestore(), `timesheets/${TS_ID}`), approvePatch));
-
-    const disabled = testEnv.authenticatedContext('mgr', { status: 'disabled', role: 'manager' });
-    await assertFails(updateDoc(doc(disabled.firestore(), `timesheets/${TS_ID}`), approvePatch));
-
-    // …but an admin who is not a manager still decides anything.
-    await assertSucceeds(
-      updateDoc(doc(adm().firestore(), `timesheets/${TS_ID}`), {
-        ...approvePatch,
-        decidedBy: 'adm',
-      }),
-    );
-  });
-
-  it('an owner who is NOT the stamped approver cannot decide their own sheet', async () => {
-    await assertFails(
-      updateDoc(doc(alice().firestore(), `timesheets/${TS_ID}`), {
-        ...approvePatch,
-        decidedBy: 'alice',
-      }),
-    );
-  });
-
-  it('decidedBy must be the caller; uid/periodKey immutable; no double-decide', async () => {
-    await assertFails(
-      updateDoc(doc(mgr().firestore(), `timesheets/${TS_ID}`), {
-        ...approvePatch,
-        decidedBy: 'someone-else',
-      }),
-    );
-    await assertFails(
-      updateDoc(doc(mgr().firestore(), `timesheets/${TS_ID}`), {
-        ...approvePatch,
-        periodKey: '2026-07-19',
-      }),
-    );
+  it('decidedBy is the caller, nothing else changes, and only a submitted week is rejected', async () => {
+    const reviewing = doc(mgr().firestore(), sheetPath);
+    await assertFails(updateDoc(reviewing, { ...rejection, decidedBy: 'someone-else' }));
+    await assertFails(updateDoc(reviewing, { ...rejection, totalMinutes: 0 }));
+    await assertFails(updateDoc(reviewing, { ...rejection, periodKey: '2026-07-19' }));
     await seed({ status: 'approved', decidedAt: T0, decidedBy: 'mgr' });
-    await assertFails(
-      updateDoc(doc(mgr().firestore(), `timesheets/${TS_ID}`), {
-        status: 'rejected',
-        decidedAt: T0 + 2,
-        decidedBy: 'mgr',
-        rejectReason: 'changed my mind',
-        updatedAt: T0 + 2,
-      }),
-    );
-  });
-});
-
-describe('timesheets — resubmit after rejection', () => {
-  beforeEach(() => seed({ status: 'rejected', decidedAt: T0, decidedBy: 'mgr', rejectReason: 'fix' }));
-
-  const resubmitPatch = {
-    status: 'submitted',
-    approverUid: 'mgr',
-    submittedAt: T0 + 5,
-    totalMinutes: 90,
-    entryCount: 2,
-    updatedAt: T0 + 5,
-    decidedAt: deleteField(),
-    decidedBy: deleteField(),
-    rejectReason: deleteField(),
-  };
-
-  it('owner resubmits, clearing the decision fields', async () => {
-    await assertSucceeds(
-      updateDoc(doc(alice().firestore(), `timesheets/${TS_ID}`), resubmitPatch),
-    );
-  });
-
-  it('keeps the rejected revision editable while a timer is still running', async () => {
-    const ref = doc(alice().firestore(), 'timesheets/' + TS_ID);
-    await seedActiveEntry();
-    await assertFails(updateDoc(ref, resubmitPatch));
-    expect((await getDoc(ref)).data()?.status).toBe('rejected');
-    await seedActiveEntry(PERIOD, T0);
-    await assertSucceeds(updateDoc(ref, resubmitPatch));
-  });
-
-  it('resubmit must clear the decision fields', async () => {
-    await assertFails(
-      updateDoc(doc(alice().firestore(), `timesheets/${TS_ID}`), {
-        ...resubmitPatch,
-        decidedAt: T0,
-        decidedBy: 'mgr',
-      }),
-    );
-  });
-
-  it('owner cannot flip rejected straight to approved; approver cannot resubmit', async () => {
-    await assertFails(
-      updateDoc(doc(alice().firestore(), `timesheets/${TS_ID}`), {
-        ...resubmitPatch,
-        status: 'approved',
-      }),
-    );
-    await assertFails(updateDoc(doc(mgr().firestore(), `timesheets/${TS_ID}`), resubmitPatch));
-  });
-
-  it('resubmit re-stamps from the CURRENT profile approver', async () => {
-    await testEnv.withSecurityRulesDisabled(async (ctx) => {
-      await setDoc(
-        doc(ctx.firestore(), 'users/alice'),
-        userDoc({ displayName: 'Alice', approverUid: 'mgr2' }),
-      );
-    });
-    await assertFails(
-      updateDoc(doc(alice().firestore(), `timesheets/${TS_ID}`), resubmitPatch), // stale mgr stamp
-    );
-    await assertSucceeds(
-      updateDoc(doc(alice().firestore(), `timesheets/${TS_ID}`), {
-        ...resubmitPatch,
-        approverUid: 'mgr2',
-      }),
-    );
+    await assertFails(updateDoc(reviewing, { ...rejection, decidedAt: T0 + 2, updatedAt: T0 + 2 }));
   });
 });
 
 describe('timesheets — withdraw and reopen (deletes)', () => {
   it('owner withdraws a submitted sheet; a rejected one too', async () => {
     await seed({});
-    await assertSucceeds(deleteDoc(doc(alice().firestore(), `timesheets/${TS_ID}`)));
+    await assertSucceeds(deleteDoc(doc(alice().firestore(), sheetPath)));
     await seed({ status: 'rejected', decidedAt: T0, decidedBy: 'mgr', rejectReason: 'fix' });
-    await assertSucceeds(deleteDoc(doc(alice().firestore(), `timesheets/${TS_ID}`)));
+    await assertSucceeds(deleteDoc(doc(alice().firestore(), sheetPath)));
   });
 
   it('owner cannot delete an approved sheet; admin reopens it; approver cannot', async () => {
     await seed({ status: 'approved', decidedAt: T0, decidedBy: 'mgr' });
-    await assertFails(deleteDoc(doc(alice().firestore(), `timesheets/${TS_ID}`)));
-    await assertFails(deleteDoc(doc(mgr().firestore(), `timesheets/${TS_ID}`)));
-    await assertSucceeds(deleteDoc(doc(adm().firestore(), `timesheets/${TS_ID}`)));
+    await assertFails(deleteDoc(doc(alice().firestore(), sheetPath)));
+    await assertFails(deleteDoc(doc(mgr().firestore(), sheetPath)));
+    await assertSucceeds(deleteDoc(doc(adm().firestore(), sheetPath)));
   });
 });
 
@@ -461,54 +178,15 @@ describe('timesheets — reads', () => {
   beforeEach(() => seed({}));
 
   it('owner, stamped approver, any manager, and admin read; other members cannot', async () => {
-    await assertSucceeds(getDoc(doc(alice().firestore(), `timesheets/${TS_ID}`)));
-    await assertSucceeds(getDoc(doc(mgr().firestore(), `timesheets/${TS_ID}`)));
-    await assertSucceeds(getDoc(doc(mgr2().firestore(), `timesheets/${TS_ID}`)));
-    await assertSucceeds(getDoc(doc(adm().firestore(), `timesheets/${TS_ID}`)));
-    await assertFails(getDoc(doc(bob().firestore(), `timesheets/${TS_ID}`)));
+    await assertSucceeds(getDoc(doc(alice().firestore(), sheetPath)));
+    await assertSucceeds(getDoc(doc(mgr().firestore(), sheetPath)));
+    await assertSucceeds(getDoc(doc(mgr2().firestore(), sheetPath)));
+    await assertSucceeds(getDoc(doc(adm().firestore(), sheetPath)));
+    await assertFails(getDoc(doc(bob().firestore(), sheetPath)));
   });
 
   it('listener on one’s own not-yet-submitted (missing) sheet is allowed; on others’ not', async () => {
     await assertSucceeds(getDoc(doc(alice().firestore(), 'timesheets/alice_2026-07-19')));
     await assertFails(getDoc(doc(bob().firestore(), 'timesheets/alice_2026-07-19')));
-  });
-});
-
-describe('timesheets — review snapshots are written by the server only', () => {
-  const limits = { minEntryMinutes: 3, maxEntryMinutes: 480, maxDayMinutes: 720 };
-  const recorded = { limits, flags: [], at: T0 };
-  const sheetPath = `timesheets/${TS_ID}`;
-  const decision = { status: 'approved', decidedAt: T0 + 2, decidedBy: 'mgr', updatedAt: T0 + 2 };
-
-  it('refuses a client-written submission review, including one with forged flags', async () => {
-    const member = doc(alice().firestore(), sheetPath);
-    await assertFails(setDoc(member, { ...submitDoc, submissionReview: recorded }));
-    await assertFails(setDoc(member, { ...submitDoc, approvalReview: recorded }));
-    await assertSucceeds(setDoc(member, submitDoc));
-  });
-
-  it('refuses a client-written approval review and keeps the member’s recorded review', async () => {
-    await seed({ submissionReview: recorded });
-    const reviewing = doc(mgr().firestore(), sheetPath);
-    await assertFails(updateDoc(reviewing, { ...decision, approvalReview: { ...recorded, at: T0 + 2 } }));
-    await assertFails(updateDoc(reviewing, { ...decision, submissionReview: deleteField() }));
-    await assertSucceeds(updateDoc(reviewing, decision));
-    const sheet = (await assertSucceeds(getDoc(reviewing))).data();
-    expect(sheet?.submissionReview).toEqual(recorded);
-    expect(sheet?.approvalReview).toBeUndefined();
-  });
-
-  it('lets an older app resubmit without touching the earlier review, and refuses changing it', async () => {
-    await seed({ status: 'rejected', submissionReview: recorded, decidedBy: 'mgr', decidedAt: T0 + 1, rejectReason: 'Check hours' });
-    const member = doc(alice().firestore(), sheetPath);
-    const resubmit = {
-      status: 'submitted', submittedAt: T0 + 2, updatedAt: T0 + 2, entryCount: 0, totalMinutes: 0,
-      decidedBy: deleteField(), decidedAt: deleteField(), rejectReason: deleteField(),
-    };
-    await assertFails(updateDoc(member, { ...resubmit, submissionReview: { ...recorded, at: T0 + 2 } }));
-    await assertFails(updateDoc(member, { ...resubmit, submissionReview: deleteField() }));
-    await assertSucceeds(updateDoc(member, resubmit));
-    // Readers ignore it: its `at` is not the new submittedAt (recordedReviewFor).
-    expect((await assertSucceeds(getDoc(member))).data()?.submissionReview).toEqual(recorded);
   });
 });

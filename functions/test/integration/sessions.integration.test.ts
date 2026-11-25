@@ -2,7 +2,7 @@ import { describe, it, beforeAll, beforeEach, expect } from 'vitest';
 import { initializeApp, getApps } from 'firebase-admin/app';
 import { getFirestore } from 'firebase-admin/firestore';
 import { closeStaleSession, closeStaleSessions } from '../../src/sessions';
-import { EMULATOR_PROJECT_ID } from '@sabeel/shared';
+import { EMULATOR_PROJECT_ID, finishedClockEntryId, runningEntryId } from '@sabeel/shared';
 
 const HOUR = 60 * 60 * 1000;
 const NOW = Date.UTC(2026, 6, 15, 20, 0);
@@ -35,56 +35,48 @@ const running = (startMsAgo: number) => ({
 
 beforeEach(reset);
 
+const session = () => getFirestore().collection('timeEntries').doc(runningEntryId('alice'));
+const finished = async () => (await getFirestore().collection('timeEntries')
+  .where('uid', '==', 'alice').where('end', '!=', null).get()).docs.map((doc) => doc.data());
+
 describe('closeStaleSessions', () => {
-  it('caps a >12h running session at start+12h, clears the pointer', async () => {
-    const db = getFirestore();
-    const ref = await db.collection('timeEntries').add(running(13 * HOUR));
-    await db.collection('users').doc('alice').set({ activeEntryId: ref.id, status: 'active' });
+  it('replaces a >12h session with a finished entry capped at start+12h', async () => {
+    await session().set(running(13 * HOUR));
 
-    const closed = await closeStaleSessions(NOW);
-    expect(closed).toBe(1);
+    expect(await closeStaleSessions(NOW)).toBe(1);
 
-    const entry = (await ref.get()).data()!;
-    expect(entry.autoClosed).toBe(true);
+    expect((await session().get()).exists).toBe(false);
+    const [entry, ...others] = await finished();
+    expect(others).toEqual([]);
+    expect(entry).toMatchObject({ autoClosed: true, start: NOW - 13 * HOUR, durationMinutes: 12 * 60 });
+    expect((await getFirestore().collection('timeEntries').doc(finishedClockEntryId('alice', NOW - 13 * HOUR)).get()).exists).toBe(true);
     expect(entry.end).toBe(entry.start + 12 * HOUR);
-    expect(entry.durationMinutes).toBe(12 * 60);
-
-    const user = (await db.collection('users').doc('alice').get()).data()!;
-    expect(user.activeEntryId).toBeNull();
   });
 
   it('leaves a session running under the cap untouched', async () => {
-    const db = getFirestore();
-    const ref = await db.collection('timeEntries').add(running(3 * HOUR));
-    await db.collection('users').doc('alice').set({ activeEntryId: ref.id, status: 'active' });
-
-    const closed = await closeStaleSessions(NOW);
-    expect(closed).toBe(0);
-    expect((await ref.get()).data()!.end).toBeNull();
+    await session().set(running(3 * HOUR));
+    expect(await closeStaleSessions(NOW)).toBe(0);
+    expect((await session().get()).data()!.end).toBeNull();
   });
 
-  it('does not overwrite a clock-out made after the initial scan', async () => {
-    const db = getFirestore();
-    const old = db.collection('timeEntries').doc('candidate');
-    const next = db.collection('timeEntries').doc('new-timer');
-    const user = db.collection('users').doc('alice');
-    await old.set(running(13 * HOUR));
-    const candidates = await db.collection('timeEntries').where('end', '==', null).get();
-    await old.update({ end: NOW, durationMinutes: 13 * 60 });
-    await next.set(running(HOUR));
-    await user.set({ activeEntryId: next.id, status: 'active' });
+  it('does not touch a session clocked out and restarted after the initial scan', async () => {
+    await session().set(running(13 * HOUR));
+    const candidates = await getFirestore().collection('timeEntries').where('end', '==', null).get();
+    // Clocked out (the session's finished entry) and in again before the job commits.
+    await getFirestore().collection('timeEntries').doc(finishedClockEntryId('alice', NOW - 13 * HOUR))
+      .set({ ...running(13 * HOUR), end: NOW, durationMinutes: 13 * 60 });
+    await session().set(running(HOUR));
 
     expect(await closeStaleSession(candidates.docs[0].id, NOW)).toBe(false);
-    expect((await old.get()).data()).toMatchObject({ end: NOW, durationMinutes: 13 * 60 });
-    expect((await old.get()).data()).not.toHaveProperty('autoClosed');
-    expect((await user.get()).data()?.activeEntryId).toBe(next.id);
+    expect((await session().get()).data()).toMatchObject({ end: null, start: NOW - HOUR });
+    expect(await finished()).toEqual([expect.objectContaining({ end: NOW, durationMinutes: 13 * 60 })]);
   });
 
   it('does the same close exactly once when two jobs pick the same candidate', async () => {
-    const db = getFirestore();
-    const ref = await db.collection('timeEntries').add(running(13 * HOUR));
-    const finished = await Promise.all([closeStaleSession(ref.id, NOW), closeStaleSession(ref.id, NOW)]);
-    expect(finished.sort()).toEqual([false, true]);
+    await session().set(running(13 * HOUR));
+    const results = await Promise.all([closeStaleSession(session().id, NOW), closeStaleSession(session().id, NOW)]);
+    expect(results.sort()).toEqual([false, true]);
+    expect(await finished()).toHaveLength(1);
   });
 
   // This job runs on the admin SDK, so the approved-period lock every client
@@ -92,8 +84,7 @@ describe('closeStaleSessions', () => {
   // asserting a total its own entries contradict.
   it('repairs the stored snapshot when it closes an entry inside an approved period', async () => {
     const db = getFirestore();
-    const ref = await db.collection('timeEntries').add(running(20 * HOUR));
-    await db.collection('users').doc('alice').set({ activeEntryId: ref.id, status: 'active' });
+    await session().set(running(20 * HOUR));
     await db.collection('timesheets').doc('alice_2026-07-12').set({
       uid: 'alice',
       periodKey: '2026-07-12',
@@ -118,24 +109,8 @@ describe('closeStaleSessions', () => {
   });
 
   it('leaves a draft period alone (no timesheet to repair)', async () => {
-    const db = getFirestore();
-    const ref = await db.collection('timeEntries').add(running(20 * HOUR));
-    await db.collection('users').doc('alice').set({ activeEntryId: ref.id, status: 'active' });
-
+    await session().set(running(20 * HOUR));
     await closeStaleSessions(NOW);
-
-    expect((await db.collection('timesheets').doc('alice_2026-07-12').get()).exists).toBe(false);
-  });
-
-  it("does not clear the pointer if it moved to a different entry", async () => {
-    const db = getFirestore();
-    const ref = await db.collection('timeEntries').add(running(20 * HOUR));
-    await db.collection('users').doc('alice').set({ activeEntryId: 'someOther', status: 'active' });
-
-    await closeStaleSessions(NOW);
-    expect((await ref.get()).data()!.autoClosed).toBe(true);
-    expect((await db.collection('users').doc('alice').get()).data()!.activeEntryId).toBe(
-      'someOther',
-    );
+    expect((await getFirestore().collection('timesheets').doc('alice_2026-07-12').get()).exists).toBe(false);
   });
 });

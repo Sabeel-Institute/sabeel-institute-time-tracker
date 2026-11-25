@@ -104,7 +104,7 @@ service cloud.firestore {
         && (request.auth.uid == uid || isManager() || isAdmin()
             || (isActive() && resource != null
                 && (resource.data.role == 'manager' || resource.data.admin == true)));
-      // Self may touch the clock pointer, cosmetic profile fields, their own
+      // Self may touch cosmetic profile fields, their own
       // approver choice (must be an active manager/admin, or null), notification
       // prefs, and last-seen timezone. NOT lastReminderDayKey — that dedup
       // marker is server-written only — and NOT rulesVersion/rulesAcceptedAt:
@@ -112,7 +112,7 @@ service cloud.firestore {
       // callable alone, so the record says the server saw it.
       allow update: if isActive() && request.auth.uid == uid
         && request.resource.data.diff(resource.data).affectedKeys()
-             .hasOnly(['activeEntryId', 'displayName', 'photoURL', 'approverUid',
+             .hasOnly(['displayName', 'photoURL', 'approverUid',
                        'notifPrefs', 'timeZone'])
         // Cosmetic fields are still typed and bounded. This cannot stop someone
         // choosing a name that collides with a colleague's — names legitimately
@@ -128,8 +128,6 @@ service cloud.firestore {
                 && request.resource.data.photoURL.size() <= 2000))
         && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['approverUid'])
             || approverOk(request.resource.data.approverUid))
-        && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['activeEntryId'])
-            || pointerReleased(resource.data.get('activeEntryId', null)))
         && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['notifPrefs'])
             || request.resource.data.notifPrefs is map)
         && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['timeZone'])
@@ -141,15 +139,6 @@ service cloud.firestore {
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['approverUid'])
         && approverOk(request.resource.data.approverUid);
       allow delete: if false;
-
-      // The pointer is what the legacy submission rules check for a running
-      // timer, so it may only move off a timer that is closed or deleted by the
-      // end of the same write (clock-out, discard, or a stale pointer).
-      function pointerReleased(previous) {
-        return !(previous is string && previous.matches('^[^/]+$'))
-          || !existsAfter(/databases/$(database)/documents/timeEntries/$(previous))
-          || getAfter(/databases/$(database)/documents/timeEntries/$(previous)).data.end != null;
-      }
 
       // Push registration tokens: strictly the owner's business. The server
       // (admin SDK) reads them to send and prunes dead ones.
@@ -244,81 +233,104 @@ service cloud.firestore {
                  // only, +1 to absorb the client's Math.round and 1-min floor.
                  && d.durationMinutes <= (d.end - d.start) / 60000 + 1));
       }
-      function me() {
-        return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+      // A clock session in progress has a fixed id, running_{uid}, and only a
+      // session in progress has that id: one person cannot run two, and there
+      // is no pointer that could name one that is gone. Clocking out deletes it
+      // and creates the finished entry under a new id in the same write.
+      function runningId(uid) {
+        return 'running_' + uid;
       }
-      function meAfter() {
-        return getAfter(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+      function runningPath(uid) {
+        return /databases/$(database)/documents/timeEntries/$(runningId(uid));
+      }
+      function hasRunningShape(d) {
+        return (entryId == runningId(d.uid)) == (d.end == null);
+      }
+      // The finished entry a session becomes has an id fixed by the session
+      // (finishedClockEntryId), so the same clock-out twice names one entry,
+      // and deleting a session can be tied to creating exactly that entry.
+      function finishedPath(uid, start) {
+        return /databases/$(database)/documents/timeEntries/$('clock_' + uid + '_' + string(start));
+      }
+      // The finished entry is that session, ended: the same activity, place
+      // and day, and the session is gone after this write. The same start is
+      // held by the ids: the entry's is built from its start, and deleting the
+      // session needs the entry at the id built from the session's start. So
+      // a clock-out queued offline after another device clocked out and in
+      // again names a start the current session does not have, and is refused
+      // rather than ending the newer session.
+      function closesRunning(d) {
+        let session = runningPath(d.uid);
+        return d.source == 'clock' && d.end != null
+          && exists(session) && !existsAfter(session)
+          && get(session).data.createdAt == d.createdAt
+          && get(session).data.activityId == d.activityId
+          && get(session).data.timeZone == d.timeZone
+          && get(session).data.dayKey == d.dayKey;
       }
 
       // resource == null: reading a doc that doesn't exist (yet) is allowed —
-      // the clock-in listener attaches optimistically before the server ack,
-      // and IDs are unguessable so existence probing is moot.
+      // the clock-in listener attaches before the server acknowledges it. A
+      // running_ id names its person, so only they may probe theirs: anyone
+      // else would learn whether that person is clocked in.
       allow read: if isActive()
-        && (resource == null || resource.data.uid == request.auth.uid
-            || isManager() || isAdmin());
+        && (resource == null
+            ? (!entryId.matches('running_.*') || entryId == runningId(request.auth.uid))
+            : (resource.data.uid == request.auth.uid || isManager() || isAdmin()));
 
-      // Owner creates their own entries (a running clock-in must, in the same
-      // batch, point users/{uid}.activeEntryId at itself, and only when no other
-      // session runs). Managers/approvers create CLOSED entries on behalf of
-      // others, flagged with lastEditedBy — who may do so per period state is
-      // canTouchPeriod's call (submitted → stamped approver/admin only).
-      // Referential integrity is checked on CREATE only: an existing entry's
-      // references were validated when it was written, activities are never
-      // deleted, and re-reading both docs on every clock-out would be waste.
+      // Owners clock in (the running_ id, while their period is open), clock
+      // out (always: a clock-out is never bricked), and add closed entries.
+      // Managers/approvers add CLOSED entries on behalf of others, flagged with
+      // lastEditedBy; who may do so per period state is canTouchPeriod's call.
+      // References are checked when an entry is first written; a clock-out
+      // keeps the session's, which were checked at clock-in.
       allow create: if isActive()
         && entryValid(request.resource.data)
-        && exists(/databases/$(database)/documents/activities/$(request.resource.data.activityId))
-        && exists(/databases/$(database)/documents/users/$(request.resource.data.uid))
-        && canTouchPeriod(request.resource.data.uid, request.resource.data.periodKey)
-        && (
-          (request.resource.data.uid == request.auth.uid
-            && (request.resource.data.end != null
-                || (me().activeEntryId == null && meAfter().activeEntryId == entryId)))
-          ||
-          (request.resource.data.uid != request.auth.uid
-            && request.resource.data.end != null
-            && request.resource.data.lastEditedBy == request.auth.uid)
-        );
+        && hasRunningShape(request.resource.data)
+        && (entryId.matches('clock_.*')
+          ? (entryId == 'clock_' + request.resource.data.uid + '_' + string(request.resource.data.start)
+             && request.resource.data.uid == request.auth.uid && closesRunning(request.resource.data))
+          : (exists(/databases/$(database)/documents/activities/$(request.resource.data.activityId))
+            && exists(/databases/$(database)/documents/users/$(request.resource.data.uid))
+            && canTouchPeriod(request.resource.data.uid, request.resource.data.periodKey)
+            && (
+              (request.resource.data.uid == request.auth.uid
+                && (request.resource.data.end != null || request.resource.data.source == 'clock'))
+              ||
+              (request.resource.data.uid != request.auth.uid
+                && request.resource.data.end != null
+                && request.resource.data.lastEditedBy == request.auth.uid)
+            )));
 
-      // Carve-out first: the owner may ALWAYS close their own running entry
-      // (clock-out must never be bricked by a period submitted mid-session),
-      // clearing the pointer in the same batch and touching nothing else.
-      // Every other edit must clear BOTH the source and target period locks —
-      // an edit can move an entry between periods by changing its dayKey.
+      // A session in progress changes only its activity or note; its start
+      // and day are fixed (a second clock-in on another device must not
+      // overwrite them), and it ends only by clocking out. A closed entry stays
+      // closed. Every edit clears BOTH the source and target period locks: an
+      // edit can move an entry between periods by changing its dayKey.
       allow update: if isActive()
         && request.resource.data.uid == resource.data.uid
         && entryValid(request.resource.data)
-        && (
-          (resource.data.uid == request.auth.uid
-            && resource.data.end == null
-            && request.resource.data.end != null
-            && meAfter().activeEntryId == null
-            && request.resource.data.diff(resource.data).affectedKeys()
-                 .hasOnly(['end', 'durationMinutes', 'updatedAt']))
-          ||
-          (canTouchPeriod(resource.data.uid, resource.data.periodKey)
-            && canTouchPeriod(resource.data.uid, request.resource.data.periodKey)
-            && (
-              // A closed entry stays closed: a running timer exists only through
-              // clock-in, which sets the pointer the submission rules check.
-              (resource.data.uid == request.auth.uid
-                && (resource.data.end != null ? request.resource.data.end != null
-                    : (request.resource.data.end == null || meAfter().activeEntryId == null)))
-              ||
-              (resource.data.uid != request.auth.uid
-                && resource.data.end != null && request.resource.data.end != null
-                && request.resource.data.lastEditedBy == request.auth.uid)
-            ))
-        );
-
-      // Deletes go through the period lock; closed entries by owner or (per
-      // canTouchPeriod) managers/approver, a running entry only by its owner,
-      // clearing the pointer in the same batch.
-      allow delete: if isActive()
+        && hasRunningShape(request.resource.data)
         && canTouchPeriod(resource.data.uid, resource.data.periodKey)
-        && (resource.data.end != null
-            || (resource.data.uid == request.auth.uid && meAfter().activeEntryId == null));
+        && canTouchPeriod(resource.data.uid, request.resource.data.periodKey)
+        && (resource.data.end == null
+            ? (resource.data.uid == request.auth.uid
+               && request.resource.data.diff(resource.data).affectedKeys()
+                    .hasOnly(['activityId', 'activityName', 'note', 'updatedAt'])
+               && exists(/databases/$(database)/documents/activities/$(request.resource.data.activityId)))
+            : (resource.data.uid == request.auth.uid
+               || request.resource.data.lastEditedBy == request.auth.uid));
+
+      // A session in progress ends only by clocking out: its owner deletes it
+      // in the write that creates its finished entry, whatever the period's
+      // state (a clock-out is never bricked). Closed entries go through the
+      // period lock.
+      allow delete: if isActive()
+        && (resource.data.end == null
+            ? (resource.data.uid == request.auth.uid
+               && existsAfter(finishedPath(resource.data.uid, resource.data.start))
+               && getAfter(finishedPath(resource.data.uid, resource.data.start)).data.start == resource.data.start)
+            : canTouchPeriod(resource.data.uid, resource.data.periodKey));
     }
 
     // Operational state written only by the backend (the health canary's
@@ -366,58 +378,12 @@ service cloud.firestore {
     }
 
     // Weekly timesheets: one doc per (user, period) from submission on; no doc =
-    // draft. Lifecycle: submit (owner create) → approve/reject (stamped approver
-    // or admin) → resubmit after rejection (owner). Withdraw = owner delete while
-    // not approved; admin delete reopens anything back to draft.
+    // draft. Submission and approval are written only by the
+    // submitReviewedTimesheet and approveReviewedTimesheet callables, which
+    // check in one transaction the exact hours, overlaps, running timer and
+    // duration review the person saw. Clients reject (the stamped approver or an
+    // admin), withdraw (the owner, before approval) and reopen (an admin).
     match /timesheets/{tsId} {
-      function tsValid(d) {
-        return d.uid is string && d.uid.size() > 0
-          && tsId == d.uid + '_' + d.periodKey
-          && d.periodKey is string && d.periodKey.size() == 10
-          && d.periodKey == periodKeyOf(d.periodKey)
-          && d.toKey is string && d.toKey.size() == 10
-          && d.toKey >= d.periodKey
-          && periodKeyOf(d.toKey) == d.periodKey
-          && d.status in ['submitted', 'approved', 'rejected']
-          && d.approverUid is string && d.approverUid.size() > 0
-          && d.submittedAt is int
-          && d.totalMinutes is int && d.totalMinutes >= 0
-          && d.entryCount is int && d.entryCount >= 0;
-      }
-      // The approver is stamped from the submitter's CURRENT profile value.
-      // Self-approval is deliberate policy at this org size: approverOk accepts
-      // any active manager/admin including oneself, so a manager may choose
-      // themselves; admins may stamp themselves without having chosen it (top of
-      // the chain). See PRODUCTION-REVIEW M5.
-      function stampOk(d) {
-        return approverOk(d.approverUid)
-          && (d.approverUid == get(/databases/$(database)/documents/users/$(request.auth.uid)).data.approverUid
-              || (isAdmin() && d.approverUid == request.auth.uid));
-      }
-      function openTimerAt(path, d) {
-        return existsAfter(path) && getAfter(path).data.uid == d.uid
-          && getAfter(path).data.end == null && getAfter(path).data.periodKey == d.periodKey;
-      }
-      function timerOpenInPeriod(id, d) {
-        return id is string && id.matches('^[^/]+$')
-          && openTimerAt(/databases/$(database)/documents/timeEntries/$(id), d);
-      }
-      // Older clients write directly. Check both pointers so a batch cannot
-      // start a timer or clear the pointer to an open timer while submitting.
-      function noRunningTimer(d) {
-        let owner = /databases/$(database)/documents/users/$(d.uid);
-        let before = get(owner).data.get('activeEntryId', null);
-        let after = getAfter(owner).data.get('activeEntryId', null);
-        return !timerOpenInPeriod(after, d) && (before == after || !timerOpenInPeriod(before, d));
-      }
-      // No future periods. Rules can't format request.time into a local dayKey,
-      // so allow UTC+14 slack; the client enforces the device-local boundary.
-      function periodStarted(d) {
-        let p = d.periodKey.split('-');
-        return timestamp.date(int(p[0]), int(p[1]), int(p[2])).toMillis()
-          <= request.time.toMillis() + 14 * 3600000;
-      }
-
       // Owners and the stamped approver see their sheets; managers see all
       // (reports/queues). resource == null covers listeners on the deterministic
       // id before submission — only for one's own sheets.
@@ -428,65 +394,24 @@ service cloud.firestore {
                || resource.data.approverUid == request.auth.uid
                || isManager() || isAdmin()));
 
-      // SUBMIT (draft → submitted): owner only; zero-hour allowed.
-      allow create: if isActive()
-        && request.resource.data.uid == request.auth.uid
-        && tsValid(request.resource.data)
-        && request.resource.data.status == 'submitted'
-        && stampOk(request.resource.data)
-        && noRunningTimer(request.resource.data)
-        && periodStarted(request.resource.data)
-        && !('decidedAt' in request.resource.data)
-        && !('decidedBy' in request.resource.data)
-        && !('rejectReason' in request.resource.data)
-        // Review snapshots are derived by the submit and approve callables from
-        // the rows they seal; a client-written one would be an unchecked claim.
-        && !('submissionReview' in request.resource.data)
-        && !('approvalReview' in request.resource.data);
+      allow create: if false;
 
+      // REJECT (submitted → rejected): the stamped approver, revalidated as a
+      // CURRENT manager, or a current admin, with a reason the owner will read.
+      // The role re-check matters because a stamp is written once and an issued
+      // token can outlive the role behind it.
       allow update: if isActive()
-        && tsValid(request.resource.data)
-        && request.resource.data.uid == resource.data.uid
-        && request.resource.data.periodKey == resource.data.periodKey
-        && (
-          // RESUBMIT (rejected → submitted): owner re-stamps their current
-          // approver and the decision fields are cleared.
-          (resource.data.uid == request.auth.uid
-            && resource.data.status == 'rejected'
-            && request.resource.data.status == 'submitted'
-            && stampOk(request.resource.data)
-            && noRunningTimer(request.resource.data)
-            && !('decidedAt' in request.resource.data)
-            && !('decidedBy' in request.resource.data)
-            && !('rejectReason' in request.resource.data)
-            // Older apps leave any previous review on the doc. The review's
-            // own timestamp lets readers recognize it as a previous submission.
-            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(
-                 ['status', 'approverUid', 'submittedAt', 'totalMinutes',
-                  'entryCount', 'updatedAt', 'decidedAt', 'decidedBy', 'rejectReason']))
-          ||
-          // DECIDE (submitted → approved | rejected): the stamped approver,
-          // revalidated as a CURRENT manager, or any admin; rejections carry a
-          // reason, approvals don't. The role re-check matters because a stamp is
-          // written once and never revisited afterwards — without it a manager who
-          // was demoted or disabled would keep deciding (their own sheets included,
-          // now that self-approval is allowed) for as long as the stamp survived.
-          // applyUserAccess clears dangling pointers when eligibility is lost; this
-          // is the braces to that belt, on the surface that actually enforces.
-          (resource.data.status == 'submitted'
-            && ((isAdmin() && hasCurrentReviewRole(true)) || (isManager()
-                && resource.data.approverUid == request.auth.uid && hasCurrentReviewRole(false)))
-            && request.resource.data.status in ['approved', 'rejected']
-            && request.resource.data.decidedBy == request.auth.uid
-            && request.resource.data.decidedAt is int
-            && (request.resource.data.status == 'approved'
-                  ? !('rejectReason' in request.resource.data)
-                  : (request.resource.data.rejectReason is string
-                     && request.resource.data.rejectReason.size() > 0))
-            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(
-                 ['status', 'decidedAt', 'decidedBy', 'rejectReason',
-                  'totalMinutes', 'entryCount', 'updatedAt']))
-        );
+        && resource.data.status == 'submitted'
+        && ((isAdmin() && hasCurrentReviewRole(true)) || (isManager()
+            && resource.data.approverUid == request.auth.uid && hasCurrentReviewRole(false)))
+        && request.resource.data.status == 'rejected'
+        && request.resource.data.decidedBy == request.auth.uid
+        && request.resource.data.decidedAt is int
+        && request.resource.data.updatedAt is int
+        && request.resource.data.rejectReason is string
+        && request.resource.data.rejectReason.size() > 0
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(
+             ['status', 'decidedAt', 'decidedBy', 'rejectReason', 'updatedAt']);
 
       // WITHDRAW (owner, before approval) and REOPEN (admin, any state).
       allow delete: if isActive()

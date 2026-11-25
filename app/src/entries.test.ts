@@ -1,43 +1,48 @@
 import { expect, it, vi } from 'vitest';
-import { runTransaction, type Transaction } from 'firebase/firestore';
+import { FirebaseError } from 'firebase/app';
+import { runTransaction, writeBatch, type Transaction, type WriteBatch } from 'firebase/firestore';
 import type { TimeEntry } from './entries';
 
 vi.mock('firebase/firestore', () => ({
-  doc: (_db: unknown, collection: string, id: string) => collection + '/' + id,
+  doc: (parent: unknown, collection?: string, id?: string) => collection === undefined ? parent + '/new-id' : collection + '/' + id,
+  collection: (_db: unknown, name: string) => name,
   runTransaction: vi.fn(),
+  writeBatch: vi.fn(),
+  setDoc: vi.fn(),
 }));
 vi.mock('./firebase', () => ({ db: {} }));
 vi.mock('./liveQuery', () => ({ useLiveDoc: vi.fn(), useLiveQuery: vi.fn() }));
 
-const { clockOut, deleteEntry, ENTRY_CHANGED, updateEntry } = await import('./entries');
+const { clockOut, deleteEntry, ENTRY_CHANGED, SESSION_ALREADY_ENDED, updateEntry } = await import('./entries');
 
 const entry = {
-  uid: 'member', id: 'old', start: 1000, end: null, dayKey: '2026-07-12', periodKey: '2026-07-12',
+  uid: 'member', id: 'running_member', start: 1000, end: null, dayKey: '2026-07-12', periodKey: '2026-07-12',
   timeZone: 'UTC', source: 'clock', activityId: 'activity', activityName: 'Activity',
   createdAt: 1000, updatedAt: 1000,
 } satisfies TimeEntry;
 
-function transactionWith(pointer: string) {
-  const tx = {
-    get: vi.fn(async (path: string) => ({
-      data: () => path.startsWith('users/') ? { activeEntryId: pointer } : { ...entry, end: 121000 },
-    })),
-    update: vi.fn(),
-  };
-  vi.mocked(runTransaction).mockImplementationOnce((_db, operation) => operation(tx as unknown as Transaction));
-  return tx;
+function recordingBatch(commit: () => Promise<void>) {
+  const batch = { set: vi.fn(), delete: vi.fn(), commit: vi.fn(commit) };
+  vi.mocked(writeBatch).mockReturnValueOnce(batch as unknown as WriteBatch);
+  return batch;
 }
 
-it('leaves a newer timer and the old hours alone when a stale screen clocks out', async () => {
-  const tx = transactionWith('new');
-  await clockOut('member', entry);
-  expect(tx.update).not.toHaveBeenCalled();
+it('clocks out by writing the finished entry and removing the session in one write', async () => {
+  vi.spyOn(Date, 'now').mockReturnValue(121000);
+  try {
+    const batch = recordingBatch(async () => {});
+    await clockOut(entry);
+    const { id: _id, ...fields } = entry;
+    expect(batch.set.mock.calls).toEqual([['timeEntries/clock_member_1000', { ...fields, end: 121000, durationMinutes: 2, updatedAt: 121000 }]]);
+    expect(batch.delete.mock.calls).toEqual([['timeEntries/running_member']]);
+  } finally {
+    vi.restoreAllMocks();
+  }
 });
 
-it('can clear a dangling pointer without overwriting the already closed hours', async () => {
-  const tx = transactionWith('old');
-  await clockOut('member', entry);
-  expect(tx.update.mock.calls).toEqual([['users/member', { activeEntryId: null }]]);
+it('says the timer was already stopped when the rules refuse a stale clock-out', async () => {
+  recordingBatch(async () => { throw new FirebaseError('permission-denied', 'denied'); });
+  await expect(clockOut(entry)).rejects.toThrow(SESSION_ALREADY_ENDED);
 });
 
 it('rejects a stale correction and a stale deletion of changed hours', async () => {
