@@ -16,23 +16,6 @@ phase boundary.
 | 7 | Weekly timesheets: submit/approve workflow | **complete** (2026-07-16: full lifecycle e2e green; deployed to prod; greenfield wipe done — 2 test users + 8 docs removed, admin kept, approver=self) |
 | 8 | Push notifications (FCM) + overlap guard + activities rename | **complete** (2026-07-17: triggers for submit/decide/new-user + Tuesday-local weekly reminder w/ per-event prefs; overlap detection blocks submission; project/event distinction dropped; 85 emulator + 17 functions-unit + 33 shared tests + full e2e green) |
 
-## Pending release
-
-- Timesheet duration review adds configurable admin thresholds and a single
-  confirmation for flagged submissions and approvals. Pending approvers see
-  current thresholds and approved sheets retain their decision snapshot.
-- A clock session in progress lives at a fixed id (`running_{uid}`), so a
-  person cannot have two and no profile pointer can name one that is gone;
-  clock-out is one offline-capable write the rules check against the session.
-- Submission and approval are the callables' alone: the direct-write paths
-  that older apps used are gone from the rules, so this release retires
-  v0.32.2 (`scripts/set-min-version.mjs 0.33.0`).
-- Rollout order: functions (three new callables, `submitReviewedTimesheet`,
-  `approveReviewedTimesheet`, `copyPreviousTimesheetWeek`, which need their
-  public invoker; `TODO.md`), then the rules, then
-  `scripts/migrate-running-sessions.mjs --apply`, then the web deploy, Play
-  internal testing and TestFlight, then the version floor.
-
 ## Deploy log
 
 Newest first, one entry per release, written with the version bump and
@@ -66,6 +49,21 @@ id and take submission and approval off direct writes. Then
 `scripts/migrate-running-sessions.mjs --apply`. v0.32.2 cannot run against
 these rules, so the version floor rises to 0.33.0 once Play and TestFlight
 have it.
+
+Shipped 2026-11-25. Functions first: the three new callables were created
+on 2026-11-25 by Deploy Functions from `40844c6`, without their public
+invoker (domain-restricted sharing); `allUsers` was bound on each by
+lifting `iam.allowedPolicyMemberDomains` on the project and restoring it.
+Then Deploy Functions from `4699624`: 9 of 9 callables answered for
+themselves, `probeQueries` OK on all 13 shapes, no errors logged. Rules
+and indexes from `4699624`, the live ruleset checked equal to the
+repository; `migrate-running-sessions.mjs --apply` cleared 20 empty
+pointers and moved no sessions. **v0.33.0** released, tag `v0.33.0` at
+`4699624`: GitHub release; Play internal testing 0.33.0 (33000), whose
+universal APK booted five times in a row with `v0.33.0 · 4699624`;
+TestFlight 0.33.0 build 33000 from the tag; hosting from the Web
+workflow's artifact through Deploy Web, serving `0.33.0` and `4699624`.
+`config/app.minVersionCode` set to 33000, which retires v0.32.2.
 
 ### 2026-11-02 — Loading, not empty — v0.32.2
 
