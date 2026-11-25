@@ -116,7 +116,6 @@ export async function buildWorld() {
       email: p.email,
       photoURL: null,
       ...access,
-      activeEntryId: null,
       approverUid: p.approver ? uids[p.approver] : null,
       timeZone: tz,
       createdAt: now - 90 * 86400000,

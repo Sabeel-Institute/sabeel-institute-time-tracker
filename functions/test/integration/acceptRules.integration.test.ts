@@ -36,7 +36,6 @@ async function account(uid: string, email: string, status: UserDoc['status']) {
     status,
     role: 'member',
     admin: false,
-    activeEntryId: null,
     approverUid: null,
     createdAt: 1,
   });

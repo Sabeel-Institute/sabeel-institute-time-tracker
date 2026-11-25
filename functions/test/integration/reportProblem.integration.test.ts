@@ -45,7 +45,6 @@ async function profile(uid: string, displayName: string, email: string) {
     status: 'active',
     role: 'member',
     admin: false,
-    activeEntryId: null,
     approverUid: null,
     createdAt: Date.now(),
   });

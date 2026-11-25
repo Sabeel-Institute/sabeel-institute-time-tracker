@@ -124,6 +124,9 @@ to Today.
 Good to know:
 
 - You can only have **one running session** at a time.
+- Clocking in and out works without a connection too; the app sends it when
+  you are back online. If the same timer was already stopped on another
+  device, the app says so and keeps that one.
 - Forgot to clock out? Sessions are **automatically closed after 12 hours**
   and marked "closed automatically" — edit the entry afterwards to correct the
   times.

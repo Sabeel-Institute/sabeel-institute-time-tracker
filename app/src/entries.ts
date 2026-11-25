@@ -4,6 +4,7 @@ import {
   doc,
   query,
   runTransaction,
+  setDoc,
   where,
   writeBatch,
   type QuerySnapshot,
@@ -15,10 +16,11 @@ import {
   deviceTimeZone,
   entryMinutes,
   patchApplied,
+  finishedClockEntryId,
   periodKeyFor,
+  runningEntryId,
   timeEntryRevision,
   type TimeEntryDoc,
-  type UserDoc,
 } from '@sabeel/shared';
 import { FirebaseError } from 'firebase/app';
 import { httpsCallable } from 'firebase/functions';
@@ -41,11 +43,14 @@ export function explainEntryWriteError(e: unknown): string {
   return (e as Error).message;
 }
 
-/** Clock in: create the running entry and point activeEntryId at it, atomically. */
+/**
+ * Clock in: the session in progress, at the person's fixed running id. A
+ * second clock-in (another device) is refused by the rules rather than
+ * starting a second timer. Not a transaction, so it works offline.
+ */
 export async function clockIn(uid: string, activity: Activity): Promise<void> {
   const now = Date.now();
   const tz = deviceTimeZone();
-  const entryRef = doc(collection(db, COLLECTIONS.timeEntries));
   const dayKey = dayKeyFor(now, tz);
   const entry: TimeEntryDoc = {
     uid,
@@ -60,29 +65,31 @@ export async function clockIn(uid: string, activity: Activity): Promise<void> {
     createdAt: now,
     updatedAt: now,
   };
-  const batch = writeBatch(db);
-  batch.set(entryRef, entry);
-  batch.update(doc(db, COLLECTIONS.users, uid), { activeEntryId: entryRef.id });
-  await batch.commit();
+  await setDoc(doc(db, COLLECTIONS.timeEntries, runningEntryId(uid)), entry);
 }
 
-/** End the timer only if both it and the latest pointer still agree. */
-export async function clockOut(uid: string, entry: TimeEntry): Promise<void> {
+export const SESSION_ALREADY_ENDED =
+  'This timer was already stopped, on another device or automatically after 12 hours. Check the entry on Timesheet.';
+
+/**
+ * Clock out: the finished entry, at the id the session fixes, replaces the
+ * session in one write. Works offline; the rules accept it only while the session it names
+ * is still the one running (same start), so a stale or queued clock-out can
+ * never end a newer session.
+ */
+export async function clockOut(session: TimeEntry): Promise<void> {
   const now = Date.now();
-  const entryRef = doc(db, COLLECTIONS.timeEntries, entry.id);
-  const userRef = doc(db, COLLECTIONS.users, uid);
-  await runTransaction(db, async (tx) => {
-    const [currentSnap, userSnap] = await Promise.all([tx.get(entryRef), tx.get(userRef)]);
-    const current = currentSnap.data() as TimeEntryDoc | undefined;
-    const user = userSnap.data() as UserDoc | undefined;
-    // A scheduler or another device may have closed this session and started
-    // a new one while this screen was still showing the previous timer.
-    if (user?.activeEntryId !== entry.id) return;
-    if (current?.uid === uid && current.end === null) {
-      tx.update(entryRef, { end: now, durationMinutes: entryMinutes(current.start, now), updatedAt: now });
-    }
-    tx.update(userRef, { activeEntryId: null });
-  });
+  const { id, ...fields } = session;
+  const finished: TimeEntryDoc = { ...fields, end: now, durationMinutes: entryMinutes(session.start, now), updatedAt: now };
+  const batch = writeBatch(db);
+  batch.set(doc(db, COLLECTIONS.timeEntries, finishedClockEntryId(session.uid, session.start)), finished);
+  batch.delete(doc(db, COLLECTIONS.timeEntries, id));
+  try {
+    await batch.commit();
+  } catch (e) {
+    if (e instanceof FirebaseError && e.code === 'permission-denied') throw new Error(SESSION_ALREADY_ENDED);
+    throw e;
+  }
 }
 
 export async function createManualEntry(input: {

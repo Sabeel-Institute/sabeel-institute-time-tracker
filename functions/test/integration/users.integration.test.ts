@@ -22,7 +22,6 @@ async function seedUser(uid: string, doc: Record<string, unknown>) {
     status: 'pending',
     role: 'member',
     admin: false,
-    activeEntryId: null,
     createdAt: Date.now(),
     ...doc,
   });
@@ -102,7 +101,6 @@ describe('applyUserAccess — an email-and-password account', () => {
       status: 'pending',
       role: 'member',
       admin: false,
-      activeEntryId: null,
       createdAt: Date.now(),
     });
     return uid;

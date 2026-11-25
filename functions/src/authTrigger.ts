@@ -44,7 +44,6 @@ export async function applyProvision(user: {
       status: claims.status,
       role: claims.role,
       admin: claims.admin,
-      activeEntryId: null,
       approverUid: null,
       createdAt: now,
       claimsUpdatedAt: now,

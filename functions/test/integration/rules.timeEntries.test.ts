@@ -1,4 +1,4 @@
-import { describe, it, beforeAll, afterAll, beforeEach } from 'vitest';
+import { describe, expect, it, beforeAll, afterAll, beforeEach } from 'vitest';
 import { readFileSync } from 'node:fs';
 import {
   initializeTestEnvironment,
@@ -6,7 +6,7 @@ import {
   assertSucceeds,
   type RulesTestEnvironment,
 } from '@firebase/rules-unit-testing';
-import { doc, getDoc, setDoc, updateDoc, deleteDoc, deleteField, writeBatch } from 'firebase/firestore';
+import { doc, getDoc, setDoc, updateDoc, deleteDoc, writeBatch } from 'firebase/firestore';
 import { EMULATOR_PROJECT_ID } from '@sabeel/shared';
 
 let testEnv: RulesTestEnvironment;
@@ -61,14 +61,13 @@ const aliceTimesheet = (status: 'submitted' | 'approved' | 'rejected') => ({
   ...(status === 'approved' ? { decidedAt: T0, decidedBy: 'mgr' } : {}),
 });
 
-const aliceUserDoc = (activeEntryId: string | null) => ({
+const aliceUserDoc = () => ({
   displayName: 'Alice',
   email: 'alice@example.com',
   photoURL: null,
   status: 'active',
   role: 'member',
   admin: false,
-  activeEntryId,
   approverUid: 'mgr',
   createdAt: 1,
 });
@@ -97,15 +96,15 @@ beforeEach(async () => {
   await testEnv.clearFirestore();
   await testEnv.withSecurityRulesDisabled(async (ctx) => {
     const db = ctx.firestore();
-    await setDoc(doc(db, 'users/alice'), aliceUserDoc(null));
+    await setDoc(doc(db, 'users/alice'), aliceUserDoc());
     // Entry creates now check referential integrity, so the referenced activity
     // and the entry's owner must exist.
     await setDoc(doc(db, 'users/mgr'), {
-      ...aliceUserDoc(null),
+      ...aliceUserDoc(),
       displayName: 'Mgr',
       role: 'manager',
     });
-    await setDoc(doc(db, 'users/adm'), { ...aliceUserDoc(null), admin: true });
+    await setDoc(doc(db, 'users/adm'), { ...aliceUserDoc(), admin: true });
     await setDoc(doc(db, 'activities/act1'), {
       name: 'Tutoring',
       status: 'active',
@@ -135,80 +134,89 @@ const seedTimesheet = (status: 'submitted' | 'approved' | 'rejected') =>
     await setDoc(doc(ctx.firestore(), `timesheets/alice_${PERIOD}`), aliceTimesheet(status));
   });
 
-describe('timeEntries — clock in/out batches', () => {
-  it('clock-in: entry create + pointer set in one batch succeeds', async () => {
-    const db = alice().firestore();
-    const batch = writeBatch(db);
-    batch.set(doc(db, 'timeEntries/e1'), runningEntry);
-    batch.update(doc(db, 'users/alice'), { activeEntryId: 'e1' });
-    await assertSucceeds(batch.commit());
+const RUN = 'timeEntries/running_alice';
+// The finished entry a clock-out writes: the session, ended.
+const finishedFrom = (session: typeof runningEntry, minutes = 30) => ({
+  ...session, end: session.start + minutes * 60000, durationMinutes: minutes, updatedAt: session.start + minutes * 60000,
+});
+async function seedSession(session: object = runningEntry) {
+  await testEnv.withSecurityRulesDisabled(async (ctx) => {
+    await setDoc(doc(ctx.firestore(), RUN), session);
   });
+}
+const finishedId = (start: number) => `timeEntries/clock_alice_${start}`;
+function clockOutBatch(db: ReturnType<ReturnType<typeof alice>['firestore']>, finished: { start: number } & Record<string, unknown>, id = finishedId(finished.start)) {
+  const batch = writeBatch(db);
+  batch.set(doc(db, id), finished);
+  batch.delete(doc(db, RUN));
+  return batch;
+}
 
-  it('clock-in without setting the pointer fails', async () => {
+describe('timeEntries — clock in and out', () => {
+  it('clock-in creates the session at the fixed running id, and nowhere else', async () => {
     const db = alice().firestore();
     await assertFails(setDoc(doc(db, 'timeEntries/e1'), runningEntry));
+    await assertFails(setDoc(doc(db, 'timeEntries/running_bob'), runningEntry));
+    await assertSucceeds(setDoc(doc(db, RUN), runningEntry));
   });
 
-  it('second concurrent clock-in fails (one active session)', async () => {
-    await testEnv.withSecurityRulesDisabled(async (ctx) => {
-      await setDoc(doc(ctx.firestore(), 'timeEntries/e1'), runningEntry);
-      await setDoc(doc(ctx.firestore(), 'users/alice'), aliceUserDoc('e1'));
-    });
-    const db = alice().firestore();
-    const batch = writeBatch(db);
-    batch.set(doc(db, 'timeEntries/e2'), runningEntry);
-    batch.update(doc(db, 'users/alice'), { activeEntryId: 'e2' });
-    await assertFails(batch.commit());
+  it('a second clock-in cannot replace the session in progress', async () => {
+    await seedSession();
+    await assertFails(setDoc(doc(alice().firestore(), RUN), { ...runningEntry, start: T0 + 60000, createdAt: T0 + 60000 }));
   });
 
-  it('clock-out: close entry + clear pointer in one batch succeeds', async () => {
-    await testEnv.withSecurityRulesDisabled(async (ctx) => {
-      await setDoc(doc(ctx.firestore(), 'timeEntries/e1'), runningEntry);
-      await setDoc(doc(ctx.firestore(), 'users/alice'), aliceUserDoc('e1'));
-    });
+  it('only a session in progress has the running id, and it ends only by clocking out', async () => {
     const db = alice().firestore();
-    const batch = writeBatch(db);
-    batch.update(doc(db, 'timeEntries/e1'), {
-      end: T0 + 30 * 60000,
-      durationMinutes: 30,
-      updatedAt: T0 + 30 * 60000,
-    });
-    batch.update(doc(db, 'users/alice'), { activeEntryId: null });
-    await assertFails(
-      updateDoc(doc(alice().firestore(), 'timeEntries/e1'), {
-        end: T0 + 30 * 60000,
-        durationMinutes: 30,
-      }),
-    ); // closing without clearing the pointer fails
-    await assertSucceeds(batch.commit());
+    await assertFails(setDoc(doc(db, RUN), closedEntry));
+    await seedSession();
+    await assertFails(updateDoc(doc(db, RUN), { end: T0 + 60000, durationMinutes: 1, updatedAt: T0 + 60000 }));
+    await assertFails(updateDoc(doc(db, RUN), { start: T0 - 60000 }));
+    await assertSucceeds(updateDoc(doc(db, RUN), { note: 'Setting up', updatedAt: T0 + 1 }));
   });
 
-  it('a closed entry cannot be turned back into a running timer', async () => {
-    await testEnv.withSecurityRulesDisabled(async (ctx) => {
-      await setDoc(doc(ctx.firestore(), 'timeEntries/m1'), { ...closedEntry, source: 'clock' });
-    });
-    const ref = doc(alice().firestore(), 'timeEntries/m1');
-    const reopen = { end: null, durationMinutes: deleteField(), updatedAt: T0 + 1 };
-    await assertFails(updateDoc(ref, reopen));
+  it('clock-out writes the finished session and removes it in one write', async () => {
+    await seedSession();
     const db = alice().firestore();
-    const batch = writeBatch(db);
-    batch.update(doc(db, 'timeEntries/m1'), reopen);
-    batch.update(doc(db, 'users/alice'), { activeEntryId: 'm1' });
-    await assertFails(batch.commit());
-    await assertSucceeds(updateDoc(ref, { note: 'still closed', updatedAt: T0 + 1 }));
+    // The finished entry without ending the session, or under another id.
+    await assertFails(setDoc(doc(db, finishedId(T0)), finishedFrom(runningEntry)));
+    await assertFails(clockOutBatch(db, finishedFrom(runningEntry), 'timeEntries/clock_alice_other').commit());
+    // Ending the session without its finished entry: no discarding hours.
+    await assertFails(deleteDoc(doc(db, RUN)));
+    const disguised = writeBatch(db);
+    disguised.set(doc(db, 'timeEntries/manual1'), finishedFrom(runningEntry));
+    disguised.delete(doc(db, RUN));
+    await assertFails(disguised.commit());
+    await assertFails(deleteDoc(doc(bob().firestore(), RUN)));
+    await assertSucceeds(clockOutBatch(db, finishedFrom(runningEntry)).commit());
   });
 
-  it('discarding a running timer and clearing its pointer succeeds; clearing alone fails', async () => {
-    await testEnv.withSecurityRulesDisabled(async (ctx) => {
-      await setDoc(doc(ctx.firestore(), 'timeEntries/e1'), runningEntry);
-      await setDoc(doc(ctx.firestore(), 'users/alice'), aliceUserDoc('e1'));
-    });
+  it('a stale clock-out cannot end a newer session or duplicate a finished one', async () => {
     const db = alice().firestore();
-    await assertFails(updateDoc(doc(db, 'users/alice'), { activeEntryId: null }));
-    const batch = writeBatch(db);
-    batch.delete(doc(db, 'timeEntries/e1'));
-    batch.update(doc(db, 'users/alice'), { activeEntryId: null });
-    await assertSucceeds(batch.commit());
+    // Queued offline for the session that started at T0; another device has
+    // since clocked out and in again.
+    await seedSession({ ...runningEntry, start: T0 + 3600000, createdAt: T0 + 3600000 });
+    await assertFails(clockOutBatch(db, finishedFrom(runningEntry)).commit());
+    // The same clock-out again once it has gone through: refused, one entry.
+    await seedSession();
+    await assertSucceeds(clockOutBatch(db, finishedFrom(runningEntry)).commit());
+    await assertFails(clockOutBatch(db, finishedFrom(runningEntry, 45)).commit());
+    expect((await getDoc(doc(db, finishedId(T0)))).data()?.durationMinutes).toBe(30);
+  });
+
+  it('a clock-out cannot change the session’s day, place or activity on the way', async () => {
+    await seedSession();
+    const db = alice().firestore();
+    await assertFails(clockOutBatch(db, { ...finishedFrom(runningEntry), timeZone: 'UTC' }).commit());
+    await assertFails(clockOutBatch(db, { ...finishedFrom(runningEntry), activityId: 'other' }).commit());
+    await assertFails(clockOutBatch(db, { ...finishedFrom(runningEntry), source: 'manual' }).commit());
+  });
+
+  it('only its owner can find out whether a session is in progress', async () => {
+    await assertSucceeds(getDoc(doc(alice().firestore(), RUN)));
+    await assertFails(getDoc(doc(bob().firestore(), RUN)));
+    await seedSession();
+    await assertFails(getDoc(doc(bob().firestore(), RUN)));
+    await assertSucceeds(getDoc(doc(manager().firestore(), RUN)));
   });
 });
 
@@ -295,18 +303,9 @@ describe('timeEntries — reads, corrections, deletes', () => {
     );
   });
 
-  it('manager cannot touch a RUNNING entry (pointer lives on the owner doc)', async () => {
-    await testEnv.withSecurityRulesDisabled(async (ctx) => {
-      await setDoc(doc(ctx.firestore(), 'timeEntries/r1'), runningEntry);
-      await setDoc(doc(ctx.firestore(), 'users/alice'), aliceUserDoc('r1'));
-    });
-    await assertFails(
-      updateDoc(doc(manager().firestore(), 'timeEntries/r1'), {
-        end: T0 + 10 * 60000,
-        durationMinutes: 10,
-        updatedAt: T0,
-      }),
-    );
+  it('manager cannot touch a session in progress', async () => {
+    await seedSession();
+    await assertFails(updateDoc(doc(manager().firestore(), RUN), { note: 'x', updatedAt: T0, lastEditedBy: 'mgr' }));
   });
 
   it('owner and manager delete closed entries; others cannot', async () => {
@@ -436,11 +435,7 @@ describe('timeEntries — submitted period lock', () => {
   });
 
   it('owner cannot clock in (running create) into a submitted period', async () => {
-    const db = alice().firestore();
-    const batch = writeBatch(db);
-    batch.set(doc(db, 'timeEntries/r9'), runningEntry);
-    batch.update(doc(db, 'users/alice'), { activeEntryId: 'r9' });
-    await assertFails(batch.commit());
+    await assertFails(setDoc(doc(alice().firestore(), RUN), runningEntry));
   });
 
   it('stamped approver may edit, add, and delete; a non-stamped manager may not', async () => {
@@ -529,37 +524,14 @@ describe('timeEntries — submitted period lock', () => {
     );
   });
 
-  it('CARVE-OUT: owner clocks out of a running entry despite the submitted period', async () => {
-    await testEnv.withSecurityRulesDisabled(async (ctx) => {
-      await setDoc(doc(ctx.firestore(), 'timeEntries/r1'), runningEntry);
-      await setDoc(doc(ctx.firestore(), 'users/alice'), aliceUserDoc('r1'));
-    });
-    const db = alice().firestore();
-    const batch = writeBatch(db);
-    batch.update(doc(db, 'timeEntries/r1'), {
-      end: T0 + 30 * 60000,
-      durationMinutes: 30,
-      updatedAt: T0 + 30 * 60000,
-    });
-    batch.update(doc(db, 'users/alice'), { activeEntryId: null });
-    await assertSucceeds(batch.commit());
+  it('CARVE-OUT: owner clocks out of a session in progress despite the submitted period', async () => {
+    await seedSession();
+    await assertSucceeds(clockOutBatch(alice().firestore(), finishedFrom(runningEntry)).commit());
   });
 
-  it('carve-out is close-only: cannot smuggle other field changes with the clock-out', async () => {
-    await testEnv.withSecurityRulesDisabled(async (ctx) => {
-      await setDoc(doc(ctx.firestore(), 'timeEntries/r1'), runningEntry);
-      await setDoc(doc(ctx.firestore(), 'users/alice'), aliceUserDoc('r1'));
-    });
-    const db = alice().firestore();
-    const batch = writeBatch(db);
-    batch.update(doc(db, 'timeEntries/r1'), {
-      end: T0 + 30 * 60000,
-      durationMinutes: 30,
-      updatedAt: T0 + 30 * 60000,
-      note: 'sneaky edit',
-    });
-    batch.update(doc(db, 'users/alice'), { activeEntryId: null });
-    await assertFails(batch.commit());
+  it('the carve-out is only a clock-out: other changes on the way are refused', async () => {
+    await seedSession();
+    await assertFails(clockOutBatch(alice().firestore(), { ...finishedFrom(runningEntry), start: T0 - 60000 }).commit());
   });
 });
 

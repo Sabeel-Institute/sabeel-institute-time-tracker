@@ -65,7 +65,6 @@ users/{uid}
   status: 'pending' | 'active' | 'disabled'
   role: 'member' | 'manager'
   admin: boolean
-  activeEntryId: string | null        # running clock session pointer
   approverUid: string | null          # sticky timesheet approver (active manager/admin)
   notifPrefs?: { rejected?, approved?, submitted?, newUser?, reminder? }  # missing = on
   timeZone?: string                   # last-seen device tz (weekly reminder scheduling)
@@ -134,13 +133,13 @@ is an explicit manager opt-in and marks the CSV filename `_unofficial`.
 
 Roles via **custom claims** (`role`, `status`, `admin`) set only by the `setUserAccess` callable; user doc mirrors them for UI. Client refreshes token (`getIdToken(true)`) when its user doc disagrees with its claims.
 
-- `users/{uid}`: **no client create** (`allow create: if false`) — the `onUserCreate` trigger provisions the forced-pending doc `{status:'pending', role:'member', admin:false, activeEntryId:null, approverUid:null, claimsUpdatedAt}` server-side; read = self, manager/admin, or (for manager/admin profiles) any active user — people must see the approver choices; self-update limited via `diff().affectedKeys().hasOnly(['activeEntryId','displayName','photoURL','approverUid','notifPrefs','timeZone'])` with the approver validated as an active manager/admin (`notifPrefs` a map, `timeZone` a string); managers may set any non-admin's `approverUid`, admins anyone's (that single field only).
+- `users/{uid}`: **no client create** (`allow create: if false`) — the `onUserCreate` trigger provisions the forced-pending doc `{status:'pending', role:'member', admin:false, approverUid:null, claimsUpdatedAt}` server-side; read = self, manager/admin, or (for manager/admin profiles) any active user — people must see the approver choices; self-update limited via `diff().affectedKeys().hasOnly(['displayName','photoURL','approverUid','notifPrefs','timeZone'])` with the approver validated as an active manager/admin (`notifPrefs` a map, `timeZone` a string); managers may set any non-admin's `approverUid`, admins anyone's (that single field only).
 - `activities`: read = any active user; create/update = manager or admin; delete = admin, archived activities only.
-- `timeEntries`: read = owner or manager; writes gated by the covering timesheet's state (`canTouchPeriod`, one `get()` on `timesheets/{uid}_{periodKey}`) and `periodKey == periodKeyOf(dayKey)` recomputed in rules (pure integer date math — spoofing a periodKey cannot dodge a lock); clock-in create requires the same batch to set `users/{uid}.activeEntryId` (checked with `getAfter()`); on-behalf writes are closed-entries-only and must set `lastEditedBy`; the owner's clock-out carve-out bypasses the period lock but may touch only `end/durationMinutes/updatedAt`.
-- `timesheets/{uid}_{periodKey}`: the full lifecycle state machine lives in rules (submit/resubmit/decide/withdraw/reopen — see the data-model section); the doc id must equal `uid + '_' + periodKey` so entry rules can `get()` it deterministically. Deciding revalidates the stamped approver as a *current* manager, so authority can't outlive the role.
+- `timeEntries`: read = owner or manager; writes gated by the covering timesheet's state (`canTouchPeriod`, one `get()` on `timesheets/{uid}_{periodKey}`) and `periodKey == periodKeyOf(dayKey)` recomputed in rules (pure integer date math — spoofing a periodKey cannot dodge a lock); a clock session in progress lives at the fixed id `timeEntries/running_{uid}` (`runningEntryId`), and only a session in progress may have it, so a person has at most one and nothing can point at one that is gone; it changes only its activity or note; clock-out deletes it and creates the finished entry (same start, activity, zone and day, checked against the session with `get()`/`existsAfter()`) in one write that works offline, and a stale clock-out naming a start the session no longer has is refused; that clock-out bypasses the period lock, as does the owner discarding a session; on-behalf writes are closed-entries-only and must set `lastEditedBy`.
+- `timesheets/{uid}_{periodKey}`: submission and approval are written only by the `submitReviewedTimesheet`/`approveReviewedTimesheet` callables, which check the reviewed hours, overlaps, running timer and duration review in one transaction (`allow create: if false`); clients reject (the stamped approver revalidated as a *current* manager, or a current admin, with a reason), withdraw (owner, before approval) and reopen (admin). The doc id must equal `uid + '_' + periodKey` so entry rules can `get()` it deterministically.
 - `meta`, `timesheetEvents`, `reports`: server-only (`allow read, write: if false`) — the canary's count baseline, the append-only timesheet history, and Report a problem's records. A client that could write the history could forge the record it exists to preserve; a report names who sent it and what they said about someone, and is for the administrators alone, who read it in their email.
 - `users/{uid}.rulesVersion`/`rulesAcceptedAt` are in no client allow-list: accepting the institute's rules is recorded by the `acceptRules` callable only.
-- One-active-session enforced by the `activeEntryId == null` precondition at clock-in; the rare race is harmless at this scale.
+- One session in progress per person by construction: it has one possible id.
 
 Rules tests with `@firebase/rules-unit-testing` (tajweed's exact harness).
 
@@ -148,7 +147,7 @@ Rules tests with `@firebase/rules-unit-testing` (tajweed's exact harness).
 
 1. `setUserAccess` (callable, **admin-only** — only admins approve/disable users or change roles) — writes user doc + custom claims atomically.
 2. `exportCsv` (callable, manager) — filters `{uid?, activityId?, from, to}` (dayKey range), returns CSV string (well under the 10 MB callable limit).
-3. `autoCloseStaleSessions` (scheduled hourly, Phase 6) — closes sessions running >12h at start+12h, `autoClosed: true`, clears pointer.
+3. `autoCloseStaleSessions` (scheduled hourly, Phase 6) — replaces a session running >12h with its finished entry at start+12h, `autoClosed: true`, in one transaction.
 4. `acceptRules` (callable, active accounts) — records the institute's rules as accepted on the caller's profile (`docs/STORE-RELEASE.md`, 4).
 5. `reportProblem` (callable, active accounts) — Report a problem: keeps `reports/{id}` (five an hour per account) and emails it from `apps-noreply@` to `apps-reports@`, Reply-To the reporter, by keyless domain-wide delegation (`functions/src/gmail.ts`).
 

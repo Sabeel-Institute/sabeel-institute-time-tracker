@@ -40,7 +40,6 @@ export interface UserDoc {
   status: UserStatus;
   role: UserRole;
   admin: boolean;
-  activeEntryId: string | null;
   /** Absent = all notifications on. */
   notifPrefs?: NotifPrefs;
   /** Last-seen device IANA timezone; the weekly reminder fires at local Tuesday 10:00. */

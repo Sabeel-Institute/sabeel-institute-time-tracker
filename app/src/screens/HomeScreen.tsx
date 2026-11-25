@@ -10,6 +10,7 @@ import {
   periodKeyFor,
   periodLabel,
   periodRangeFor,
+  runningEntryId,
   timeOfDayFor,
   type UserDoc,
 } from '@sabeel/shared';
@@ -61,7 +62,7 @@ export function HomeScreen({ uid, profile }: { uid: string; profile: UserDoc }) 
   const activities = useActivities({ includeArchived: false });
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const running = useEntry(profile.activeEntryId);
+  const running = useEntry(runningEntryId(uid));
 
   // Tick while clocked in so the elapsed figure stays honest.
   const [, setTick] = useState(0);
@@ -107,7 +108,7 @@ export function HomeScreen({ uid, profile }: { uid: string; profile: UserDoc }) 
     if (!running || !clockSettled()) return;
     setError(null);
     try {
-      await clockOut(uid, running);
+      await clockOut(running);
     } catch (e) {
       setError((e as Error).message);
     }

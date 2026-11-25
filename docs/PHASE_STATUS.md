@@ -21,13 +21,17 @@ phase boundary.
 - Timesheet duration review adds configurable admin thresholds and a single
   confirmation for flagged submissions and approvals. Pending approvers see
   current thresholds and approved sheets retain their decision snapshot.
-- Rollout order: Firestore rules and indexes, then functions (three new
-  callables: `submitReviewedTimesheet`, `approveReviewedTimesheet`,
-  `copyPreviousTimesheetWeek`), then check each new callable answers an
-  unauthenticated POST with its own `UNAUTHENTICATED` JSON (`TODO.md`), then
-  the web deploy, Play internal testing and TestFlight. v0.32.2 keeps working
-  against the new rules through its direct-write paths until it is retired
-  (`TODO.md`).
+- A clock session in progress lives at a fixed id (`running_{uid}`), so a
+  person cannot have two and no profile pointer can name one that is gone;
+  clock-out is one offline-capable write the rules check against the session.
+- Submission and approval are the callables' alone: the direct-write paths
+  that older apps used are gone from the rules, so this release retires
+  v0.32.2 (`scripts/set-min-version.mjs 0.33.0`).
+- Rollout order: functions (three new callables, `submitReviewedTimesheet`,
+  `approveReviewedTimesheet`, `copyPreviousTimesheetWeek`, which need their
+  public invoker; `TODO.md`), then the rules, then
+  `scripts/migrate-running-sessions.mjs --apply`, then the web deploy, Play
+  internal testing and TestFlight, then the version floor.
 
 ## Deploy log
 

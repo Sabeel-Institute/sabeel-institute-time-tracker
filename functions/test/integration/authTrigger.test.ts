@@ -72,7 +72,6 @@ describe('applyProvision — provisioning a valid org account', () => {
       admin: false,
       email,
       displayName: 'New Bie',
-      activeEntryId: null,
       approverUid: null,
     });
     expect(typeof snap.data()!.claimsUpdatedAt).toBe('number');

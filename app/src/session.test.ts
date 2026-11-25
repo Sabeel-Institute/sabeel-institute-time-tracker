@@ -64,7 +64,6 @@ const profile = {
   status: 'pending',
   role: 'member',
   admin: false,
-  activeEntryId: null,
   approverUid: null,
   createdAt: 1,
   claimsUpdatedAt: 1,

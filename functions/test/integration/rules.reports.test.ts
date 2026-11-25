@@ -47,7 +47,6 @@ const profile = (email: string, extra: Record<string, unknown> = {}) => ({
   status: 'active',
   role: 'member',
   admin: false,
-  activeEntryId: null,
   approverUid: null,
   createdAt: 1,
   ...extra,
