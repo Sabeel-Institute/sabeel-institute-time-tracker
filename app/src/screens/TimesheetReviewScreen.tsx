@@ -7,16 +7,19 @@ import {
   dayKeyFor,
   deviceTimeZone,
   formatDuration,
-  overlappingEntryIds,
   periodRangeFor,
+  recordedReviewFor,
+  timesheetEntriesVersion,
+  timesheetRevision,
 } from '@sabeel/shared';
 import { leaveIfShowing, type RootStackParamList } from '../nav';
-import { useEntriesRange } from '../entries';
-import { approveTimesheet, rejectTimesheet, reopenTimesheet, useTimesheet } from '../timesheets';
+import { approveTimesheet, rejectTimesheet, reopenTimesheet, useTimesheet, weekActionMessage } from '../timesheets';
 import { DayEntries, WeekStepper, openingDay, stepPeriod } from '../components/WeekView';
 import { Sheet } from '../components/Sheet';
 import { Button, ErrorText, Field, Notice, Screen, Spinner, StatusChip, sheetStatus } from '../components/ui';
 import { getTheme, spacing } from '../theme';
+import { useReviewConfirmation, useTimesheetReview } from '../timesheetReview';
+import { reviewHighlights, TimesheetReviewPrompt } from '../components/TimesheetReviewPrompt';
 
 const t = getTheme();
 
@@ -47,30 +50,44 @@ export function TimesheetReviewScreen({
   const period = periodRangeFor(anchor);
   const sheet = useTimesheet(uid, period.fromKey);
   const status = sheet === undefined ? undefined : (sheet?.status ?? 'draft');
-  // undefined until the week's entries arrive: until then no day says it has
-  // no hours, and the week cannot be approved on an empty list.
-  const loaded = useEntriesRange(uid, period.fromKey, period.toKey);
-  const entries = useMemo(() => loaded ?? [], [loaded]);
-  const [rejecting, setRejecting] = useState(false);
+  // Wait for the entries before showing empty days or enabling approval.
+  const { loaded, synced, entries, conflicts, needsReview, review, hasRunning } = useTimesheetReview(uid, period.fromKey, period.toKey);
+  const [rejecting, setRejecting] = useState<string | null>(null);
   const [reason, setReason] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
   // A second submission notification can re-target this screen (another person,
   // another week) while it is mounted — navigate() swaps the params in place —
   // and whatever was under way for the last subject goes with it: a Reject
   // sheet left open would otherwise reject the new week with the old reason.
   useEffect(() => {
     setAnchor(periodKey);
-    setRejecting(false);
+    setRejecting(null);
     setReason('');
     setError(null);
   }, [uid, periodKey]);
   // An error is about the week it happened on; another week starts clear.
   const showWeek = (key: string) => {
     setAnchor(key);
+    setRejecting(null);
     setError(null);
   };
 
-  const conflicts = useMemo(() => overlappingEntryIds(entries), [entries]);
+  const recordedSubmission = recordedReviewFor(sheet?.submissionReview, sheet?.submittedAt);
+  // An empty week is submitted without a review; anything flagged since then
+  // is new to the member. (An older app's submission records none either, and
+  // says nothing about what its member saw.)
+  const submittedReview = recordedSubmission
+    ?? (sheet?.status === 'submitted' && sheet.entryCount === 0 && review ? { limits: review.limits, flags: [] } : undefined);
+  const shownReview = status === 'approved' ? recordedReviewFor(sheet?.approvalReview, sheet?.decidedAt) : review;
+  const highlights = reviewHighlights(shownReview, status === 'submitted' ? submittedReview : undefined);
+  const canApprove = loaded && synced && (!needsReview || review !== undefined) && conflicts.size === 0 && !hasRunning;
+  const target = JSON.stringify([uid, period.fromKey, sheet ? timesheetRevision(sheet) : status]);
+  const confirmation = useReviewConfirmation(JSON.stringify([target, canApprove, timesheetEntriesVersion(entries)]), review, setError);
+  const editEntry = (entryId: string) => {
+    confirmation.close();
+    nav.navigate('EntryEdit', { entryId });
+  };
   const total = useMemo(() => entries.reduce((s, e) => s + (e.durationMinutes ?? 0), 0), [entries]);
 
   // Every day of the week, so an empty day is visible during review.
@@ -84,11 +101,27 @@ export function TimesheetReviewScreen({
     setError(null);
     try {
       await fn();
-      setRejecting(false);
+      setRejecting(null);
       leaveIfShowing(nav);
     } catch (e) {
-      setError((e as Error).message);
+      setError(weekActionMessage(e));
     }
+  };
+
+  const approve = async () => {
+    if (!sheet || sheet.status !== 'submitted' || !canApprove || saving) return;
+    confirmation.close();
+    setSaving(true);
+    try {
+      await decide(() => approveTimesheet(sheet, entries, review));
+    } finally {
+      setSaving(false);
+    }
+  };
+  const startApproval = () => {
+    setError(null);
+    if (review?.flags.length) confirmation.open();
+    else void approve();
   };
 
   const shown = status ? sheetStatus(status) : null;
@@ -123,17 +156,24 @@ export function TimesheetReviewScreen({
           <Text style={styles.hint}>
             Check the days below, then approve the week, or reject it with a reason {displayName} will see.
           </Text>
+          {recordedSubmission && recordedSubmission.flags.length > 0 ? (
+            <Text style={styles.hint}>Member confirmed the flagged hours on {new Date(recordedSubmission.at).toLocaleDateString()}.</Text>
+          ) : null}
+          {loaded && !synced ? <Text style={styles.hint}>Checking for the latest hours before you can approve…</Text> : null}
+          {hasRunning ? <Notice tone="info">This week still has a running timer. Wait for it to close before approving.</Notice> : null}
+          {conflicts.size > 0 ? <Notice tone="error">Fix overlapping entries before approving.</Notice> : null}
           <Button
             label="Approve timesheet"
-            onPress={() => decide(() => approveTimesheet(sheet, reviewerUid, entries))}
-            disabled={!loaded}
+            onPress={startApproval}
+            disabled={!canApprove || saving}
           />
           <Button
             label="Reject timesheet…"
             kind="secondary"
+            disabled={saving}
             onPress={() => {
               setError(null);
-              setRejecting(true);
+              setRejecting(target);
             }}
           />
         </View>
@@ -150,7 +190,7 @@ export function TimesheetReviewScreen({
                 try {
                   await reopenTimesheet(sheet);
                 } catch (e) {
-                  setError((e as Error).message);
+                  setError(weekActionMessage(e));
                 }
               }}
             />
@@ -158,7 +198,8 @@ export function TimesheetReviewScreen({
         </View>
       ) : null}
       {/* Under the buttons it answers, not below the whole week. */}
-      <ErrorText error={error} />
+      <ErrorText error={confirmation.visible ? null : error} />
+      {highlights.days.map((message) => <Notice key={message} tone="info">{message}</Notice>)}
 
       {!loaded ? <Spinner label="Loading this week…" /> : null}
       {(loaded ? days : []).map((dayKey) => (
@@ -167,8 +208,9 @@ export function TimesheetReviewScreen({
           dayKey={dayKey}
           entries={entries.filter((e) => e.dayKey === dayKey)}
           conflicts={conflicts}
+          review={highlights.entries}
           // An approver corrects entries in any week not yet approved.
-          onOpen={status === 'approved' ? undefined : (entryId) => nav.navigate('EntryEdit', { entryId })}
+          onOpen={status === 'approved' ? undefined : editEntry}
         />
       ))}
 
@@ -182,7 +224,18 @@ export function TimesheetReviewScreen({
         />
       )}
 
-      <Sheet visible={rejecting} title="Reject timesheet" onClose={() => setRejecting(false)} closeLabel="Cancel">
+      <TimesheetReviewPrompt
+        visible={confirmation.visible && status === 'submitted' && canApprove}
+        mode="approve"
+        highlights={highlights}
+        entries={entries}
+        busy={saving}
+        error={error}
+        onClose={confirmation.close}
+        onConfirm={approve}
+        onEdit={editEntry}
+      />
+      <Sheet visible={rejecting === target} title="Reject timesheet" onClose={() => setRejecting(null)} closeLabel="Cancel">
         <Field
           label={`What does ${displayName} need to fix?`}
           value={reason}

@@ -40,6 +40,7 @@ beforeEach(async () => {
   await testEnv.clearFirestore();
   await testEnv.withSecurityRulesDisabled(async (ctx) => {
     await setDoc(doc(ctx.firestore(), APP_CONFIG_COLLECTION, APP_CONFIG_DOC), { minVersionCode: 32 });
+    await setDoc(doc(ctx.firestore(), COLLECTIONS.users, 'adm'), { status: 'active', role: 'member', admin: true });
   });
 });
 
@@ -67,5 +68,45 @@ describe('config/app', () => {
     // that the read-open collection is not the deny-all catch-all by mistake.
     await assertSucceeds(getDoc(doc(testEnv.unauthenticatedContext().firestore(), APP_CONFIG_COLLECTION, 'other')));
     await assertFails(getDoc(doc(testEnv.unauthenticatedContext().firestore(), COLLECTIONS.reports, 'x')));
+  });
+});
+
+describe('config/timesheetReview', () => {
+  const settings = { minEntryMinutes: 3, maxEntryMinutes: 480, maxDayMinutes: 720 };
+  const ref = (uid: string, claims: Record<string, string | boolean>) =>
+    doc(testEnv.authenticatedContext(uid, claims).firestore(), APP_CONFIG_COLLECTION, 'timesheetReview');
+
+  it('allows active accounts to read and only admins to save', async () => {
+    const admin = ref('adm', { role: 'member', admin: true, status: 'active' });
+    const manager = ref('mgr', { role: 'manager', status: 'active' });
+    const member = ref('mem', { role: 'member', status: 'active' });
+    const pending = ref('pending', { role: 'member', status: 'pending' });
+    await assertSucceeds(getDoc(member)); // absent config uses defaults
+    await assertSucceeds(setDoc(admin, settings));
+    await assertSucceeds(getDoc(member));
+    await assertSucceeds(getDoc(manager));
+    await assertFails(getDoc(pending));
+    await assertFails(getDoc(doc(testEnv.unauthenticatedContext().firestore(), APP_CONFIG_COLLECTION, 'timesheetReview')));
+    await assertFails(setDoc(manager, settings));
+    await assertFails(setDoc(member, settings));
+  });
+
+  it('rejects invalid, incomplete, and unrelated settings', async () => {
+    const admin = ref('adm', { role: 'member', admin: true, status: 'active' });
+    await assertFails(setDoc(admin, { ...settings, minEntryMinutes: 2.5 }));
+    await assertFails(setDoc(admin, { ...settings, minEntryMinutes: 481 }));
+    await assertFails(setDoc(admin, { ...settings, maxDayMinutes: 1501 }));
+    await assertFails(setDoc(admin, { ...settings, maxEntryMinutes: 721 }));
+    await assertFails(setDoc(admin, { minEntryMinutes: 3, maxEntryMinutes: 480 }));
+    await assertFails(setDoc(admin, { ...settings, extra: true }));
+    await assertSucceeds(setDoc(admin, { ...settings, maxEntryMinutes: 600 }));
+  });
+
+  it('refuses an admin token that outlived the admin role', async () => {
+    const admin = ref('adm', { role: 'member', admin: true, status: 'active' });
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), COLLECTIONS.users, 'adm'), { status: 'active', role: 'member', admin: false });
+    });
+    await assertFails(setDoc(admin, settings));
   });
 });

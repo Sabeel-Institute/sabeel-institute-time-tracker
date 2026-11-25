@@ -27,6 +27,22 @@ you complete them.
   may sign as `report-mailer@sabeel-institute-time-tracker.iam.gserviceaccount.com`.
   The exact `gcloud` command is `docs/DEPLOY.md`, "One-time, per Firebase
   project", step 4. Without it every report is kept but its email fails.
+- [ ] **Public invoker for the timesheet-review callables** (the release after
+  v0.32.2): `submitReviewedTimesheet`, `approveReviewedTimesheet` and
+  `copyPreviousTimesheetWeek` are the first callables created since
+  domain-restricted sharing applies, so the deploy may create them without
+  `allUsers` as invoker. Check each with an unauthenticated
+  `curl -X POST https://us-central1-sabeel-institute-time-tracker.cloudfunctions.net/<name> -H 'Content-Type: application/json' -d '{"data":{}}'`:
+  the function's own `UNAUTHENTICATED` JSON is right, a Cloud Run HTML 403 is
+  not. Fix: the expo-firebase-stack skill, "Callables: Failed to set invoker"
+  (lift `iam.allowedPolicyMemberDomains` on the project, bind, restore). Do it
+  before the web deploy: the site calls them at once.
+- [ ] **Decide when to retire v0.32.2** (`node scripts/set-min-version.mjs
+  <version>`, `docs/DEPLOY.md`, "Retiring old builds"). Until it is retired,
+  rules keep the direct-write submit, resubmit and approve paths that v0.32.2
+  uses; they check the approver, the period and the running timer, but not the
+  reviewed hours, overlaps or the duration review. Once raised, those paths can
+  be closed in the rules.
 - [x] **Android debug SHA-1 registered** + `google-services.json` re-downloaded
   (now has the `client_type: 1` Android OAuth client). Native Google Sign-In is
   wired and the app builds; complete a real sign-in on a device/emulator with a

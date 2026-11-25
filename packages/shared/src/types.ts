@@ -2,6 +2,8 @@
 // Timestamps cross this boundary as epoch milliseconds in shared code; each
 // surface converts to/from its SDK's Timestamp at the read/write edge.
 
+import type { RecordedReview } from './timesheetReview';
+
 export type UserStatus = 'pending' | 'active' | 'disabled';
 export type UserRole = 'member' | 'manager';
 
@@ -141,6 +143,10 @@ export interface TimesheetDoc {
   /** Stamped from users/{uid}.approverUid at (re)submission; admins may self-stamp. */
   approverUid: string;
   submittedAt: number;
+  /** Thresholds and flags the member reviewed when submitting. */
+  submissionReview?: RecordedReview;
+  /** Thresholds and flags the approver reviewed when deciding. */
+  approvalReview?: RecordedReview;
   /** Decision fields: set on approve/reject, cleared again on resubmit. */
   decidedAt?: number;
   decidedBy?: string;

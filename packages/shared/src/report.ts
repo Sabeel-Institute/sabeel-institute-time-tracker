@@ -1,4 +1,4 @@
-import { timeOfDayFor } from './time';
+import { entryDisplayTimeZone, timeOfDayFor } from './time';
 import type { TimeEntryDoc } from './types';
 
 /**
@@ -54,14 +54,15 @@ export function reportRow(
   person: { name: string; email: string },
 ): (string | number)[] {
   const minutes = entry.durationMinutes ?? 0;
+  const zone = entryDisplayTimeZone(entry.timeZone);
   return [
     person.name,
     person.email,
     entry.activityName,
     entry.dayKey,
-    timeOfDayFor(entry.start, entry.timeZone),
-    timeOfDayFor(entry.end as number, entry.timeZone),
-    entry.timeZone,
+    timeOfDayFor(entry.start, zone),
+    timeOfDayFor(entry.end as number, zone),
+    zone === entry.timeZone ? zone : 'UTC (stored time zone unavailable)',
     Number((minutes / 60).toFixed(2)),
     minutes,
     entry.source,

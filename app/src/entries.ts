@@ -1,28 +1,28 @@
 import {
   addDoc,
   collection,
-  deleteDoc,
   doc,
-  getDocs,
   query,
-  updateDoc,
+  runTransaction,
   where,
   writeBatch,
+  type QuerySnapshot,
 } from 'firebase/firestore';
 import { useLiveDoc, useLiveQuery } from './liveQuery';
 import {
-  addDays,
   COLLECTIONS,
   dayKeyFor,
   deviceTimeZone,
   entryMinutes,
-  epochFor,
+  patchApplied,
   periodKeyFor,
-  timeOfDayFor,
+  timeEntryRevision,
   type TimeEntryDoc,
+  type UserDoc,
 } from '@sabeel/shared';
 import { FirebaseError } from 'firebase/app';
-import { db } from './firebase';
+import { httpsCallable } from 'firebase/functions';
+import { db, functions } from './firebase';
 import type { Activity } from './activities';
 
 export type TimeEntry = TimeEntryDoc & { id: string };
@@ -66,17 +66,23 @@ export async function clockIn(uid: string, activity: Activity): Promise<void> {
   await batch.commit();
 }
 
-/** Clock out: close the running entry and clear the pointer, atomically. */
+/** End the timer only if both it and the latest pointer still agree. */
 export async function clockOut(uid: string, entry: TimeEntry): Promise<void> {
   const now = Date.now();
-  const batch = writeBatch(db);
-  batch.update(doc(db, COLLECTIONS.timeEntries, entry.id), {
-    end: now,
-    durationMinutes: entryMinutes(entry.start, now),
-    updatedAt: now,
+  const entryRef = doc(db, COLLECTIONS.timeEntries, entry.id);
+  const userRef = doc(db, COLLECTIONS.users, uid);
+  await runTransaction(db, async (tx) => {
+    const [currentSnap, userSnap] = await Promise.all([tx.get(entryRef), tx.get(userRef)]);
+    const current = currentSnap.data() as TimeEntryDoc | undefined;
+    const user = userSnap.data() as UserDoc | undefined;
+    // A scheduler or another device may have closed this session and started
+    // a new one while this screen was still showing the previous timer.
+    if (user?.activeEntryId !== entry.id) return;
+    if (current?.uid === uid && current.end === null) {
+      tx.update(entryRef, { end: now, durationMinutes: entryMinutes(current.start, now), updatedAt: now });
+    }
+    tx.update(userRef, { activeEntryId: null });
   });
-  batch.update(doc(db, COLLECTIONS.users, uid), { activeEntryId: null });
-  await batch.commit();
 }
 
 export async function createManualEntry(input: {
@@ -125,7 +131,7 @@ export function useEntry(entryId: string | null): TimeEntry | null {
     [entryId],
     {
       label: 'useEntry',
-      map: (snap) => (snap.exists() ? { id: snap.id, ...(snap.data() as TimeEntryDoc) } : null),
+      map: (snap) => (snap.exists() ? { ...(snap.data() as TimeEntryDoc), id: snap.id } : null),
       empty: null,
     },
   );
@@ -141,24 +147,63 @@ export function useEntriesRange(
   toKey: string,
 ): TimeEntry[] | undefined {
   return useLiveQuery<TimeEntry[] | undefined>(
-    () =>
-      query(
-        collection(db, COLLECTIONS.timeEntries),
-        where('uid', '==', uid),
-        where('dayKey', '>=', fromKey),
-        where('dayKey', '<=', toKey),
-      ),
+    () => entriesRangeQuery(uid, fromKey, toKey),
+    [uid, fromKey, toKey],
+    { label: 'useEntriesRange', map: (snap) => entryRows(snap), empty: undefined },
+  );
+}
+
+/**
+ * The same rows once the server has confirmed them, and whether it still
+ * does: `synced` turns false when the connection drops, and the rows stay on
+ * screen. An action that seals the week waits for `synced`.
+ */
+export function useSyncedEntriesRange(
+  uid: string,
+  fromKey: string,
+  toKey: string,
+): { rows: TimeEntry[]; synced: boolean } | undefined {
+  return useLiveQuery<{ rows: TimeEntry[]; synced: boolean } | undefined>(
+    () => entriesRangeQuery(uid, fromKey, toKey),
     [uid, fromKey, toKey],
     {
-      label: 'useEntriesRange',
-      map: (snap) => {
-        const list = snap.docs.map((d) => ({ id: d.id, ...(d.data() as TimeEntryDoc) }));
-        list.sort((a, b) => b.dayKey.localeCompare(a.dayKey) || b.start - a.start);
-        return list;
-      },
+      label: 'useSyncedEntriesRange',
+      waitForServer: true,
+      map: (snap) => ({ rows: entryRows(snap), synced: !snap.metadata.fromCache }),
       empty: undefined,
     },
   );
+}
+
+function entriesRangeQuery(uid: string, fromKey: string, toKey: string) {
+  return query(
+    collection(db, COLLECTIONS.timeEntries),
+    where('uid', '==', uid),
+    where('dayKey', '>=', fromKey),
+    where('dayKey', '<=', toKey),
+  );
+}
+
+function entryRows(snap: QuerySnapshot): TimeEntry[] {
+  const list = snap.docs.map((d) => ({ ...(d.data() as TimeEntryDoc), id: d.id }));
+  list.sort((a, b) => b.dayKey.localeCompare(a.dayKey) || b.start - a.start);
+  return list;
+}
+
+export const ENTRY_CHANGED = 'This entry changed while you were editing. Load the latest entry and review it again.';
+
+function changeEntry(entry: TimeEntry, patch?: Record<string, unknown>): Promise<void> {
+  const ref = doc(db, COLLECTIONS.timeEntries, entry.id);
+  return runTransaction(db, async (tx) => {
+    const current = (await tx.get(ref)).data() as TimeEntryDoc | undefined;
+    // A retried commit finds its own write (patchApplied): success, not a conflict.
+    if (patch ? patchApplied(current, patch) : !current) return;
+    if (!current || timeEntryRevision({ ...current, id: entry.id }) !== timeEntryRevision(entry)) {
+      throw new Error(ENTRY_CHANGED);
+    }
+    if (patch) tx.update(ref, patch);
+    else tx.delete(ref);
+  });
 }
 
 /** Edit a closed entry's fields; recomputes duration/dayKey from the new times. */
@@ -169,14 +214,17 @@ export async function updateEntry(
     start: number;
     end: number;
     note?: string;
+    timeZone?: string;
     editorUid: string;
   },
 ): Promise<void> {
-  const dayKey = dayKeyFor(changes.start, entry.timeZone);
-  await updateDoc(doc(db, COLLECTIONS.timeEntries, entry.id), {
+  const timeZone = changes.timeZone ?? entry.timeZone;
+  const dayKey = dayKeyFor(changes.start, timeZone);
+  await changeEntry(entry, {
     ...(changes.activity
       ? { activityId: changes.activity.id, activityName: changes.activity.name }
       : {}),
+    ...(timeZone !== entry.timeZone ? { timeZone } : {}),
     start: changes.start,
     end: changes.end,
     durationMinutes: entryMinutes(changes.start, changes.end),
@@ -188,63 +236,16 @@ export async function updateEntry(
   });
 }
 
-export function deleteEntry(entryId: string): Promise<void> {
-  return deleteDoc(doc(db, COLLECTIONS.timeEntries, entryId));
+export function deleteEntry(entry: TimeEntry): Promise<void> {
+  return changeEntry(entry);
 }
 
-/**
- * Copy last week's closed entries into a (still empty) week, one weekday later
- * by exactly seven days, preserving each entry's wall-clock start time and
- * duration in its own timezone (a +7d epoch shift would drift across DST).
- * Entries whose target day falls outside the destination period are skipped —
- * month-clipped weeks are shorter than the source week.
- */
-export async function copyPeriodEntries(
-  uid: string,
-  fromPeriod: { fromKey: string; toKey: string },
-  toPeriod: { fromKey: string; toKey: string },
-): Promise<{ copied: number; skipped: number }> {
-  const snap = await getDocs(
-    query(
-      collection(db, COLLECTIONS.timeEntries),
-      where('uid', '==', uid),
-      where('dayKey', '>=', fromPeriod.fromKey),
-      where('dayKey', '<=', fromPeriod.toKey),
-    ),
-  );
-  const now = Date.now();
-  const batch = writeBatch(db);
-  let copied = 0;
-  let skipped = 0;
-  for (const d of snap.docs) {
-    const e = d.data() as TimeEntryDoc;
-    if (e.end === null) continue; // never copy a running session
-    const dayKey = addDays(e.dayKey, 7);
-    if (dayKey < toPeriod.fromKey || dayKey > toPeriod.toKey) {
-      skipped++;
-      continue;
-    }
-    const start = epochFor(dayKey, timeOfDayFor(e.start, e.timeZone), e.timeZone);
-    const copy: TimeEntryDoc = {
-      uid,
-      activityId: e.activityId,
-      activityName: e.activityName,
-      start,
-      end: start + (e.end - e.start),
-      durationMinutes: e.durationMinutes ?? entryMinutes(e.start, e.end),
-      timeZone: e.timeZone,
-      dayKey,
-      periodKey: periodKeyFor(dayKey),
-      source: 'manual',
-      ...(e.note ? { note: e.note } : {}),
-      createdAt: now,
-      updatedAt: now,
-    };
-    batch.set(doc(collection(db, COLLECTIONS.timeEntries)), copy);
-    copied++;
-  }
-  if (copied > 0) await batch.commit();
-  return { copied, skipped };
+/** Copy only if the destination remains an empty draft at commit time. */
+export async function copyPeriodEntries(periodKey: string): Promise<{ copied: number; skipped: number }> {
+  const response = await httpsCallable<{ periodKey: string }, { copied: number; skipped: number }>(
+    functions, 'copyPreviousTimesheetWeek',
+  )({ periodKey });
+  return response.data;
 }
 
 /**

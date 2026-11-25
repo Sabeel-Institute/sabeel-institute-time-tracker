@@ -70,7 +70,17 @@ service cloud.firestore {
         ? (request.auth.uid == entryUid || isManager() || isAdmin())
         : (st == 'submitted'
             && request.auth.uid != entryUid
-            && (isAdmin() || get(tsPath(entryUid, periodKey)).data.approverUid == request.auth.uid));
+            && ((isAdmin() && hasCurrentReviewRole(true)) || (isManager()
+                && get(tsPath(entryUid, periodKey)).data.approverUid == request.auth.uid
+                && hasCurrentReviewRole(false))));
+    }
+
+    // An old sheet keeps its stamped approver even after demotion. Check the
+    // current profile too, since an issued manager token can outlive the role.
+    function hasCurrentReviewRole(adminRole) {
+      let profile = get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+      return profile.status == 'active'
+        && (adminRole ? profile.get('admin', false) == true : profile.role == 'manager');
     }
 
     // approverUid may be null (unset) or point at an active manager-or-admin.
@@ -118,6 +128,8 @@ service cloud.firestore {
                 && request.resource.data.photoURL.size() <= 2000))
         && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['approverUid'])
             || approverOk(request.resource.data.approverUid))
+        && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['activeEntryId'])
+            || pointerReleased(resource.data.get('activeEntryId', null)))
         && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['notifPrefs'])
             || request.resource.data.notifPrefs is map)
         && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['timeZone'])
@@ -129,6 +141,15 @@ service cloud.firestore {
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['approverUid'])
         && approverOk(request.resource.data.approverUid);
       allow delete: if false;
+
+      // The pointer is what the legacy submission rules check for a running
+      // timer, so it may only move off a timer that is closed or deleted by the
+      // end of the same write (clock-out, discard, or a stale pointer).
+      function pointerReleased(previous) {
+        return !(previous is string && previous.matches('^[^/]+$'))
+          || !existsAfter(/databases/$(database)/documents/timeEntries/$(previous))
+          || getAfter(/databases/$(database)/documents/timeEntries/$(previous)).data.end != null;
+      }
 
       // Push registration tokens: strictly the owner's business. The server
       // (admin SDK) reads them to send and prunes dead ones.
@@ -279,9 +300,11 @@ service cloud.firestore {
           (canTouchPeriod(resource.data.uid, resource.data.periodKey)
             && canTouchPeriod(resource.data.uid, request.resource.data.periodKey)
             && (
+              // A closed entry stays closed: a running timer exists only through
+              // clock-in, which sets the pointer the submission rules check.
               (resource.data.uid == request.auth.uid
-                && (resource.data.end != null || request.resource.data.end == null
-                    || meAfter().activeEntryId == null))
+                && (resource.data.end != null ? request.resource.data.end != null
+                    : (request.resource.data.end == null || meAfter().activeEntryId == null)))
               ||
               (resource.data.uid != request.auth.uid
                 && resource.data.end != null && request.resource.data.end != null
@@ -319,8 +342,17 @@ service cloud.firestore {
     // Readable by anyone: it is one integer, and a signed-out read is the
     // point. Written by nobody but the Admin SDK (`scripts/set-min-version.mjs`).
     match /config/{doc} {
-      allow read: if true;
-      allow write: if false;
+      allow read: if doc != 'timesheetReview' || isActive();
+      allow create, update: if doc == 'timesheetReview' && isAdmin() && hasCurrentReviewRole(true)
+        && reviewLimitsValid(request.resource.data);
+    }
+
+    function reviewLimitsValid(d) {
+      return d is map && d.keys().hasOnly(['minEntryMinutes', 'maxEntryMinutes', 'maxDayMinutes'])
+        && d.minEntryMinutes is int && d.minEntryMinutes >= 1
+        && d.maxEntryMinutes is int && d.maxEntryMinutes >= d.minEntryMinutes && d.maxEntryMinutes <= 1440
+        && d.maxDayMinutes is int && d.maxDayMinutes >= 1 && d.maxDayMinutes <= 1500
+        && d.maxEntryMinutes <= d.maxDayMinutes;
     }
 
     // Append-only timesheet history, written by the onTimesheetWritten trigger.
@@ -358,9 +390,25 @@ service cloud.firestore {
       // themselves; admins may stamp themselves without having chosen it (top of
       // the chain). See PRODUCTION-REVIEW M5.
       function stampOk(d) {
-        return d.approverUid ==
-            get(/databases/$(database)/documents/users/$(request.auth.uid)).data.approverUid
-          || (isAdmin() && d.approverUid == request.auth.uid);
+        return approverOk(d.approverUid)
+          && (d.approverUid == get(/databases/$(database)/documents/users/$(request.auth.uid)).data.approverUid
+              || (isAdmin() && d.approverUid == request.auth.uid));
+      }
+      function openTimerAt(path, d) {
+        return existsAfter(path) && getAfter(path).data.uid == d.uid
+          && getAfter(path).data.end == null && getAfter(path).data.periodKey == d.periodKey;
+      }
+      function timerOpenInPeriod(id, d) {
+        return id is string && id.matches('^[^/]+$')
+          && openTimerAt(/databases/$(database)/documents/timeEntries/$(id), d);
+      }
+      // Older clients write directly. Check both pointers so a batch cannot
+      // start a timer or clear the pointer to an open timer while submitting.
+      function noRunningTimer(d) {
+        let owner = /databases/$(database)/documents/users/$(d.uid);
+        let before = get(owner).data.get('activeEntryId', null);
+        let after = getAfter(owner).data.get('activeEntryId', null);
+        return !timerOpenInPeriod(after, d) && (before == after || !timerOpenInPeriod(before, d));
       }
       // No future periods. Rules can't format request.time into a local dayKey,
       // so allow UTC+14 slack; the client enforces the device-local boundary.
@@ -386,10 +434,15 @@ service cloud.firestore {
         && tsValid(request.resource.data)
         && request.resource.data.status == 'submitted'
         && stampOk(request.resource.data)
+        && noRunningTimer(request.resource.data)
         && periodStarted(request.resource.data)
         && !('decidedAt' in request.resource.data)
         && !('decidedBy' in request.resource.data)
-        && !('rejectReason' in request.resource.data);
+        && !('rejectReason' in request.resource.data)
+        // Review snapshots are derived by the submit and approve callables from
+        // the rows they seal; a client-written one would be an unchecked claim.
+        && !('submissionReview' in request.resource.data)
+        && !('approvalReview' in request.resource.data);
 
       allow update: if isActive()
         && tsValid(request.resource.data)
@@ -402,9 +455,12 @@ service cloud.firestore {
             && resource.data.status == 'rejected'
             && request.resource.data.status == 'submitted'
             && stampOk(request.resource.data)
+            && noRunningTimer(request.resource.data)
             && !('decidedAt' in request.resource.data)
             && !('decidedBy' in request.resource.data)
             && !('rejectReason' in request.resource.data)
+            // Older apps leave any previous review on the doc. The review's
+            // own timestamp lets readers recognize it as a previous submission.
             && request.resource.data.diff(resource.data).affectedKeys().hasOnly(
                  ['status', 'approverUid', 'submittedAt', 'totalMinutes',
                   'entryCount', 'updatedAt', 'decidedAt', 'decidedBy', 'rejectReason']))
@@ -418,7 +474,8 @@ service cloud.firestore {
           // applyUserAccess clears dangling pointers when eligibility is lost; this
           // is the braces to that belt, on the surface that actually enforces.
           (resource.data.status == 'submitted'
-            && (isAdmin() || (isManager() && resource.data.approverUid == request.auth.uid))
+            && ((isAdmin() && hasCurrentReviewRole(true)) || (isManager()
+                && resource.data.approverUid == request.auth.uid && hasCurrentReviewRole(false)))
             && request.resource.data.status in ['approved', 'rejected']
             && request.resource.data.decidedBy == request.auth.uid
             && request.resource.data.decidedAt is int
@@ -434,7 +491,7 @@ service cloud.firestore {
       // WITHDRAW (owner, before approval) and REOPEN (admin, any state).
       allow delete: if isActive()
         && ((resource.data.uid == request.auth.uid && resource.data.status != 'approved')
-            || isAdmin());
+            || (isAdmin() && hasCurrentReviewRole(true)));
     }
   }
 }

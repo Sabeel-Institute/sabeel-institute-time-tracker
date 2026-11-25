@@ -7,25 +7,52 @@ export function deviceTimeZone(): string {
   return Intl.DateTimeFormat().resolvedOptions().timeZone;
 }
 
+// Constructing an Intl.DateTimeFormat is far costlier than formatting with
+// one, above all on Hermes (no JIT; ICU behind JNI), and a timesheet review
+// formats hundreds of instants. One formatter per zone; a zone Intl rejects
+// throws RangeError on every call, as before, and is never cached.
+const dayKeyFormats = new Map<string, Intl.DateTimeFormat>();
+const timeOfDayFormats = new Map<string, Intl.DateTimeFormat>();
+
+function cachedFormat(cache: Map<string, Intl.DateTimeFormat>, timeZone: string, make: () => Intl.DateTimeFormat) {
+  let format = cache.get(timeZone);
+  if (!format) {
+    format = make();
+    cache.set(timeZone, format);
+  }
+  return format;
+}
+
 /** 'YYYY-MM-DD' of an instant in a given IANA timezone. */
 export function dayKeyFor(epochMs: number, timeZone: string): string {
   // en-CA formats as YYYY-MM-DD.
-  return new Intl.DateTimeFormat('en-CA', {
+  return cachedFormat(dayKeyFormats, timeZone, () => new Intl.DateTimeFormat('en-CA', {
     timeZone,
     year: 'numeric',
     month: '2-digit',
     day: '2-digit',
-  }).format(new Date(epochMs));
+  })).format(new Date(epochMs));
 }
 
 /** 'HH:MM' (24h) of an instant in a given IANA timezone. */
 export function timeOfDayFor(epochMs: number, timeZone: string): string {
-  return new Intl.DateTimeFormat('en-GB', {
+  return cachedFormat(timeOfDayFormats, timeZone, () => new Intl.DateTimeFormat('en-GB', {
     timeZone,
     hour: '2-digit',
     minute: '2-digit',
     hour12: false,
-  }).format(new Date(epochMs));
+  })).format(new Date(epochMs));
+}
+
+/** Use UTC for display when an older stored timezone is unavailable. */
+export function entryDisplayTimeZone(timeZone: string): string {
+  try {
+    new Intl.DateTimeFormat('en', { timeZone });
+    return timeZone;
+  } catch (e) {
+    if (e instanceof RangeError) return 'UTC';
+    throw e;
+  }
 }
 
 /** Short timezone label (e.g. 'PDT', 'GMT+8') for display next to times. */

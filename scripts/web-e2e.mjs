@@ -185,19 +185,24 @@ async function settled(page, landing) {
  * however fast the server made it. Auth is not held, so the account lookups
  * the app makes meanwhile are answered.
  */
-async function holdFirestore(page) {
+async function holdRequests(page, url, scope = page.context()) {
   let release;
   const held = new Promise((r) => (release = r));
-  const url = `http://${EMULATOR_HOSTS.firestore}/**`;
-  await page.context().route(url, async (route) => {
+  await scope.route(url, async (route) => {
     await held;
     await route.continue().catch(() => {});
   });
   return async () => {
     release();
-    await page.context().unroute(url);
+    await scope.unroute(url);
   };
 }
+
+const holdFirestore = (page) => holdRequests(page, 'http://' + EMULATOR_HOSTS.firestore + '/**');
+const approvalEndpoint = 'http://' + EMULATOR_HOSTS.functions + '/' + PROJECT + '/us-central1/approveReviewedTimesheet';
+const submissionEndpoint = 'http://' + EMULATOR_HOSTS.functions + '/' + PROJECT + '/us-central1/submitReviewedTimesheet';
+const copyEndpoint = 'http://' + EMULATOR_HOSTS.functions + '/' + PROJECT + '/us-central1/copyPreviousTimesheetWeek';
+const isCallablePost = (url) => (request) => request.url() === url && request.method() === 'POST';
 
 /**
  * Open `address` with every Firestore request slowed, and prove the screen never
@@ -326,7 +331,7 @@ async function moreRows(page) {
 }
 
 const MEMBER_MORE = ['Notifications', 'Help', 'Report a problem', 'Privacy policy', 'Sign out'];
-const APPROVER_MORE = ['People', 'Activities', ...MEMBER_MORE];
+const ADMIN_MORE = ['People', 'Activities', 'Timesheet review settings', ...MEMBER_MORE];
 
 /** A member has no manager tab and nothing of the institute's tools in More. */
 async function expectMemberTools(page, who) {
@@ -443,6 +448,8 @@ async function main() {
   // { label, text, url }: Chromium words a failed request as "Failed to load
   // resource: ... status of 400" and nothing more, so the URL travels with it.
   const consoleErrors = [];
+  // Pages the offline check has disconnected on purpose, while it lasts.
+  const offlineLabels = new Set();
   // Every failing response from the functions, Firestore and Auth emulators,
   // WITH ITS BODY. A callable failure reaches the UI as a bare "internal" and,
   // if the function is missing entirely, as a browser CORS complaint — neither
@@ -461,7 +468,7 @@ async function main() {
     const page = await ctx.newPage();
     pages.set(label, page);
     page.on('console', (m) => {
-      if (m.type() === 'error') consoleErrors.push({ label, text: m.text(), url: m.location().url });
+      if (m.type() === 'error') consoleErrors.push({ label, text: m.text(), url: m.location().url, offline: offlineLabels.has(label) });
       if (m.type() === 'warning' && /listener|session poll/.test(m.text()))
         console.log(`  (warn) [${label}] ${m.text()}`);
     });
@@ -648,6 +655,15 @@ async function main() {
   if ((await vol.getByText('CLOCKED IN').count()) === 0) throw new Error('a double tap on Clock in clocked straight out');
   await vol.screenshot({ path: join(shots, '7-clocked-in.png'), animations: 'disabled', timeout: 8000 }).catch(() => {});
 
+  console.log('▸ the timesheet asks the member to clock out before submitting…');
+  await tab(vol, 'timesheet');
+  await firstOnScreen(vol.getByText('Clock out before you submit this week.', { exact: true })).waitFor();
+  if (!(await onScreen(vol.getByRole('button', { name: /^Submit timesheet/ })).isDisabled())) {
+    throw new Error('a timesheet with a running timer offers Submit');
+  }
+  await tab(vol, 'today');
+  await vol.getByText('CLOCKED IN').waitFor();
+
   await doubleTap(vol.getByRole('button', { name: 'Clock out', exact: true }));
   await vol.getByText('What are you working on?').waitFor();
   await vol.waitForTimeout(1500);
@@ -674,12 +690,36 @@ async function main() {
   console.log('▸ Phase 4: period timesheet — edit an entry, delete an entry…');
   await tab(vol, 'timesheet');
   await logged(vol, '1h 31m').waitFor();
+  if ((await vol.getByText('Clock out before you submit this week.', { exact: true }).count()) !== 0) {
+    throw new Error('clock-out prompt remained after the timer closed');
+  }
+  await firstOnScreen(vol.getByText('Short entry · less than 3m', { exact: true })).waitFor();
   await vol.screenshot({ path: join(shots, '9-timesheet.png'), animations: 'disabled', timeout: 8000 }).catch(() => {});
 
   // Edit the manual entry (found by its note) to end at 11:00 → total 2h 01m.
   await entryRow(vol, vol.getByText('Math tutoring with the kids', { exact: true })).click();
   await formFields(vol).to.fill('11:00');
   await vol.getByRole('button', { name: 'Save changes', exact: true }).click();
+  await logged(vol, '2h 01m').waitFor();
+
+  // Two editors of the same entry. Reload the current record explicitly before
+  // allowing a new save, so the note on the first screen is never applied to
+  // the changed record underneath the form.
+  await entryRow(vol, vol.getByText('Math tutoring with the kids', { exact: true })).click();
+  await vol.waitForURL('**/entry/**');
+  await admin2.goto(vol.url());
+  await noteField(admin2, 'Note').fill('Updated from a second session');
+  await admin2.getByRole('button', { name: 'Save changes', exact: true }).click();
+  const reloadEntry = vol.getByRole('button', { name: /This entry changed while you were editing/ });
+  await reloadEntry.waitFor();
+  const staleSave = vol.getByRole('button', { name: 'Save changes', exact: true });
+  if (!(await staleSave.isDisabled()) || !(await vol.getByRole('button', { name: 'Delete entry', exact: true }).isDisabled()))
+    throw new Error('the stale edit screen still allows a write');
+  await reloadEntry.click();
+  if ((await noteField(vol, 'Note').inputValue()) !== 'Updated from a second session')
+    throw new Error('reloading the edit form did not load the current note');
+  await noteField(vol, 'Note').fill('Math tutoring with the kids');
+  await staleSave.click();
   await logged(vol, '2h 01m').waitFor();
 
   // A note alone saves on the clock entry, and leaves its minutes alone. The
@@ -799,6 +839,41 @@ async function main() {
   // The field echoes the selection once the profile listener catches up — wait
   // for it so Submit isn't clicked while still disabled.
   await firstOnScreen(vol.getByText('Admin', { exact: true })).waitFor();
+  // Offline, the week still shows its hours, but cannot be submitted until the
+  // server confirms them again: a cached range may be missing rows.
+  const checking = onScreen(vol.getByText('Checking for the latest hours before you can submit…', { exact: true }));
+  if (await submit.isDisabled()) await eventually(vol, 'Submit enabled online', () => submit.isDisabled(), (off) => !off);
+  offlineLabels.add('volunteer');
+  await vol.context().setOffline(true);
+  await checking.waitFor({ timeout: 45000 });
+  if (!(await submit.isDisabled())) throw new Error('an offline week offers Submit');
+  await firstOnScreen(vol.getByText('Math tutoring with the kids', { exact: true })).waitFor();
+  await vol.context().setOffline(false);
+  await checking.waitFor({ state: 'hidden', timeout: 45000 });
+  // Requests that failed while offline are logged as they settle; the tab is
+  // back once the server has confirmed the week again.
+  offlineLabels.delete('volunteer');
+  await eventually(vol, 'Submit enabled after reconnecting', () => submit.isDisabled(), (off) => !off, 45000);
+  // Hold a submission while another session edits an entry in the draft.
+  const releaseSubmit = await holdRequests(vol, submissionEndpoint, vol);
+  const isSubmit = isCallablePost(submissionEndpoint);
+  const submitStarted = vol.waitForRequest(isSubmit);
+  const staleSubmit = vol.waitForResponse((response) => isSubmit(response.request()));
+  await submit.click();
+  await submitStarted;
+  await admin2.goto(baseUrl + '/approvals/review?uid=' + volUid + '&displayName=Volunteer&periodKey=' + thisWeek.fromKey);
+  await entryRow(admin2, admin2.getByText('Math tutoring with the kids', { exact: true })).click();
+  await noteField(admin2, 'Note').fill('Math tutoring before submitting');
+  await admin2.getByRole('button', { name: 'Save changes', exact: true }).click();
+  await eventually(admin2, 'the draft note edit on the server',
+    () => storedEntries(volUid, thisWeek.fromKey, thisWeek.toKey),
+    (entries) => entries.some((entry) => entry.note === 'Math tutoring before submitting'));
+  await releaseSubmit();
+  if ((await staleSubmit).ok()) throw new Error('submission accepted hours changed in another session');
+  await firstOnScreen(vol.getByText(/^This week changed a moment ago/)).waitFor();
+  if (await storedSheetStatus(volUid, thisWeek.fromKey) !== null)
+    throw new Error('a stale submission locked the draft');
+  await firstOnScreen(vol.getByText('Math tutoring before submitting', { exact: true })).waitFor();
   await submit.click();
   await firstOnScreen(vol.getByText('Submitted', { exact: true })).waitFor();
   await vol.screenshot({ path: join(shots, '11-submitted.png'), animations: 'disabled', timeout: 8000 }).catch(() => {});
@@ -818,23 +893,48 @@ async function main() {
   await tab(mgr, 'approvals');
   await mgr.getByRole('button', { name: "Review Volunteer's timesheet", exact: true }).click();
   await logged(mgr, '2h 00m').waitFor();
-  // Two people on one week: the approval leaves first but travels slowly, the
-  // withdrawal lands first, and the rules refuse the approval. The approver is
-  // told so in words, under the buttons pressed, not in the database's.
-  await mgr.context().route(`http://${EMULATOR_HOSTS.firestore}/**`, async (route) => {
-    await new Promise((r) => setTimeout(r, 3000));
-    await route.continue().catch(() => {});
-  });
+  // Hold the first approval until the member has withdrawn and replaced the
+  // sheet. The replacement has the same document id and submitted status.
+  const isApproval = isCallablePost(approvalEndpoint);
+  const approvalResponse = () => mgr.waitForResponse((response) => isApproval(response.request()));
+  const releaseApproval = await holdRequests(mgr, approvalEndpoint, mgr);
+  const firstApprovalStarted = mgr.waitForRequest(isApproval);
+  const replacedResponse = approvalResponse();
   await mgr.getByRole('button', { name: 'Approve timesheet', exact: true }).click();
-  await vol.waitForTimeout(200);
+  await firstApprovalStarted;
   await onScreen(vol.getByRole('button', { name: 'Withdraw submission', exact: true })).click();
+  await eventually(vol, 'the withdrawal on the server',
+    () => storedSheetStatus(volUid, thisWeek.fromKey), (status) => status === null);
+  await firstOnScreen(vol.getByRole('button', { name: 'Submit timesheet', exact: true })).click();
+  await eventually(vol, 'the replacement submission on the server',
+    () => storedSheetStatus(volUid, thisWeek.fromKey), (status) => status === 'submitted');
+  await releaseApproval();
+  if ((await replacedResponse).ok()) throw new Error('the approval accepted a replacement submission');
   const weekChanged = firstOnScreen(mgr.getByText(/^This week changed a moment ago/));
   await weekChanged.waitFor({ timeout: 30000 });
   if (!(await weekChanged.evaluate((e) => e.getBoundingClientRect().bottom <= innerHeight)))
     throw new Error('the refused approval is explained out of sight');
-  await mgr.context().unroute(`http://${EMULATOR_HOSTS.firestore}/**`);
-  await firstOnScreen(vol.getByRole('button', { name: 'Submit timesheet', exact: true })).click();
-  await firstOnScreen(vol.getByText('Submitted', { exact: true })).waitFor();
+  if (await storedSheetStatus(volUid, thisWeek.fromKey) !== 'submitted')
+    throw new Error('a stale approval affected a replacement submission');
+  // This time the sheet remains submitted throughout. An edit to its hours
+  // from the second tab must still invalidate the first tab's approval.
+  const releaseEntryRace = await holdRequests(mgr, approvalEndpoint, mgr);
+  const editedApprovalStarted = mgr.waitForRequest(isApproval);
+  const editedResponse = approvalResponse();
+  await mgr.getByRole('button', { name: 'Approve timesheet', exact: true }).click();
+  await editedApprovalStarted;
+  await admin2.goto(mgr.url());
+  await entryRow(admin2, admin2.getByText('Math tutoring before submitting', { exact: true })).click();
+  await noteField(admin2, 'Note').fill('Math tutoring with the kids, corrected');
+  await admin2.getByRole('button', { name: 'Save changes', exact: true }).click();
+  await eventually(admin2, 'the submitted note edit on the server',
+    () => storedEntries(volUid, thisWeek.fromKey, thisWeek.toKey),
+    (entries) => entries.some((entry) => entry.note === 'Math tutoring with the kids, corrected'));
+  await releaseEntryRace();
+  if ((await editedResponse).ok()) throw new Error('the approval accepted changed hours');
+  await weekChanged.waitFor();
+  if (await storedSheetStatus(volUid, thisWeek.fromKey) !== 'submitted')
+    throw new Error('changed hours were approved');
   await mgr.getByRole('button', { name: 'Reject timesheet…', exact: true }).waitFor({ timeout: 30000 });
   await mgr.getByRole('button', { name: 'Reject timesheet…', exact: true }).click();
   // The reason is required: Reject is dead until something is typed.
@@ -860,14 +960,60 @@ async function main() {
   await vol.getByText('Rejected by Admin: Tuesday hours belong to Food Drive.', { exact: false }).waitFor();
   await vol.screenshot({ path: join(shots, '12-rejected.png'), animations: 'disabled', timeout: 8000 }).catch(() => {});
 
-  console.log('▸ Phase 7: volunteer resubmits; approver adds hours on behalf + approves…');
-  await vol.getByRole('button', { name: 'Resubmit timesheet', exact: true }).click();
+  console.log('▸ timesheet review: draft thresholds, member confirmation, pending threshold changes and approver confirmation…');
+  const minField = (page) => page.getByRole('textbox', { name: 'Minimum time per entry (minutes)' });
+  const maxField = (page) => page.getByRole('textbox', { name: 'Maximum time per entry (hours)' });
+  const dayField = (page) => page.getByRole('textbox', { name: 'Maximum total per day (hours)' });
+  async function saveLimits(page) {
+    await page.getByRole('button', { name: 'Save review settings', exact: true }).click();
+    await page.getByText('Review settings saved.', { exact: true }).waitFor();
+  }
+  async function setReviewLimits(minimum, maximum, page = mgr) {
+    await more(page, 'Timesheet review settings');
+    await minField(page).fill(minimum);
+    await maxField(page).fill(maximum);
+    await saveLimits(page);
+  }
+  // An admin drafts one field while someone else saves another. The draft
+  // field should survive, and saving it must preserve the independent change.
+  await more(mgr, 'Timesheet review settings');
+  await minField(mgr).fill('121');
+  await admin2.goto(baseUrl + '/timesheet-review-settings');
+  await dayField(admin2).fill('13');
+  await saveLimits(admin2);
+  await eventually(mgr, 'updated daily threshold', () => dayField(mgr).inputValue(), (value) => value === '13');
+  if (await minField(mgr).inputValue() !== '121') throw new Error('a remote settings update discarded the local draft');
+  await saveLimits(mgr);
+  await eventually(admin2, 'saved minimum', () => minField(admin2).inputValue(), (value) => value === '121');
+  if (await dayField(admin2).inputValue() !== '13') throw new Error('saving a draft overwrote the other admin’s change');
+  await dayField(admin2).fill('12');
+  await saveLimits(admin2);
+  const shortEntry = firstOnScreen(vol.getByText('Short entry · less than 2h 01m', { exact: true }));
+  await shortEntry.waitFor();
+  const resubmit = vol.getByRole('button', { name: 'Resubmit timesheet', exact: true });
+  await resubmit.click();
+  const submitReview = dialogOf(vol);
+  await submitReview.getByText('Short entry · less than 2h 01m', { exact: true }).waitFor();
+  await submitReview.getByRole('button', { name: 'Cancel', exact: true }).click();
+  if (await storedSheetStatus(volUid, thisWeek.fromKey) !== 'rejected')
+    throw new Error('the canceled review resubmitted the timesheet');
+  await resubmit.click();
+  await submitReview.getByRole('button', { name: 'I’ve checked these entries — submit', exact: true }).click();
   await firstOnScreen(vol.getByText('Submitted', { exact: true })).waitFor();
+  await eventually(vol, 'the confirmed submission on the server',
+    () => storedSheetStatus(volUid, thisWeek.fromKey), (status) => status === 'submitted');
+
+  await setReviewLimits('3', '1.5');
+  await shortEntry.waitFor();
+  if (await onScreen(vol.getByText('Long entry · more than 1h 30m', { exact: true })).count())
+    throw new Error('the member’s submitted timesheet changed along with the settings');
 
   await mgr.goto(baseUrl + '/');
   await mgr.getByText('Salaam,', { exact: false }).waitFor({ timeout: 45000 });
   await tab(mgr, 'approvals');
   await mgr.getByRole('button', { name: "Review Volunteer's timesheet", exact: true }).click();
+  await firstOnScreen(mgr.getByText('Flagged since submission · Long entry · more than 1h 30m', { exact: true })).waitFor();
+  await firstOnScreen(mgr.getByText('Member confirmed the flagged hours on', { exact: false })).waitFor();
   // Add a 1h entry on the volunteer's behalf (approver correction path).
   await mgr.getByRole('button', { name: 'Add hours for Volunteer', exact: true }).click();
   await mgr.getByText('Adding hours for Volunteer', { exact: false }).waitFor();
@@ -879,8 +1025,26 @@ async function main() {
   // Back on the review screen the live total includes the added hour.
   await logged(mgr, '3h 00m').waitFor({ timeout: 15000 });
   await mgr.getByRole('button', { name: 'Approve timesheet', exact: true }).click();
+  const approvalReview = dialogOf(mgr);
+  await approvalReview.getByText('Flagged since submission · Long entry · more than 1h 30m', { exact: true }).waitFor();
+  if (await storedSheetStatus(volUid, thisWeek.fromKey) !== 'submitted')
+    throw new Error('approval went through without confirmation');
+  // A settings change while the dialog is open must invalidate that
+  // confirmation. Refresh the dialog and verify approval uses the new rules.
+  await maxField(admin2).fill('1.75');
+  await saveLimits(admin2);
+  await approvalReview.waitFor({ state: 'hidden' });
+  await firstOnScreen(mgr.getByText('This review changed.', { exact: false })).waitFor();
+  if (await storedSheetStatus(volUid, thisWeek.fromKey) !== 'submitted')
+    throw new Error('changing the limits approved the sheet');
+  const newLong = 'Flagged since submission · Long entry · more than 1h 45m';
+  await firstOnScreen(mgr.getByText(newLong, { exact: true })).waitFor();
+  await mgr.getByRole('button', { name: 'Approve timesheet', exact: true }).click();
+  await approvalReview.getByText(newLong, { exact: true }).waitFor();
+  await approvalReview.getByRole('button', { name: 'Confirm approval', exact: true }).click();
   await mgr.getByText('Nothing waiting for you.', { exact: false }).waitFor();
   await mgr.screenshot({ path: join(shots, '13-approved-queue-empty.png'), timeout: 8000 }).catch(() => {});
+  await setReviewLimits('3', '8');
 
   console.log('▸ Phase 7: approved week is locked for the volunteer…');
   await vol.goto(baseUrl + '/');
@@ -890,6 +1054,7 @@ async function main() {
   await vol.getByText('This week is approved, so it is closed for new hours', { exact: false }).waitFor();
   await tab(vol, 'timesheet');
   await onScreen(vol.getByText('Approved, so this week is closed', { exact: false })).waitFor();
+  await firstOnScreen(vol.getByText('Long entry · more than 1h 45m', { exact: true })).waitFor();
   const editCount = await vol.getByRole('button', { name: 'Submit timesheet', exact: true }).count();
   if (editCount !== 0) throw new Error('approved sheet still offers Submit');
   await vol.screenshot({ path: join(shots, '14-approved-locked.png'), animations: 'disabled', timeout: 8000 }).catch(() => {});
@@ -1097,9 +1262,19 @@ async function main() {
   if ((await storedEntries(adminUid, copyTo.fromKey, copyTo.toKey)).length !== 0)
     throw new Error('a declined copy copied entries');
   await onScreen(mgr.getByText(EMPTY_WEEK)).waitFor({ timeout: 1000 });
-  // Accepted: every entry arrives a week later, same times and notes; the
-  // source week keeps its own.
+  // Both sessions initiate the copy from an empty view. One request arrives
+  // late, after the second has filled the week, and must leave it alone.
+  await admin2.goto(mgr.url());
+  await onScreen(admin2.getByText(EMPTY_WEEK)).waitFor({ timeout: 45000 });
+  const releaseCopy = await holdRequests(mgr, copyEndpoint, mgr);
+  const lateCopy = mgr.waitForResponse((res) => res.url() === copyEndpoint && res.request().method() === 'POST');
   await tapAndAnswer(mgr, () => copyButton.click(), true);
+  const secondCopy = admin2.getByRole('button', { name: "Copy last week's hours", exact: true });
+  await tapAndAnswer(admin2, () => secondCopy.click(), true);
+  await logged(admin2, '2h 30m').waitFor({ timeout: 15000 });
+  await releaseCopy();
+  if ((await lateCopy).ok()) throw new Error('the late copy accepted a populated destination');
+  await firstOnScreen(mgr.getByText('You can only copy hours into an empty draft week.', { exact: true })).waitFor();
   await logged(mgr, '2h 30m').waitFor({ timeout: 15000 });
   for (const h of copyHours) await firstOnScreen(mgr.getByText(h.note, { exact: true })).waitFor();
   if ((await copyButton.count()) !== 0) throw new Error('Copy last week is still offered on a week with hours');
@@ -1207,6 +1382,76 @@ async function main() {
   await loadsWithoutClaimingEmpty(mgr, mgr.url(), { empty: 'No hours.', loading: 'Loading this week…' });
   await loadsWithoutClaimingEmpty(mgr, baseUrl + '/people', { empty: 'No one yet', loading: 'Loading people…' });
 
+  console.log('▸ an empty week submits, can be rejected and resubmitted, and approves without a review prompt…');
+  await vol.goto(baseUrl + '/timesheet?initialPeriodKey=' + otherWeek.fromKey);
+  const emptySubmit = vol.getByRole('button', { name: 'Submit timesheet (no hours)', exact: true });
+  await emptySubmit.click();
+  const zeroStatus = (wanted) => eventually(vol, 'the empty week becoming ' + wanted,
+    () => storedSheetStatus(volUid, otherWeek.fromKey), (status) => status === wanted);
+  await zeroStatus('submitted');
+  await firstOnScreen(vol.getByText('No hours were logged for this week.', { exact: true })).waitFor();
+  if (await dialogOf(vol).isVisible()) throw new Error('an empty timesheet prompted the member to review');
+  const emptyReviewUrl = baseUrl + '/approvals/review?uid=' + volUid + '&displayName=Volunteer&periodKey=' + otherWeek.fromKey;
+  await mgr.goto(emptyReviewUrl);
+  await mgr.getByRole('button', { name: 'Reject timesheet…', exact: true }).click();
+  await dialogOf(mgr).getByPlaceholder('What needs fixing?').fill('Double-check the week.');
+  await dialogOf(mgr).getByRole('button', { name: 'Reject timesheet', exact: true }).click();
+  await zeroStatus('rejected');
+  await vol.getByRole('button', { name: 'Resubmit timesheet', exact: true }).click();
+  await zeroStatus('submitted');
+  // Hours that appear after an empty submission are new to the member: the
+  // approver sees them marked as flagged since submission.
+  const lateShort = FIRESTORE_DOCS + '/timeEntries/late-short';
+  const lateStart = shared.epochFor(otherWeek.fromKey, '12:00', shared.deviceTimeZone());
+  const lateFields = Object.fromEntries(Object.entries({
+    uid: volUid, dayKey: otherWeek.fromKey, periodKey: otherWeek.fromKey, activityId: 'late-short-activity',
+    activityName: 'Late setup', timeZone: shared.deviceTimeZone(), start: lateStart, end: lateStart + 120000,
+    durationMinutes: 2, source: 'manual', createdAt: lateStart, updatedAt: lateStart,
+  }).map(([key, value]) => [key, typeof value === 'number' ? { integerValue: String(value) } : { stringValue: value }]));
+  const owner = { Authorization: 'Bearer owner', 'Content-Type': 'application/json' };
+  if (!(await fetch(lateShort, { method: 'PATCH', headers: owner, body: JSON.stringify({ fields: lateFields }) })).ok)
+    throw new Error('could not seed the late entry');
+  await mgr.goto(emptyReviewUrl);
+  await firstOnScreen(mgr.getByText('Flagged since submission · Short entry · less than 3m', { exact: true })).waitFor();
+  if (!(await fetch(lateShort, { method: 'DELETE', headers: owner })).ok) throw new Error('could not remove the late entry');
+  await logged(mgr, '0m').waitFor();
+  await mgr.getByRole('button', { name: 'Approve timesheet', exact: true }).click();
+  await zeroStatus('approved');
+  if (await dialogOf(mgr).isVisible()) throw new Error('an empty timesheet prompted the approver to review');
+  const rawZero = await fetch(FIRESTORE_DOCS + '/timesheets/' + volUid + '_' + otherWeek.fromKey, {
+    headers: { Authorization: 'Bearer owner' },
+  });
+  const { fields: empty } = await rawZero.json();
+  if (empty.entryCount.integerValue !== '0' || empty.totalMinutes.integerValue !== '0'
+      || empty.submissionReview || empty.approvalReview) throw new Error('the empty timesheet saved review data or hours');
+
+  console.log('▸ a legacy timezone can be displayed and repaired without changing its actual times…');
+  const legacyPath = FIRESTORE_DOCS + '/timeEntries/legacy-zone';
+  const legacyStart = shared.epochFor(todayKey, '12:30', shared.deviceTimeZone());
+  const legacyEnd = legacyStart + 120000;
+  const legacyFields = Object.fromEntries(Object.entries({
+    uid: volUid, dayKey: todayKey, periodKey: thisWeek.fromKey, activityId: 'legacy-zone-activity',
+    activityName: 'Legacy setup', timeZone: 'unavailable', start: legacyStart, end: legacyEnd,
+    durationMinutes: 2, source: 'manual', note: 'Legacy zone recovery', createdAt: legacyStart, updatedAt: legacyStart,
+  }).map(([key, value]) => [key, typeof value === 'number' ? { integerValue: String(value) } : { stringValue: value }]));
+  const seededLegacy = await fetch(legacyPath, {
+    method: 'PATCH',
+    headers: { Authorization: 'Bearer owner', 'Content-Type': 'application/json' },
+    body: JSON.stringify({ fields: legacyFields }),
+  });
+  if (!seededLegacy.ok) throw new Error('could not seed the legacy timezone case');
+  await vol.goto(baseUrl + '/timesheet?initialPeriodKey=' + thisWeek.fromKey);
+  await firstOnScreen(vol.getByText('Stored time zone unavailable', { exact: false })).waitFor();
+  await entryRow(vol, vol.getByText('Legacy zone recovery', { exact: true })).click();
+  await firstOnScreen(vol.getByText('The stored time zone is unavailable. Saving uses UTC.', { exact: true })).waitFor();
+  await vol.getByRole('button', { name: 'Save changes', exact: true }).click();
+  const repaired = await eventually(vol, 'repaired legacy timezone', async () => {
+    const response = await fetch(legacyPath, { headers: { Authorization: 'Bearer owner' } });
+    return (await response.json()).fields;
+  }, (fields) => fields.timeZone.stringValue === 'UTC');
+  if (repaired.start.integerValue !== String(legacyStart) || repaired.end.integerValue !== String(legacyEnd))
+    throw new Error('repairing only the time zone changed the recorded instants');
+
   console.log('▸ People: role, admin and active each ask first, and a reload keeps the answer…');
   const VOL = 'volunteer@oursabeel.com';
   const volAccess = () => storedAccess(volUid);
@@ -1272,7 +1517,9 @@ async function main() {
   });
   await firstOnScreen(vol.getByTestId('tab-approvals')).waitFor({ timeout: 30000 });
   await firstOnScreen(vol.getByTestId('tab-reports')).waitFor();
-  if (!(await moreRows(vol)).includes('Activities')) throw new Error('a manager is not offered Activities in More');
+  const managerRows = await moreRows(vol);
+  if (!managerRows.includes('Activities') || managerRows.includes('Timesheet review settings'))
+    throw new Error('a manager should have Activities and only an admin can open review settings');
   await restoreVolunteer({
     tap: (page) => roleOption(page, 'Member').click(),
     asks: 'Change role to member?',
@@ -1290,8 +1537,8 @@ async function main() {
     shows: (line) => line.includes('Admin'),
   });
   await firstOnScreen(vol.getByTestId('tab-approvals')).waitFor({ timeout: 30000 });
-  if (JSON.stringify(await moreRows(vol)) !== JSON.stringify(APPROVER_MORE))
-    throw new Error('an admin is not offered People and Activities in More');
+  if (JSON.stringify(await moreRows(vol)) !== JSON.stringify(ADMIN_MORE))
+    throw new Error('the admin’s More menu is missing institute settings');
   await restoreVolunteer({
     tap: (page) => adminSwitch(page).click(),
     asks: 'Remove admin?',
@@ -1471,6 +1718,10 @@ async function main() {
     (/^(slow|stuck|outsider)$/.test(e.label) &&
       /Could not reach Cloud Firestore backend|status of 400/.test(e.text)) ||
     // The email form's refusals: Auth answers a sign-in it will not make with a 400.
+    (e.label === 'admin' && [approvalEndpoint, copyEndpoint].includes(e.url) && /status of 400/.test(e.text)) ||
+    (e.label === 'volunteer' && e.url === submissionEndpoint && /status of 400/.test(e.text)) ||
+    // The offline check disconnects the volunteer's tab on purpose.
+    (e.offline && /net::ERR_INTERNET_DISCONNECTED/.test(e.text)) ||
     (e.label === 'email' &&
       /status of 400/.test(e.text) &&
       e.url.startsWith(`http://${EMULATOR_HOSTS.auth}/`));

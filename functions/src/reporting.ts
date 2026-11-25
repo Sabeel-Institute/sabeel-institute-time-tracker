@@ -1,7 +1,8 @@
 import { onCall, HttpsError } from 'firebase-functions/v2/https';
-import { getFirestore, Query } from 'firebase-admin/firestore';
+import { getFirestore, type Query } from 'firebase-admin/firestore';
 import {
   addDays,
+  isDayKey,
   REPORT_COLUMNS,
   reportRow,
   type ReportFilter,
@@ -12,19 +13,17 @@ import {
 import { requireManagerOrAdmin } from './auth';
 import { guarded, sentryDsn } from './sentry';
 
-const KEY = /^\d{4}-\d{2}-\d{2}$/;
-
 function validate(data: unknown): ReportFilter {
   const d = data as Partial<ReportFilter> | null;
-  if (!d || !KEY.test(d.fromKey ?? '') || !KEY.test(d.toKey ?? '')) {
+  if (!d || !isDayKey(d.fromKey) || !isDayKey(d.toKey)) {
     throw new HttpsError('invalid-argument', 'fromKey and toKey must be YYYY-MM-DD.');
   }
-  if (d.fromKey! > d.toKey!) {
+  if (d.fromKey > d.toKey) {
     throw new HttpsError('invalid-argument', 'fromKey must be on or before toKey.');
   }
   return {
-    fromKey: d.fromKey!,
-    toKey: d.toKey!,
+    fromKey: d.fromKey,
+    toKey: d.toKey,
     ...(typeof d.uid === 'string' ? { uid: d.uid } : {}),
     ...(typeof d.activityId === 'string' ? { activityId: d.activityId } : {}),
     ...(d.includeUnapproved === true ? { includeUnapproved: true } : {}),
@@ -36,21 +35,12 @@ function validate(data: unknown): ReportFilter {
  * inclusive [fromKey, toKey] dayKey range. Periods span at most 7 days, so a
  * period overlapping the range must start no earlier than fromKey-6.
  */
-async function approvedPeriodSet(fromKey: string, toKey: string): Promise<Set<string>> {
-  const snap = await getFirestore()
+function approvedPeriodsQuery(fromKey: string, toKey: string): Query {
+  return getFirestore()
     .collection('timesheets')
     .where('status', '==', 'approved')
     .where('periodKey', '>=', addDays(fromKey, -6))
-    .where('periodKey', '<=', toKey)
-    .get();
-  return new Set(
-    snap.docs.filter((d) => (d.data() as TimesheetDoc).toKey >= fromKey).map((d) => d.id),
-  );
-}
-
-/** Keep only entries covered by an approved timesheet (the official view). */
-function approvedOnly(rows: TimeEntryDoc[], approved: Set<string>): TimeEntryDoc[] {
-  return rows.filter((e) => approved.has(`${e.uid}_${e.periodKey}`));
+    .where('periodKey', '<=', toKey);
 }
 
 /** Build the filtered, dayKey-ordered query shared by the CSV export and totals. */
@@ -63,6 +53,31 @@ function entriesQuery(input: ReportFilter): Query {
     .where('dayKey', '<=', input.toKey)
     .orderBy('dayKey');
   return q;
+}
+
+/**
+ * Official reports read the hours and their approvals at the same point in
+ * time. Otherwise a concurrent edit and approval can certify an older set.
+ */
+async function reportEntries(input: ReportFilter): Promise<TimeEntryDoc[]> {
+  const db = getFirestore();
+  const entries = entriesQuery(input);
+  const closedRows = (docs: { data(): unknown }[]) => docs
+    .map((doc) => doc.data() as TimeEntryDoc)
+    .filter((entry) => entry.end !== null);
+  if (input.includeUnapproved) return closedRows((await entries.get()).docs);
+
+  return db.runTransaction(async (tx) => {
+    const [hours, sheets] = await Promise.all([
+      tx.get(entries),
+      tx.get(approvedPeriodsQuery(input.fromKey, input.toKey)),
+    ]);
+    const approved = new Map(sheets.docs.map((doc) => [doc.id, (doc.data() as TimesheetDoc).toKey]));
+    return closedRows(hours.docs).filter((entry) => {
+      const toKey = approved.get(entry.uid + '_' + entry.periodKey);
+      return toKey !== undefined && entry.dayKey >= entry.periodKey && entry.dayKey <= toKey;
+    });
+  }, { readOnly: true });
 }
 
 export function csvCell(v: string | number): string {
@@ -78,13 +93,7 @@ export function csvCell(v: string | number): string {
 /** Closed entries (approved-only unless asked otherwise) → CSV, times rendered
  *  in each entry's own timezone. People show as name + email, never raw uids. */
 export async function buildCsv(input: ReportFilter): Promise<string> {
-  const snap = await entriesQuery(input).get();
-  let rows = snap.docs
-    .map((d) => d.data() as TimeEntryDoc)
-    .filter((e) => e.end !== null); // running sessions excluded
-  if (!input.includeUnapproved) {
-    rows = approvedOnly(rows, await approvedPeriodSet(input.fromKey, input.toKey));
-  }
+  const rows = await reportEntries(input);
 
   const uids = [...new Set(rows.map((e) => e.uid))];
   const people = new Map<string, { name: string; email: string }>();
@@ -109,11 +118,7 @@ export async function buildCsv(input: ReportFilter): Promise<string> {
 /** In-memory rollups for dashboards over the same filtered set. `byPerson` is
  *  resolved to display names here so the wire shape (shared `Totals`) is whole. */
 export async function computeTotals(input: ReportFilter): Promise<Totals> {
-  const snap = await entriesQuery(input).get();
-  let rows = snap.docs.map((d) => d.data() as TimeEntryDoc).filter((e) => e.end !== null);
-  if (!input.includeUnapproved) {
-    rows = approvedOnly(rows, await approvedPeriodSet(input.fromKey, input.toKey));
-  }
+  const rows = await reportEntries(input);
 
   const act = new Map<string, { activityName: string; minutes: number }>();
   const per = new Map<string, number>();

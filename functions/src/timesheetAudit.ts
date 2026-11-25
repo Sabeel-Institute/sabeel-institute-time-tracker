@@ -1,6 +1,6 @@
 import { onDocumentWritten } from 'firebase-functions/v2/firestore';
 import { getFirestore } from 'firebase-admin/firestore';
-import { COLLECTIONS, type TimesheetDoc } from '@sabeel/shared';
+import { COLLECTIONS, recordedReviewFor, type TimesheetDoc } from '@sabeel/shared';
 import { reportError, sentryDsn } from './sentry';
 
 /**
@@ -39,6 +39,7 @@ export interface TimesheetEvent {
   entryCount: number;
   approverUid: string | null;
   rejectReason?: string;
+  review?: TimesheetDoc['submissionReview'];
 }
 
 /**
@@ -91,6 +92,10 @@ export const onTimesheetWritten = onDocumentWritten(
       const state = after ?? before;
       if (!state) return;
 
+      const review = verdict.kind === 'approved' ? recordedReviewFor(state.approvalReview, state.decidedAt)
+        : verdict.kind === 'submitted' || verdict.kind === 'resubmitted'
+          ? recordedReviewFor(state.submissionReview, state.submittedAt)
+          : undefined;
       const record: TimesheetEvent = {
         sheetId: event.params.sheetId,
         uid: state.uid,
@@ -101,6 +106,7 @@ export const onTimesheetWritten = onDocumentWritten(
         totalMinutes: state.totalMinutes,
         entryCount: state.entryCount,
         approverUid: state.approverUid ?? null,
+        ...(review ? { review } : {}),
         ...(state.rejectReason ? { rejectReason: state.rejectReason } : {}),
       };
       await getFirestore().collection(COLLECTIONS.timesheetEvents).add(record);

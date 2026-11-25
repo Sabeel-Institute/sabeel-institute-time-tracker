@@ -1,7 +1,7 @@
 import { describe, it, beforeAll, beforeEach, expect } from 'vitest';
 import { initializeApp, getApps } from 'firebase-admin/app';
 import { getFirestore } from 'firebase-admin/firestore';
-import { closeStaleSessions } from '../../src/sessions';
+import { closeStaleSession, closeStaleSessions } from '../../src/sessions';
 import { EMULATOR_PROJECT_ID } from '@sabeel/shared';
 
 const HOUR = 60 * 60 * 1000;
@@ -61,6 +61,30 @@ describe('closeStaleSessions', () => {
     const closed = await closeStaleSessions(NOW);
     expect(closed).toBe(0);
     expect((await ref.get()).data()!.end).toBeNull();
+  });
+
+  it('does not overwrite a clock-out made after the initial scan', async () => {
+    const db = getFirestore();
+    const old = db.collection('timeEntries').doc('candidate');
+    const next = db.collection('timeEntries').doc('new-timer');
+    const user = db.collection('users').doc('alice');
+    await old.set(running(13 * HOUR));
+    const candidates = await db.collection('timeEntries').where('end', '==', null).get();
+    await old.update({ end: NOW, durationMinutes: 13 * 60 });
+    await next.set(running(HOUR));
+    await user.set({ activeEntryId: next.id, status: 'active' });
+
+    expect(await closeStaleSession(candidates.docs[0].id, NOW)).toBe(false);
+    expect((await old.get()).data()).toMatchObject({ end: NOW, durationMinutes: 13 * 60 });
+    expect((await old.get()).data()).not.toHaveProperty('autoClosed');
+    expect((await user.get()).data()?.activeEntryId).toBe(next.id);
+  });
+
+  it('does the same close exactly once when two jobs pick the same candidate', async () => {
+    const db = getFirestore();
+    const ref = await db.collection('timeEntries').add(running(13 * HOUR));
+    const finished = await Promise.all([closeStaleSession(ref.id, NOW), closeStaleSession(ref.id, NOW)]);
+    expect(finished.sort()).toEqual([false, true]);
   });
 
   // This job runs on the admin SDK, so the approved-period lock every client

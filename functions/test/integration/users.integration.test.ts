@@ -3,7 +3,7 @@ import { initializeApp, getApps } from 'firebase-admin/app';
 import { getAuth } from 'firebase-admin/auth';
 import { getFirestore } from 'firebase-admin/firestore';
 import { HttpsError } from 'firebase-functions/v2/https';
-import { applyUserAccess } from '../../src/users';
+import { applyUserAccess, clearIneligibleApproverPointers } from '../../src/users';
 import { EMULATOR_PROJECT_ID } from '@sabeel/shared';
 
 // Runs under `firebase emulators:exec` — FIRESTORE_EMULATOR_HOST and
@@ -148,6 +148,64 @@ describe('applyUserAccess — approver pointer cleanup', () => {
 
     expect(await approverOf(mgr)).toBeNull();
     expect(await approverOf(alice)).toBeNull();
+  });
+
+  it('a retry cleans up a pointer left after the role was already removed', async () => {
+    const admin = freshUid('admin');
+    const former = freshUid('former');
+    const alice = freshUid('alice');
+    await seedUser(admin, { status: 'active', admin: true });
+    await seedUser(former, { status: 'active', role: 'member' });
+    await seedUser(alice, { status: 'active', approverUid: former });
+    await applyUserAccess(admin, { uid: former, role: 'member' });
+    expect(await approverOf(alice)).toBeNull();
+  });
+
+  it('preserves a new assignment racing with cleanup', async () => {
+    const former = freshUid('former');
+    const replacement = freshUid('reviewer');
+    const alice = freshUid('alice');
+    await seedUser(former, { status: 'disabled', role: 'manager' });
+    await seedUser(replacement, { status: 'active', role: 'manager' });
+    await seedUser(alice, { status: 'active', approverUid: former });
+    await Promise.all([
+      clearIneligibleApproverPointers(former),
+      getFirestore().doc('users/' + alice).update({ approverUid: replacement }),
+    ]);
+    expect(await approverOf(alice)).toBe(replacement);
+  });
+
+  it('does not clear assignments if the approver is already eligible again', async () => {
+    const reviewer = freshUid('restored');
+    const alice = freshUid('alice');
+    await seedUser(reviewer, { status: 'active', role: 'manager' });
+    await seedUser(alice, { status: 'active', approverUid: reviewer });
+    expect(await clearIneligibleApproverPointers(reviewer)).toBe(0);
+    expect(await approverOf(alice)).toBe(reviewer);
+  });
+
+  it('clears every page of assignments without changing submitted or approved records', async () => {
+    const db = getFirestore();
+    const former = freshUid('former');
+    const users = db.collection('users');
+    const pending = db.doc('timesheets/' + former + '-pending');
+    const approved = db.doc('timesheets/' + former + '-approved');
+    const pendingData = { status: 'submitted', approverUid: former };
+    const approvedData = { status: 'approved', approverUid: former, decidedBy: former };
+    const batch = db.batch();
+    batch.set(users.doc(former), { status: 'active', role: 'member' });
+    for (let i = 0; i < 401; i++) {
+      batch.set(users.doc(former + '-report-' + i), { approverUid: former, displayName: 'Volunteer ' + i });
+    }
+    batch.set(pending, pendingData);
+    batch.set(approved, approvedData);
+    await batch.commit();
+
+    expect(await clearIneligibleApproverPointers(former)).toBe(401);
+    expect((await users.where('approverUid', '==', former).get()).empty).toBe(true);
+    expect((await users.doc(former + '-report-400').get()).data()).toEqual({ approverUid: null, displayName: 'Volunteer 400' });
+    expect((await pending.get()).data()).toEqual(pendingData);
+    expect((await approved.get()).data()).toEqual(approvedData);
   });
 
   it('disabling an approver clears pointers even though the role is untouched', async () => {

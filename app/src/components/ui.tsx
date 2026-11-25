@@ -323,6 +323,7 @@ export function Row({
   value,
   onPress,
   warn,
+  review,
   actions,
   accessibilityLabel,
   testID,
@@ -332,17 +333,20 @@ export function Row({
   value?: string;
   onPress?: () => void;
   warn?: string;
+  review?: string[];
   /** Buttons at the row's end — Archive, Approve. Not with `onPress`. */
   actions?: ReactNode;
   accessibilityLabel?: string;
   testID?: string;
 }) {
+  const highlight = warn ? styles.rowWarnFill : review?.length ? styles.rowReviewFill : undefined;
   const body = (
     <>
       <View style={styles.rowText}>
         <Text style={styles.rowLabel}>{label}</Text>
         {typeof detail === 'string' ? <Text style={styles.rowDetail}>{detail}</Text> : (detail ?? null)}
         {warn ? <Text style={styles.rowWarn}>{warn}</Text> : null}
+        {review?.map((message) => <Text key={message} style={styles.rowReview}>{message}</Text>)}
       </View>
       {value ? (
         <Text style={styles.rowValue} numberOfLines={1}>
@@ -355,7 +359,7 @@ export function Row({
   );
   if (!onPress) {
     return (
-      <View testID={testID} style={[styles.row, actions ? styles.rowWithActions : null, warn ? styles.rowWarnFill : null]}>
+      <View testID={testID} style={[styles.row, actions ? styles.rowWithActions : null, highlight]}>
         {body}
       </View>
     );
@@ -366,7 +370,7 @@ export function Row({
       accessibilityRole="button"
       accessibilityLabel={accessibilityLabel}
       onPress={onPress}
-      style={({ pressed }) => [styles.row, warn ? styles.rowWarnFill : null, pressed ? styles.rowPressed : null]}
+      style={({ pressed }) => [styles.row, highlight, pressed ? styles.rowPressed : null]}
     >
       {body}
     </Pressable>
@@ -456,12 +460,16 @@ export function Field({
   onChangeText,
   placeholder,
   multiline,
+  inputMode,
+  editable,
 }: {
   label: string;
   value: string;
   onChangeText: (v: string) => void;
   placeholder?: string;
   multiline?: boolean;
+  inputMode?: 'numeric' | 'decimal';
+  editable?: boolean;
 }) {
   return (
     <View style={styles.field}>
@@ -474,6 +482,8 @@ export function Field({
         placeholder={placeholder}
         placeholderTextColor={t.text.muted}
         multiline={multiline}
+        inputMode={inputMode}
+        editable={editable}
         numberOfLines={multiline ? 4 : undefined}
         textAlignVertical={multiline ? 'top' : undefined}
       />
@@ -821,6 +831,8 @@ const styles = StyleSheet.create({
   },
   rowPressed: { backgroundColor: t.bg.inset },
   rowWarnFill: { backgroundColor: t.bg.dangerSoft },
+  rowReviewFill: { backgroundColor: t.bg.goldSoft },
+  rowReview: { fontSize: 13, fontWeight: '600', color: t.text.primary },
   rowText: { flexGrow: 1, flexShrink: 1, flexBasis: 160, minWidth: 0, gap: 2 },
   rowLabel: { fontSize: 16, fontWeight: '600', color: t.text.primary },
   rowDetail: { fontSize: 13, color: t.text.secondary },
