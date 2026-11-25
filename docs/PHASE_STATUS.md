@@ -40,6 +40,33 @@ headed `### <YYYY-MM-DD> — <summary> — vX.Y.Z`: `npx sabeel-ci release` take
 the release's title and notes from it (`docs/DEPLOY.md`). Deploys that shipped
 no app version carry no version in their heading.
 
+### 2026-11-24 — Timesheet review — v0.33.0
+
+- Before a week is submitted or approved, the app highlights hours worth a
+  second look. That covers entries under 3 minutes or over 8 hours, days
+  over 12 hours, and sessions auto-closed at 12 hours. The person confirms
+  them once. Admins set the limits in More → Timesheet review settings.
+- The member's confirmation is kept with the submission. The approver sees
+  the current limits and anything flagged or changed since then. An
+  approval keeps the review it was made with.
+- Submit, approve and Copy last week now check the hours on the server at
+  the moment they commit. A week changed in another session, a timer
+  still running, or overlapping entries stop the action with a message.
+  An empty week still submits and approves without a review.
+- A dropped connection keeps the week on screen and pauses Submit and
+  Approve until it is back.
+- Clocking in and out works without a connection. A clock-out from a
+  device that is out of date never stops a newer timer, and a timer can no
+  longer get stuck so that clocking in is refused.
+
+Functions and rules deploy first: three new callables
+(`submitReviewedTimesheet`, `approveReviewedTimesheet`,
+`copyPreviousTimesheetWeek`) and rules that move the timer to its own fixed
+id and take submission and approval off direct writes. Then
+`scripts/migrate-running-sessions.mjs --apply`. v0.32.2 cannot run against
+these rules, so the version floor rises to 0.33.0 once Play and TestFlight
+have it.
+
 ### 2026-11-02 — Loading, not empty — v0.32.2
 
 - While a list is still loading, the app says so instead of saying there
