@@ -144,53 +144,74 @@ describe('waiting weeks follow the current approver', () => {
 
 describe('what a profile change sets off', () => {
   const profile = async (uid: string) => (await user(uid).get()).data() as UserDoc;
+  /** Change a profile and follow it, as the trigger does, at event time `at`. */
+  async function change(uid: string, fields: Partial<UserDoc>, at: number) {
+    const before = await profile(uid);
+    await user(uid).update(fields);
+    return followProfileChange(uid, before, await profile(uid), at);
+  }
 
   it('one push to the new approver for all the weeks passed to them', async () => {
-    const before = await profile(owner);
-    await user(owner).update({ displayName: 'Member' });
-    const pushes = await followProfileChange(owner, { ...before, approverUid: 'old' }, await profile(owner));
+    await user(owner).update({ approverUid: 'old', displayName: 'Member' });
+    const pushes = await change(owner, { approverUid: 'new' }, 100);
     expect(pushes).toEqual([{ to: 'new', notif: expect.objectContaining({ title: '2 timesheets passed to you' }) }]);
     expect((await holder(1)).approverUid).toBe('new');
   });
 
+  it('a retry of the same event still sends the push its first attempt committed', async () => {
+    await handOverWaitingWeeks(owner, { now: 100 });
+    const before = await profile(owner);
+    const pushes = await followProfileChange(owner, { ...before, approverUid: 'old' }, before, 100);
+    expect(pushes).toEqual([{ to: 'new', notif: expect.objectContaining({ title: '2 timesheets passed to you' }) }]);
+    expect(await followProfileChange(owner, { ...before, approverUid: 'old' }, before, 200)).toEqual([]);
+  });
+
   it('nothing for a change that leaves the choice and the roles alone', async () => {
-    const now = await profile(owner);
-    expect(await followProfileChange(owner, now, { ...now, timeZone: 'UTC' })).toEqual([]);
+    expect(await change(owner, { timeZone: 'UTC' }, 100)).toEqual([]);
     expect((await holder(0)).approverUid).toBe('old');
   });
 
-  it('tells the person once their choice is cleared and nobody can approve their weeks', async () => {
+  it('tells the person once, when their weeks become ones nobody can approve', async () => {
     await user('old').update({ role: 'member' });
-    const before = await profile(owner);
-    await user(owner).update({ approverUid: null });
-    const pushes = await followProfileChange(owner, before, await profile(owner));
-    expect(pushes).toEqual([{ to: owner, notif: expect.objectContaining({ title: 'Choose a new approver' }) }]);
+    expect(await change(owner, { approverUid: null }, 100))
+      .toEqual([{ to: owner, notif: expect.objectContaining({ title: 'Choose a new approver' }) }]);
+    expect(await change(owner, { role: 'manager' }, 200)).toEqual([]);
+    expect((await holder(0)).stuckSince).toBe(100);
   });
 
-  it('tells them only when the choice is cleared, not again on every later change', async () => {
-    await user('old').update({ role: 'member' });
+  it('tells the person when the one who has their week loses the role, whoever they chose', async () => {
     await user(owner).update({ approverUid: null });
-    const now = await profile(owner);
-    expect(await followProfileChange(owner, now, { ...now, role: 'manager' })).toEqual([]);
+    expect(await change('old', { role: 'member' }, 100))
+      .toEqual([{ to: owner, notif: expect.objectContaining({ title: 'Choose a new approver' }) }]);
+  });
+
+  it('tells an admin whose own weeks nobody can approve once they stop being one', async () => {
+    await user(owner).update({ admin: true, approverUid: null });
+    await handOverWaitingWeeks(owner);
+    expect(await change(owner, { admin: false }, 100))
+      .toEqual([{ to: owner, notif: expect.objectContaining({ title: 'Choose a new approver' }) }]);
+  });
+
+  it('a week approvable again loses its mark, so a later episode is told anew', async () => {
+    await user('old').update({ role: 'member' });
+    await change(owner, { approverUid: null }, 100);
+    await change('old', { role: 'manager' }, 200);
+    expect((await holder(0)).stuckSince).toBeUndefined();
+    expect(await change('old', { role: 'member' }, 300)).toHaveLength(1);
   });
 
   it("an admin's own weeks come back to them when they are enabled again", async () => {
     await user(owner).update({ admin: true, approverUid: null, status: 'disabled' });
     await user('old').update({ role: 'member' });
     expect((await handOverWaitingWeeks(owner)).moved).toEqual([]);
-    const before = await profile(owner);
-    await user(owner).update({ status: 'active' });
-    await followProfileChange(owner, before, await profile(owner));
+    await change(owner, { status: 'active' }, 100);
     expect((await holder(0)).approverUid).toBe(owner);
   });
 
   it('weeks of those who chose someone follow them when they may approve again', async () => {
-    await user(owner).update({ approverUid: 'new' });
     await user('new').update({ role: 'member' });
     expect((await handOverWaitingWeeks(owner)).moved).toEqual([]);
-    const before = await profile('new');
-    await user('new').update({ role: 'manager' });
-    await followProfileChange('new', before, await profile('new'));
+    await change('new', { role: 'manager' }, 100);
     expect((await holder(0)).approverUid).toBe('new');
   });
 });

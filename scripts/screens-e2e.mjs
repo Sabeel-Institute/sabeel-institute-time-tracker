@@ -1171,7 +1171,7 @@ async function tourAdmin(tag, width) {
   /** Such a week under review: who had it, and the picker that gives its person a new approver. */
   await visit('timesheet-review-stuck', async () => {
     await vis(page.getByText(/· was with Former Approver$/)).click();
-    await vis(page.getByText(`Former Approver can no longer approve timesheets, so this week is waiting for a new approver. Choose who approves ${STUCK.name}'s timesheets below.`, { exact: true }))
+    await vis(page.getByText(`Former Approver can no longer approve timesheets, so this week is waiting for a new approver. Choose who approves ${STUCK.name}'s timesheets below. You can also approve or reject it yourself.`, { exact: true }))
       .waitFor({ timeout: 20000 });
     await vis(page.getByText('Choose an approver', { exact: true })).waitFor({ timeout: 20000 });
   });

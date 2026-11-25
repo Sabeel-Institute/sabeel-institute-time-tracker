@@ -1,16 +1,16 @@
-import { useMemo } from 'react';
 import { approverFor, dayKeyFor, deviceTimeZone, shortDayLabel, waitingState, type WaitingState } from '@sabeel/shared';
 import type { Timesheet } from './timesheets';
-import { useApproverChoices, type UserRow } from './users';
+import { useApprovers } from './approvers';
+import type { UserRow } from './users';
 
 /**
  * Everyone who may approve now, by uid, for telling where a waiting week
- * stands (waitingState). undefined while the list loads, so no week reads as
- * stuck before it has been checked.
+ * stands (waitingState). undefined until the server has answered, so no week
+ * reads as stuck because the cache knew only some of them.
  */
 export function useEligibleApprovers(): ReadonlyMap<string, UserRow> | undefined {
-  const approvers = useApproverChoices();
-  return useMemo(() => (approvers ? new Map(approvers.map((a) => [a.uid, a])) : undefined), [approvers]);
+  const { byUid, confirmed } = useApprovers();
+  return confirmed ? byUid : undefined;
 }
 
 /**
@@ -30,7 +30,7 @@ export function weekStanding(
   const since = shortDayLabel(dayKeyFor(sheet.heldSince ?? sheet.submittedAt, deviceTimeZone()));
   const line = state.kind === 'stuck' ? 'Needs a new approver'
     : state.kind === 'moving' ? (self ? 'Passing to you to approve' : `Passing to ${name}`)
-    : self ? `For your own approval since ${since}` : `With ${name} since ${since}`;
+    : self ? `With you since ${since}` : `With ${name} since ${since}`;
   return { ...state, line, ownStuck: state.kind === 'stuck' && self };
 }
 

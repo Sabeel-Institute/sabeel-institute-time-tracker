@@ -1,11 +1,10 @@
-import { useMemo } from 'react';
 import { StyleSheet, Text } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { dayKeyFor, dayLabel, deviceTimeZone, formatDuration, periodLabel } from '@sabeel/shared';
 import { tabState, type RootStackParamList } from '../nav';
 import { useRejectedSheets } from '../timesheets';
-import { useApproverChoices } from '../users';
+import { useApprovers } from '../approvers';
 import { Empty, Row, RowList, Screen, Spinner } from '../components/ui';
 import { getTheme } from '../theme';
 
@@ -21,8 +20,7 @@ export function NeedsAttentionScreen({ uid }: { uid: string }) {
   const sheets = useRejectedSheets(uid);
   // Rejections come from managers/admins, whose profiles every active user may
   // read — so names resolve without the manager-only users listing.
-  const approvers = useApproverChoices();
-  const nameOf = useMemo(() => new Map((approvers ?? []).map((a) => [a.uid, a.displayName])), [approvers]);
+  const { byUid } = useApprovers();
   const tz = deviceTimeZone();
 
   return (
@@ -51,7 +49,7 @@ export function NeedsAttentionScreen({ uid }: { uid: string }) {
                       </Text>
                     ) : null}
                     <Text style={styles.meta}>
-                      Rejected{ts.decidedBy ? ` by ${nameOf.get(ts.decidedBy) ?? 'a manager'}` : ''}
+                      Rejected{ts.decidedBy ? ` by ${byUid?.get(ts.decidedBy)?.displayName ?? 'a manager'}` : ''}
                       {ts.decidedAt ? ` · ${dayLabel(dayKeyFor(ts.decidedAt, tz))}` : ''}
                     </Text>
                   </>

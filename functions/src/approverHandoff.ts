@@ -1,6 +1,6 @@
 import { onDocumentUpdated } from 'firebase-functions/v2/firestore';
 import { getFirestore } from 'firebase-admin/firestore';
-import { canApproveTimesheets, COLLECTIONS, type UserDoc } from '@sabeel/shared';
+import { canApproveTimesheets, COLLECTIONS, type TimesheetDoc, type UserDoc } from '@sabeel/shared';
 import { handOverWaitingWeeks, type HandOver } from './handOver';
 import { prefOn, texts, type Notif } from './notifyCore';
 import { PUSH_SECRETS } from './messaging';
@@ -17,27 +17,22 @@ function handoffInputs(user: UserDoc | undefined): string {
 
 type Push = { to: string; notif: Notif };
 
-async function noticesFor(uid: string, result: HandOver, clearedChoice: boolean): Promise<Push[]> {
+async function noticesFor(uid: string, result: HandOver): Promise<Push[]> {
   const users = getFirestore().collection(COLLECTIONS.users);
   const profile = async (id: string) => (await users.doc(id).get()).data() as UserDoc | undefined;
+  const range = (week: { periodKey: string; toKey: string }) => ({ fromKey: week.periodKey, toKey: week.toKey });
   const pushes: Push[] = [];
   if (result.moved.length > 0 && result.to !== null && result.to !== uid) {
     const [owner, approver] = await Promise.all([profile(uid), profile(result.to)]);
     if (approver && prefOn(approver.notifPrefs, 'submitted')) {
-      const week = result.moved[0];
-      pushes.push({
-        to: result.to,
-        notif: texts.handedOver(uid, owner?.displayName ?? uid, { fromKey: week.periodKey, toKey: week.toKey }, result.moved.length),
-      });
+      pushes.push({ to: result.to, notif: texts.handedOver(uid, owner?.displayName ?? uid, range(result.moved[0]), result.moved.length) });
     }
   }
-  // Told once, when the choice is cleared because the approver lost the role:
-  // a week nobody can approve is the person's to fix.
-  if (clearedChoice && result.stuck.length > 0) {
+  // A week nobody can approve is the person's to fix: told once, when it becomes so.
+  if (result.newlyStuck.length > 0) {
     const owner = await profile(uid);
     if (owner && prefOn(owner.notifPrefs, 'rejected')) {
-      const week = result.stuck[0];
-      pushes.push({ to: uid, notif: texts.needsApprover({ fromKey: week.periodKey, toKey: week.toKey }, result.stuck.length) });
+      pushes.push({ to: uid, notif: texts.needsApprover(range(result.newlyStuck[0]), result.newlyStuck.length) });
     }
   }
   return pushes;
@@ -45,29 +40,32 @@ async function noticesFor(uid: string, result: HandOver, clearedChoice: boolean)
 
 /**
  * What a profile change does to waiting weeks, and the pushes it calls for.
- * Two kinds of change matter. The person's own choice, or their own ability
- * to approve when they are their own approver, moves their weeks. A change
- * in whether they may approve also moves the weeks of everyone who chose
- * them: those who chose them are normally cleared when they lose the role,
- * but a choice left pointing at them waits for them to be able again.
+ * The person's own choice, or their own ability to approve when they are
+ * their own approver, decides where their weeks go. A change in whether they
+ * may approve also decides it for everyone who chose them (normally cleared
+ * when they lose the role, but a choice left pointing at them waits for them
+ * to be able again) and for everyone whose weeks they have (stuck once they
+ * lose it). `now` is the event's time, the same on every retry of it.
  */
 export async function followProfileChange(
   uid: string,
   before: UserDoc | undefined,
   after: UserDoc | undefined,
-  now = Date.now(),
+  now: number,
 ): Promise<Push[]> {
-  const pushes: Push[] = [];
-  if (handoffInputs(before) !== handoffInputs(after)) {
-    const clearedChoice = (before?.approverUid ?? null) !== null && (after?.approverUid ?? null) === null;
-    pushes.push(...await noticesFor(uid, await handOverWaitingWeeks(uid, { now }), clearedChoice));
-  }
+  const owners = new Set<string>();
+  if (handoffInputs(before) !== handoffInputs(after)) owners.add(uid);
   if (canApproveTimesheets(before) !== canApproveTimesheets(after)) {
-    const choosers = await getFirestore().collection(COLLECTIONS.users).where('approverUid', '==', uid).get();
-    for (const doc of choosers.docs.filter((d) => d.id !== uid)) {
-      pushes.push(...await noticesFor(doc.id, await handOverWaitingWeeks(doc.id, { now }), false));
-    }
+    const db = getFirestore();
+    const [choosers, holding] = await Promise.all([
+      db.collection(COLLECTIONS.users).where('approverUid', '==', uid).get(),
+      db.collection(COLLECTIONS.timesheets).where('approverUid', '==', uid).where('status', '==', 'submitted').get(),
+    ]);
+    for (const doc of choosers.docs) owners.add(doc.id);
+    for (const doc of holding.docs) owners.add((doc.data() as TimesheetDoc).uid);
   }
+  const pushes: Push[] = [];
+  for (const owner of [...owners].sort()) pushes.push(...await noticesFor(owner, await handOverWaitingWeeks(owner, { now })));
   return pushes;
 }
 
@@ -75,8 +73,10 @@ export async function followProfileChange(
  * Every way an approver changes (the person, a manager or admin, or the
  * cleanup when an approver loses the role) writes a profile, so this one
  * trigger keeps waiting weeks with the current approver whichever way it came.
- * Retried on failure; the hand-over is safe to repeat. A push that fails is
- * reported, not retried: the weeks have already moved.
+ * Retried on failure: the hand-over is safe to repeat, and a retry rebuilds
+ * the pushes its earlier attempts committed but did not send, from the
+ * event's time stamped on the weeks. A push that fails to send is reported,
+ * not retried. (A second delivery of the same event can repeat a push.)
  */
 export const handOverTimesheets = onDocumentUpdated(
   { document: 'users/{uid}', secrets: [sentryDsn, ...PUSH_SECRETS], retry: true },
@@ -85,7 +85,7 @@ export const handOverTimesheets = onDocumentUpdated(
     const after = event.data?.after.data() as UserDoc | undefined;
     let pushes: Push[];
     try {
-      pushes = await followProfileChange(event.params.uid, before, after);
+      pushes = await followProfileChange(event.params.uid, before, after, Date.parse(event.time));
     } catch (e) {
       await reportError(e);
       throw e;

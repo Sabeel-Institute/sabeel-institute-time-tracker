@@ -106,6 +106,8 @@ Weeks you have submitted that are waiting for approval are listed at the
 bottom of Today, under **Waiting for approval**, folded away until you tap it.
 Each one says who has it and since when (see 1.6).
 
+![Waiting for approval, unfolded](manual/img/today-waiting.png)
+
 Managers and admins also get **Approvals** and **Reports** tabs, and **People**
 and **Activities** in More — covered in Parts 2 and 3.
 
@@ -390,8 +392,9 @@ to that person. An admin can also approve such a week directly. A manager who
 opens such a week (from Reports) can choose the approver too, for anyone who
 is not an admin.
 
-Only the one who has a week, or an admin, can approve or reject it. A manager
-who opens someone else's week sees who has it instead of the buttons.
+Only the one who has a week, or an admin, can approve, reject or correct it. A
+manager who opens someone else's submitted week sees who has it instead of the
+buttons.
 
 ![Reviewing a timesheet](manual/img/review.png)
 

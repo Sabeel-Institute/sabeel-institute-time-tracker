@@ -151,6 +151,9 @@ export interface TimesheetDoc {
    *  that passed it to them. Absent on weeks submitted before v0.34.0, whose
    *  holder has had them since submittedAt. */
   heldSince?: number;
+  /** Server-only: since when nobody can approve it (handOverWaitingWeeks), so
+   *  its person is told once. Cleared when it can be approved again. */
+  stuckSince?: number;
   /** Thresholds and flags the member reviewed when submitting. */
   submissionReview?: RecordedReview;
   /** Thresholds and flags the approver reviewed when deciding. */

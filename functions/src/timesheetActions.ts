@@ -126,7 +126,7 @@ export async function submitReviewed(input: SubmissionRequest, uid: string, admi
     if (sheet) {
       tx.update(sheetRef, {
         ...submitted,
-        submissionReview: review ? { ...review, at: now } : FieldValue.delete(),
+        submissionReview: review ? { ...review, at: now } : FieldValue.delete(), stuckSince: FieldValue.delete(),
         decidedAt: FieldValue.delete(), decidedBy: FieldValue.delete(), rejectReason: FieldValue.delete(),
       });
     } else {
@@ -171,7 +171,7 @@ export async function approveReviewed(
 
     const { review, snapshot } = await reviewedHours(tx, input.uid, input);
     tx.update(sheetRef, {
-      ...snapshot, status: 'approved', decidedAt: now, decidedBy: reviewerUid, updatedAt: now,
+      ...snapshot, status: 'approved', decidedAt: now, decidedBy: reviewerUid, updatedAt: now, stuckSince: FieldValue.delete(),
       ...(review ? { approvalReview: { ...review, at: now } } : {}),
     });
   });

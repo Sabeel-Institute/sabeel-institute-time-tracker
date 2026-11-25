@@ -31,6 +31,7 @@ import {
 } from '../timesheets';
 import { approverItems, setApprover } from '../users';
 import { stuckMessage, useEligibleApprovers, weekStanding } from '../waiting';
+import { useApprovers } from '../approvers';
 import { SearchablePicker } from '../components/SearchablePicker';
 import { DayEntries, MonthWeeks, openingDay, type WeekState } from '../components/WeekView';
 import {
@@ -116,18 +117,20 @@ export function TimesheetScreen({
   }, [entries]);
 
   // Submission needs an approver and a period with no open timers or overlaps.
+  const approvers = useApprovers();
   const eligible = useEligibleApprovers();
   // Rejections come from managers/admins, whose profiles every active user may
   // read, so the name resolves from the approver list.
-  const decidedBy = sheet?.decidedBy ? eligible?.get(sheet.decidedBy)?.displayName : undefined;
+  const decidedBy = sheet?.decidedBy ? approvers.byUid?.get(sheet.decidedBy)?.displayName : undefined;
   const approverUid = approverFor(uid, { approverUid: profile.approverUid, admin: claims.admin === true });
   // A waiting week follows the approver chosen here (handOverTimesheets),
   // judged from the profile as the server does; the token gates submitting.
   const standing = sheet?.status === 'submitted' && eligible ? weekStanding(sheet, profile, eligible) : undefined;
   const approverPicker = (
     <SearchablePicker
-      items={approverItems([...(eligible?.values() ?? [])], uid, '(myself)')}
+      items={approverItems(approvers.list ?? [], uid, '(myself)')}
       selectedId={approverUid}
+      loading={approvers.list ? undefined : 'Loading approvers…'}
       onSelect={(id) => void act(() => setApprover(uid, id))}
       placeholder="Choose who approves your hours"
       title="Timesheet approver"
@@ -284,10 +287,10 @@ export function TimesheetScreen({
           ) : standing ? (
             <Text style={styles.hint}>{standing.kind === 'moving' ? `${standing.line}…` : `${standing.line}.`}</Text>
           ) : null}
-          <Text style={styles.hint}>Withdraw it if you need to change something.</Text>
           <SectionTitle>Approver</SectionTitle>
           <Text style={styles.hint}>Weeks waiting for approval go to whoever you choose.</Text>
           {approverPicker}
+          <Text style={styles.hint}>Withdraw it if you need to change something.</Text>
           <Button label="Withdraw submission" kind="quiet" onPress={() => act(() => withdrawTimesheet(sheet))} />
         </>
       ) : null}

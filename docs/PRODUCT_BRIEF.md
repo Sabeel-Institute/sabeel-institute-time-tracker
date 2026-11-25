@@ -96,6 +96,7 @@ timesheets/{uid}_{periodKey}          # one doc per (user, period) once submitte
   approverUid                         # who has it: approverFor(uid, profile) at (re)submission,
                                       #   moved with the profile's approver while submitted
   heldSince?                          # when they got it (absent before v0.34.0: submittedAt)
+  stuckSince?                         # server-only: since when nobody can approve it
   submittedAt, decidedAt?, decidedBy?, rejectReason?
   totalMinutes, entryCount            # informational snapshot; live truth = the period's entries
   createdAt, updatedAt
@@ -155,7 +156,7 @@ Rules tests with `@firebase/rules-unit-testing` (tajweed's exact harness).
 2. `exportCsv` (callable, manager) — filters `{uid?, activityId?, from, to}` (dayKey range), returns CSV string (well under the 10 MB callable limit).
 3. `autoCloseStaleSessions` (scheduled hourly, Phase 6) — replaces a session running >12h with its finished entry at start+12h, `autoClosed: true`, in one transaction.
 4. `acceptRules` (callable, active accounts) — records the institute's rules as accepted on the caller's profile (`docs/STORE-RELEASE.md`, 4).
-5. `handOverTimesheets` (trigger on `users/{uid}` updates, retried) — when the approver choice, or the status, role or admin flag, changes, moves the person's submitted weeks to their current approver in one transaction (if that person may approve) and stamps `heldSince`. When a person's own ability to approve changes, it does the same for everyone who chose them. One push per move to the new approver ("Timesheet passed to you", or "N timesheets…"); when the cleanup clears a choice and nobody can approve the person's weeks, a "Choose a new approver" push to them.
+5. `handOverTimesheets` (trigger on `users/{uid}` updates, retried) — when the approver choice, or the status, role or admin flag, changes, moves the person's submitted weeks to their current approver in one transaction (if that person may approve) and stamps `heldSince`. When a person's own ability to approve changes, it does the same for everyone who chose them. When a person's own ability to approve changes, it also does this for everyone whose weeks they have. One push per move to the new approver ("Timesheet passed to you", or "N timesheets…"). A week that becomes one nobody can approve is marked `stuckSince`, and its person gets one "Choose a new approver" push; the mark clears when it can be approved again. Pushes are rebuilt from the event's time stamped on the weeks, so a retry sends what an earlier attempt committed.
 6. `reportProblem` (callable, active accounts) — Report a problem: keeps `reports/{id}` (five an hour per account) and emails it from `apps-noreply@` to `apps-reports@`, Reply-To the reporter, by keyless domain-wide delegation (`functions/src/gmail.ts`).
 
 Not functions: profile creation (client create under rules), totals (aggregation queries), statements (print view).

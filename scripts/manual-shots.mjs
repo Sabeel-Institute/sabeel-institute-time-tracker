@@ -117,6 +117,14 @@ const SHOTS = [
     do: (s) => s.see(s.text('So far')),
   },
   {
+    name: 'today-waiting',
+    as: PEOPLE.yusuf.email,
+    do: async (s) => {
+      await s.tap(s.btn(/^Show Waiting for approval/));
+      await s.scrollTo(s.text(/^With Omar Siddiqui since /), 220);
+    },
+  },
+  {
     name: 'clocked-in',
     as: PEOPLE.sara.email,
     do: async (s) => {
@@ -170,7 +178,10 @@ const SHOTS = [
     name: 'submitted',
     as: PEOPLE.yusuf.email,
     start: (w) => `timesheet?initialPeriodKey=${w.weeks.PREV.fromKey}`,
-    do: (s) => s.see(s.btn('Withdraw submission')),
+    do: async (s) => {
+      await s.see(s.text(/^With Omar Siddiqui since /));
+      await s.scrollTo(s.text(/^With Omar Siddiqui since /), 360);
+    },
   },
   {
     name: 'needs-attention',

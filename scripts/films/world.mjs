@@ -228,6 +228,12 @@ export async function buildWorld() {
       await auth.setCustomUserClaims(uid, access);
       await db.doc(`${COLLECTIONS.users}/${uid}`).set({ ...access, claimsUpdatedAt: Date.now() }, { merge: true });
     },
+    /** Set someone's approver (a person in PEOPLE, or null), as an admin would. */
+    chooseApprover: async (who, approver) => {
+      await db.doc(`${COLLECTIONS.users}/${uids[who]}`).update({ approverUid: approver === null ? null : uids[approver] });
+      // The hand-over trigger on that change settles before anyone looks.
+      await new Promise((r) => setTimeout(r, 3000));
+    },
     /** The uid an account made on camera got, by its address. */
     uidOf: async (email) => (await auth.getUserByEmail(email)).uid,
   };

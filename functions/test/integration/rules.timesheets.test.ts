@@ -157,6 +157,14 @@ describe('timesheets — reject', () => {
     await assertSucceeds(updateDoc(reviewing, rejection));
   });
 
+  it('an admin who chose nobody approves their own: the manager who had the week no longer rejects it', async () => {
+    await seed({});
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await updateDoc(doc(ctx.firestore(), 'users/alice'), { approverUid: null, admin: true });
+    });
+    await assertFails(updateDoc(doc(mgr().firestore(), sheetPath), rejection));
+  });
+
   it('a revoked reviewer cannot reject or reopen through a stale token', async () => {
     await testEnv.withSecurityRulesDisabled(async (ctx) => {
       const db = ctx.firestore();

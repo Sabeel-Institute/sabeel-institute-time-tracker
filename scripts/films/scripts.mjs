@@ -359,6 +359,10 @@ export const FILMS = [
         do: (t) => t.highlight(t.text('Submitted')),
       },
       {
+        say: "It also tells you who has your week, and since when. Pick someone else under Approver, and it moves to them. There's no need to take it back.",
+        do: (t) => t.highlight(t.text(/^With Omar Siddiqui since /)),
+      },
+      {
         say: "Noticed something you forgot? Tap Withdraw submission to take it back, and the week is yours to edit again.",
         do: (t) => t.tap(t.btn('Withdraw submission')),
       },
@@ -725,7 +729,7 @@ export const FILMS = [
         do: (t) => t.highlight(t.text(/^Active · /)),
       },
       {
-        say: "Approver is where their timesheets go when they submit. Tap the box if you want to choose someone different.",
+        say: "Approver is where their timesheets go, including any that are already waiting. Tap the box if you want to choose someone different.",
         do: (t) => t.highlight(t.text('Omar Siddiqui')),
       },
       {
@@ -739,6 +743,42 @@ export const FILMS = [
       {
         say: "Active is the account's on switch. Turn it off, and the person is locked out at once and can't log hours, though their past hours stay.",
         do: (t) => t.highlight(t.switch('Active')),
+      },
+    ],
+  },
+  {
+    id: 'approver-left',
+    as: PEOPLE.amina.email,
+    start: '',
+    // Omar has stopped being a manager, and Yusuf's week was with him.
+    before: async (w) => {
+      await w.setAccess('omar', { status: 'active', role: 'member', admin: false });
+      await w.chooseApprover('yusuf', null);
+    },
+    steps: [
+      {
+        say: "When an approver leaves, or stops being a manager, the weeks they had need someone new. Start in Approvals.",
+        do: (t) => t.tap(t.tabOf('approvals')),
+      },
+      {
+        say: "Choose All submitted, to see every week that's waiting, whoever has it.",
+        do: (t) => t.tap(t.tab('All submitted')),
+      },
+      {
+        say: "Weeks that nobody can approve are kept together at the top, folded away. Tap the heading to open it.",
+        do: (t) => t.tap(t.btn('Show No one can approve these (1)')),
+      },
+      {
+        say: "Here's Yusuf's week. It was with Omar, who can't approve any more. Tap it.",
+        do: (t) => t.tap(t.text(/· was with Omar Siddiqui$/)),
+      },
+      {
+        say: "Now choose who approves Yusuf's timesheets from here on. In this case, that's you.",
+        do: (t) => pick(t, t.text('Choose an approver'), 'Amina Rahman'),
+      },
+      {
+        say: "The week moves to you straight away, along with any others of Yusuf's that were waiting. You can approve it now.",
+        do: (t) => t.highlight(t.btn('Approve timesheet')),
       },
     ],
   },

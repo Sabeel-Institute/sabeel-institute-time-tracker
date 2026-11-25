@@ -24,18 +24,22 @@ export function ApprovalsScreen({ uid, claims }: { uid: string; claims: TokenCla
   const all = claims.admin === true && scope === 'all';
   const queue = useApprovalQueue(uid, { all });
   const users = useUsers();
+  // Where a week stands is judged from every profile, so from the server's
+  // list: the cache may hold only some (managers', admins' and one's own).
+  const everyone = useUsers({ waitForServer: true });
   const byUid = useMemo(() => new Map((users ?? []).map((u) => [u.uid, u])), [users]);
-  const eligible = useMemo(() => new Set(approverChoices(users ?? []).map((u) => u.uid)), [users]);
+  const profileOf = useMemo(() => new Map((everyone ?? []).map((u) => [u.uid, u])), [everyone]);
+  const eligible = useMemo(() => new Set(approverChoices(everyone ?? []).map((u) => u.uid)), [everyone]);
   const tz = deviceTimeZone();
   // Everyone's queue, for an admin: weeks nobody can approve go in their own
   // folded group above the rest, each saying who had it. The fix is choosing
   // the person a new approver, from the week itself.
   const standingOf = (ts: Timesheet) => {
-    const owner = byUid.get(ts.uid);
+    const owner = profileOf.get(ts.uid);
     return waitingState(ts, owner ? approverFor(ts.uid, owner) : null, eligible);
   };
   // Where each week is can be said only once everyone's profile is in.
-  const placed = all && users !== undefined;
+  const placed = all && everyone !== undefined;
   const stuck = placed ? (queue ?? []).filter((ts) => standingOf(ts).kind === 'stuck') : [];
   const rest = (queue ?? []).filter((ts) => !stuck.includes(ts));
   const row = (ts: Timesheet) => {

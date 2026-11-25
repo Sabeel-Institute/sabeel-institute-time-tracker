@@ -1,4 +1,4 @@
-import { getFirestore, type Transaction } from 'firebase-admin/firestore';
+import { FieldValue, getFirestore, type Transaction } from 'firebase-admin/firestore';
 import {
   COLLECTIONS,
   approverFor,
@@ -28,22 +28,28 @@ export type Week = { id: string; periodKey: string; toKey: string; approverUid: 
 export type HandOver = {
   /** Who the weeks belong with now, or null. */
   to: string | null;
-  /** Weeks passed to `to`, as they were before, oldest first. */
+  /** Weeks passed to `to` at `now`, with who had them before, oldest first. */
   moved: Week[];
   /** With nobody to go to: weeks whose holder may no longer approve them. */
   stuck: Week[];
+  /** Those of `stuck` that became stuck at `now`: their person is told once. */
+  newlyStuck: Week[];
 };
 
 /**
  * A waiting week belongs with the person's approver as they stand now. Moves
  * each submitted week of `uid` to currentApprover, stamping when the new
  * holder got it; leaves every week alone when that is nobody (the week stays
- * with whoever had it, and the app asks for a new approver).
+ * with whoever had it, and the app asks for a new approver), marking when it
+ * became stuck.
  *
  * Reads the profiles at commit time rather than trusting the event that woke
  * it, so events delivered late, twice or out of order all end in the latest
- * choice. Approved and rejected weeks are never touched: a rejected week goes
- * to the current approver when it is resubmitted. `apply: false` only reports.
+ * choice. `now` is the event's time: a retry of the same event finds the
+ * weeks its first attempt moved or marked by that stamp, so what it reports,
+ * and the pushes made from that, do not depend on which attempt committed.
+ * Approved and rejected weeks are never touched: a rejected week goes to the
+ * current approver when it is resubmitted. `apply: false` only reports.
  */
 export async function handOverWaitingWeeks(
   uid: string,
@@ -51,26 +57,43 @@ export async function handOverWaitingWeeks(
 ): Promise<HandOver> {
   const db = getFirestore();
   return db.runTransaction(async (tx) => {
-    const owner = (await tx.get(db.collection(COLLECTIONS.users).doc(uid))).data() as UserDoc | undefined;
+    const users = db.collection(COLLECTIONS.users);
+    const owner = (await tx.get(users.doc(uid))).data() as UserDoc | undefined;
     const to = owner ? await currentApprover(tx, uid, owner) : null;
     const waiting = (await tx.get(db.collection(COLLECTIONS.timesheets)
       .where('uid', '==', uid).where('status', '==', 'submitted'))).docs
       .map((doc) => {
-        const { periodKey, toKey, approverUid } = doc.data() as TimesheetDoc;
-        return { ref: doc.ref, week: { id: doc.id, periodKey, toKey, approverUid } };
+        const data = doc.data() as TimesheetDoc;
+        const { periodKey, toKey, approverUid } = data;
+        return { ref: doc.ref, data, week: { id: doc.id, periodKey, toKey, approverUid } };
       })
       .sort((a, b) => a.week.periodKey.localeCompare(b.week.periodKey));
-    if (to !== null) {
-      const moving = waiting.filter((w) => w.week.approverUid !== to);
-      if (apply) for (const w of moving) tx.update(w.ref, { approverUid: to, heldSince: now, updatedAt: now });
-      return { to, moved: moving.map((w) => w.week), stuck: [] };
-    }
-    const holders = [...new Set(waiting.map((w) => w.week.approverUid))];
     const able = new Set<string>();
-    for (const holder of holders) {
-      const profile = holder === uid ? owner : (await tx.get(db.collection(COLLECTIONS.users).doc(holder))).data() as UserDoc | undefined;
-      if (canApproveTimesheets(profile)) able.add(holder);
+    if (to === null) {
+      for (const holder of new Set(waiting.map((w) => w.week.approverUid))) {
+        const profile = holder === uid ? owner : (await tx.get(users.doc(holder))).data() as UserDoc | undefined;
+        if (canApproveTimesheets(profile)) able.add(holder);
+      }
     }
-    return { to, moved: [], stuck: waiting.filter((w) => !able.has(w.week.approverUid)).map((w) => w.week) };
+    const moving = to === null ? [] : waiting.filter((w) => w.week.approverUid !== to);
+    const movedEarlier = to === null ? [] : waiting.filter((w) => w.week.approverUid === to && w.data.heldSince === now);
+    // Stuck only with nobody to go to: a week on its way to `to` is not.
+    const stuck = to === null ? waiting.filter((w) => !able.has(w.week.approverUid)) : [];
+    const newlyStuck = stuck.filter((w) => w.data.stuckSince === undefined || w.data.stuckSince === now);
+    if (apply) {
+      for (const w of moving) {
+        tx.update(w.ref, { approverUid: to, heldSince: now, updatedAt: now, stuckSince: FieldValue.delete() });
+      }
+      for (const w of newlyStuck) if (w.data.stuckSince === undefined) tx.update(w.ref, { stuckSince: now });
+      // Approvable again (its holder got the role back): a later episode is told anew.
+      for (const w of waiting) {
+        if (!moving.includes(w) && !stuck.includes(w) && w.data.stuckSince !== undefined) {
+          tx.update(w.ref, { stuckSince: FieldValue.delete() });
+        }
+      }
+    }
+    const weeks = (list: typeof waiting) => list.map((w) => w.week)
+      .sort((a, b) => a.periodKey.localeCompare(b.periodKey));
+    return { to, moved: weeks([...moving, ...movedEarlier]), stuck: weeks(stuck), newlyStuck: weeks(newlyStuck) };
   });
 }

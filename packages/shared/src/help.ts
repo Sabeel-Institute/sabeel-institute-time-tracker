@@ -46,6 +46,7 @@ export const HELP_VIDEOS: readonly HelpVideo[] = [
   { id: 'activities', audience: 'manager', title: 'Activities', summary: 'Adding, archiving and restoring what people log against.' },
   { id: 'new-accounts', audience: 'admin', title: 'Approving new accounts', summary: 'People waiting to get in, and letting them in.' },
   { id: 'roles', audience: 'admin', title: 'Roles and access', summary: 'Member, manager and admin, approvers, and turning an account off.' },
+  { id: 'approver-left', audience: 'admin', title: 'When an approver leaves', summary: 'Weeks nobody can approve, and choosing who approves them now.' },
   { id: 'reopening', audience: 'admin', title: 'Reopening an approved week', summary: 'When an approved week needs changing.' },
 ];
 

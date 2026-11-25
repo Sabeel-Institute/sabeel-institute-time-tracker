@@ -1503,9 +1503,17 @@ async function main() {
   if (await handRow.count()) throw new Error('the waiting weeks on Today are not folded away');
   await waitingFold.click();
   await handRow.getByText(/^With Admin since /).waitFor();
-  // Choosing someone else on the submitted week passes it to them.
+  // Offline, a screen opened anew still has the approvers the session heard:
+  // the picker names the one chosen rather than asking for one.
+  offlineLabels.add('volunteer');
+  await vol.context().setOffline(true);
   await handRow.click();
   await expectWeekShown(vol, shared.periodLabel(handWeek));
+  await firstOnScreen(vol.getByText(/^With Admin since /)).waitFor();
+  await firstOnScreen(vol.getByRole('button', { name: /^Admin, Timesheet approver$/ })).waitFor();
+  await vol.context().setOffline(false);
+  offlineLabels.delete('volunteer');
+  // Choosing someone else on the submitted week passes it to them.
   const picked = Date.now();
   await pickFromModal(vol, 'Admin', 'Second Approver');
   await eventually(vol, 'the week passed to the second approver', storedHolder, (uid) => uid === secondUid);
@@ -1519,7 +1527,6 @@ async function main() {
   await openPerson('Second Approver');
   await tapAndAnswer(mgr, () => roleOption(mgr, 'Member').click(), true);
   await eventually(vol, 'the cleared choice', () => storedProfile(volUid), (f) => 'nullValue' in f.approverUid);
-  if (await storedHolder() !== secondUid) throw new Error('a week nobody can approve moved anyway');
   await firstOnScreen(vol.getByText('Your approver can no longer approve timesheets. Choose a new approver below, and this week goes to them.', { exact: true })).waitFor();
   await vol.goto(baseUrl + '/');
   const stuckNotice = vol.getByRole('button', { name: /^Your approver can no longer approve timesheets\. Choose a new one, and your/ });
@@ -1529,9 +1536,12 @@ async function main() {
   await mgr.getByRole('tab', { name: 'All submitted', exact: true }).click();
   const stuckFold = mgr.getByRole('button', { name: 'Show No one can approve these (1)', exact: true });
   await stuckFold.waitFor({ timeout: 30000 });
+  // By now the clear's own hand-over has run: it must have left the week where it was.
+  if (await storedHolder() !== secondUid) throw new Error('a week nobody can approve moved anyway');
+  if (!(await storedHand()).stuckSince) throw new Error('a week nobody can approve was not marked, so its person is not told');
   await stuckFold.click();
   await firstOnScreen(mgr.getByText(/· was with Second Approver$/)).click();
-  await firstOnScreen(mgr.getByText("Second Approver can no longer approve timesheets, so this week is waiting for a new approver. Choose who approves Volunteer's timesheets below.", { exact: true })).waitFor();
+  await firstOnScreen(mgr.getByText("Second Approver can no longer approve timesheets, so this week is waiting for a new approver. Choose who approves Volunteer's timesheets below. You can also approve or reject it yourself.", { exact: true })).waitFor();
   await pickFromModal(mgr, 'Choose an approver', 'Admin');
   await eventually(mgr, 'the week passed to the admin', storedHolder, (uid) => uid === adminUid);
   await stuckNotice.waitFor({ state: 'hidden', timeout: 30000 });
