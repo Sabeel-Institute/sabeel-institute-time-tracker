@@ -49,8 +49,9 @@ export interface UserDoc {
   lastReminderDayKey?: string;
   /**
    * Sticky choice of who approves this user's timesheets (an active manager or
-   * admin). Stamped onto each timesheet at submission — changing it affects only
-   * future submissions. null until chosen; submission requires one (admins may
+   * admin). Stamped onto each timesheet at submission, and changing it moves
+   * the weeks still waiting for approval (handOverTimesheets) but no decided
+   * one. null until chosen; submission requires one (admins may
    * self-stamp).
    */
   approverUid: string | null;
@@ -139,9 +140,17 @@ export interface TimesheetDoc {
   /** Inclusive end dayKey (denormalized for range queries and display). */
   toKey: string;
   status: TimesheetStatus;
-  /** Stamped from users/{uid}.approverUid at (re)submission; admins may self-stamp. */
+  /**
+   * Who has the week: approverFor(uid, profile) at (re)submission, and while
+   * it waits, whoever that becomes (handOverTimesheets). Once decided, who
+   * had it.
+   */
   approverUid: string;
   submittedAt: number;
+  /** When the one in approverUid got it: the (re)submission, or the hand-over
+   *  that passed it to them. Absent on weeks submitted before v0.34.0, whose
+   *  holder has had them since submittedAt. */
+  heldSince?: number;
   /** Thresholds and flags the member reviewed when submitting. */
   submissionReview?: RecordedReview;
   /** Thresholds and flags the approver reviewed when deciding. */

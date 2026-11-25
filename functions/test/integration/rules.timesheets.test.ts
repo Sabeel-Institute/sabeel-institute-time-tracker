@@ -136,6 +136,27 @@ describe('timesheets — reject', () => {
     await assertSucceeds(updateDoc(doc(adm().firestore(), sheetPath), { ...rejection, decidedBy: 'adm' }));
   });
 
+  it('once the person has chosen another approver, the one who has the week no longer rejects it', async () => {
+    await seed({});
+    const reviewing = doc(mgr().firestore(), sheetPath);
+    const choose = (approverUid: string | null) => testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await updateDoc(doc(ctx.firestore(), 'users/alice'), { approverUid });
+    });
+    await choose('mgr2');
+    await assertFails(updateDoc(reviewing, rejection));
+    await assertSucceeds(updateDoc(doc(adm().firestore(), sheetPath), { ...rejection, decidedBy: 'adm' }));
+    await seed({});
+    // Nobody chosen, or someone who may not approve: it is still theirs to decide.
+    await choose(null);
+    await assertSucceeds(updateDoc(reviewing, rejection));
+    await seed({});
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), 'users/bob'), userDoc({ displayName: 'Bob' }));
+    });
+    await choose('bob');
+    await assertSucceeds(updateDoc(reviewing, rejection));
+  });
+
   it('a revoked reviewer cannot reject or reopen through a stale token', async () => {
     await testEnv.withSecurityRulesDisabled(async (ctx) => {
       const db = ctx.firestore();

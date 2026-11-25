@@ -1,6 +1,7 @@
 import { onCall, HttpsError } from 'firebase-functions/v2/https';
 import { getAuth } from 'firebase-admin/auth';
 import { getFirestore } from 'firebase-admin/firestore';
+import { canApproveTimesheets, type UserDoc } from '@sabeel/shared';
 import { requireAdmin } from './auth';
 import { guarded, sentryDsn } from './sentry';
 
@@ -31,16 +32,7 @@ function validateInput(data: unknown): UserAccessInput {
   return { uid: d.uid, status: d.status, role: d.role, admin: d.admin };
 }
 
-interface Access {
-  status: string;
-  role: string;
-  admin: boolean;
-}
-
-/** Who may be someone's timesheet approver — mirrors approverOk in firestore.rules. */
-function isEligibleApprover(u: Access): boolean {
-  return u.status === 'active' && (u.role === 'manager' || u.admin === true);
-}
+type Access = Pick<UserDoc, 'status' | 'role' | 'admin'>;
 
 /**
  * Clear only assignments that still point to an ineligible account at commit
@@ -54,7 +46,7 @@ export async function clearIneligibleApproverPointers(approverUid: string): Prom
   for (;;) {
     const count = await db.runTransaction(async (tx) => {
       const approver = (await tx.get(users.doc(approverUid))).data() as Access | undefined;
-      if (approver && isEligibleApprover(approver)) return 0;
+      if (canApproveTimesheets(approver)) return 0;
       const pointing = await tx.get(users.where('approverUid', '==', approverUid).limit(pageSize));
       for (const doc of pointing.docs) tx.update(doc.ref, { approverUid: null });
       return pointing.size;
@@ -138,7 +130,7 @@ export async function applyUserAccess(callerUid: string, input: UserAccessInput)
   // role was already removed on the first attempt. Skip first-time activation
   // of ordinary members, who could not have been an approver yet.
   const explicitlyRemovedRole = input.role === 'member' || input.admin === false || input.status === 'disabled';
-  if (!isEligibleApprover(next) && (isEligibleApprover(current) || explicitlyRemovedRole)) {
+  if (!canApproveTimesheets(next) && (canApproveTimesheets(current) || explicitlyRemovedRole)) {
     const cleared = await clearIneligibleApproverPointers(input.uid);
     if (cleared > 0) console.log('applyUserAccess: cleared ' + cleared + ' ineligible approver assignments');
   }

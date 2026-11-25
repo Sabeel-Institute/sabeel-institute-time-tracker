@@ -8,7 +8,8 @@ export type UserRow = UserDoc & { uid: string };
 /**
  * Point a user's sticky timesheet approver at an active manager/admin (or clear
  * it). Rules scope who may call this for whom: self always; managers for any
- * non-admin; admins for anyone. Affects future submissions only.
+ * non-admin; admins for anyone. The server then passes the person's waiting
+ * weeks to them (handOverTimesheets).
  */
 export function setApprover(uid: string, approverUid: string | null): Promise<void> {
   return updateDoc(doc(db, COLLECTIONS.users, uid), { approverUid });
@@ -62,10 +63,12 @@ export function approverItems(
 /**
  * Live list of possible approvers (active managers/admins). Unlike useUsers,
  * this query is readable by every active user — rules open manager/admin
- * profiles to all so people can pick their own approver.
+ * profiles to all so people can pick their own approver. undefined = still
+ * loading (or the listen failed, which the banner says): whether a waiting
+ * week is stuck is read from this list, and an empty list would say it is.
  */
-export function useApproverChoices(): UserRow[] {
-  return useLiveQuery(
+export function useApproverChoices(): UserRow[] | undefined {
+  return useLiveQuery<UserRow[] | undefined>(
     () =>
       query(
         collection(db, COLLECTIONS.users),
@@ -74,11 +77,15 @@ export function useApproverChoices(): UserRow[] {
     [],
     {
       label: 'useApproverChoices',
+      // The profile a manager or admin listens to matches this query, so the
+      // cache alone can answer it first with only them in it: and a week
+      // whose approver is missing from the list reads as stuck.
+      waitForServer: true,
       map: (snap) => {
         const list = snap.docs.map((d) => ({ uid: d.id, ...(d.data() as UserDoc) }));
         return approverChoices(list).sort((a, b) => a.displayName.localeCompare(b.displayName));
       },
-      empty: [],
+      empty: undefined,
     },
   );
 }

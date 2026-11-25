@@ -56,7 +56,11 @@ export function SearchablePicker({
 
   return (
     <>
+      {/* A button named by what it shows (the choice, or the placeholder that
+          asks for one): the section title above says what it chooses. */}
       <Pressable
+        accessibilityRole="button"
+        aria-disabled={disabled || undefined}
         onPress={() => !disabled && setOpen(true)}
         style={[styles.field, disabled && styles.fieldDisabled]}
       >

@@ -2,6 +2,8 @@ import { FieldValue, getFirestore, type Transaction } from 'firebase-admin/fires
 import { HttpsError, onCall } from 'firebase-functions/v2/https';
 import {
   APP_CONFIG_COLLECTION,
+  approverFor,
+  canApproveTimesheets,
   COLLECTIONS,
   dayKeyFor,
   DEFAULT_REVIEW_LIMITS,
@@ -24,6 +26,7 @@ import {
   type UserDoc,
 } from '@sabeel/shared';
 import { requireActive, requireManagerOrAdmin, roleOf } from './auth';
+import { currentApprover } from './handOver';
 import { guarded, sentryDsn } from './sentry';
 
 function isUid(uid: unknown): uid is string {
@@ -98,24 +101,27 @@ export async function submitReviewed(input: SubmissionRequest, uid: string, admi
     const sheet = sheetSnap.data() as TimesheetDoc | undefined;
     const owner = ownerSnap.data() as UserDoc | undefined;
     if (owner?.status !== 'active') throw new HttpsError('permission-denied', 'Account is not active.');
-    if (sheet && patchApplied(sheet, { uid, status: 'submitted', submittedAt: now, approverUid: input.approverUid })) return;
+    // submittedAt is this attempt's own: a hand-over since then may have moved the week.
+    if (sheet && patchApplied(sheet, { uid, status: 'submitted', submittedAt: now })) return;
     if (input.sheetVersion === null ? sheet !== undefined
       : !sheet || sheet.uid !== uid || sheet.status !== 'rejected' || timesheetRevision(sheet) !== input.sheetVersion) {
       changed();
     }
 
-    const selfAdmin = adminClaim && owner.admin === true && input.approverUid === uid;
+    // The week goes to the approver it would be handed to now (approverFor),
+    // so a submission never starts out somewhere handOverWaitingWeeks would
+    // move it from. An admin's own fallback needs the admin token as well.
     const approver = input.approverUid === uid ? owner
       : (await tx.get(db.collection(COLLECTIONS.users).doc(input.approverUid))).data() as UserDoc | undefined;
-    if ((!selfAdmin && owner.approverUid !== input.approverUid)
-        || approver?.status !== 'active' || (approver.role !== 'manager' && approver.admin !== true)) {
+    if (approverFor(uid, owner) !== input.approverUid || (owner.approverUid === null && !adminClaim)
+        || !canApproveTimesheets(approver)) {
       throw new HttpsError('failed-precondition', 'Choose an active approver before submitting.');
     }
 
     const { review, snapshot } = await reviewedHours(tx, uid, input);
     const submitted = {
       uid, periodKey: input.periodKey, status: 'submitted' as const, approverUid: input.approverUid,
-      submittedAt: now, updatedAt: now, ...snapshot,
+      submittedAt: now, heldSince: now, updatedAt: now, ...snapshot,
     };
     if (sheet) {
       tx.update(sheetRef, {
@@ -147,12 +153,19 @@ export async function approveReviewed(
     const person = personSnap.data() as UserDoc | undefined;
     const admin = role === 'admin' && person?.admin === true;
     const manager = role !== 'member' && person?.role === 'manager';
-    if (person?.status !== 'active' || (!admin && !manager)
-        || (sheet && !admin && sheet.approverUid !== reviewerUid)) {
+    if (person?.status !== 'active' || (!admin && !manager)) {
       throw new HttpsError('permission-denied', 'You are no longer able to approve this timesheet.');
     }
     // A rerun after a lost commit response: this approval already landed.
     if (patchApplied(sheet, { uid: input.uid, status: 'approved', decidedAt: now, decidedBy: reviewerUid })) return;
+    // Only the one who has it, and not once its person has chosen someone
+    // else: the hand-over may not have committed yet.
+    if (sheet && !admin) {
+      const chosen = sheet.approverUid === reviewerUid ? await currentApprover(tx, sheet.uid) : undefined;
+      if (chosen === undefined || (chosen !== null && chosen !== reviewerUid)) {
+        throw new HttpsError('permission-denied', 'This timesheet is now with another approver.');
+      }
+    }
     if (!sheet || sheet.uid !== input.uid || sheet.status !== 'submitted'
         || timesheetRevision(sheet) !== input.sheetVersion) changed();
 

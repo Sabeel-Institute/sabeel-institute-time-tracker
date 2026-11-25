@@ -18,9 +18,9 @@ const t = getTheme();
 type PrefKey = keyof NotifPrefs;
 
 const ROWS: { key: PrefKey; label: string; hint?: string; who?: 'approver' | 'admin' }[] = [
-  { key: 'rejected', label: 'My timesheet is rejected' },
+  { key: 'rejected', label: 'My timesheet is rejected', hint: 'Also when no one can approve a week you submitted, and you need to choose a new approver.' },
   { key: 'approved', label: 'My timesheet is approved' },
-  { key: 'submitted', label: 'A timesheet is submitted to me', who: 'approver' },
+  { key: 'submitted', label: 'A timesheet is submitted to me', hint: 'Also when someone’s waiting timesheets are passed to you.', who: 'approver' },
   { key: 'newUser', label: 'New account requests', who: 'admin' },
   {
     key: 'reminder',

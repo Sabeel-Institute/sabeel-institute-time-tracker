@@ -12,3 +12,4 @@ export * from './problemReport';
 export * from './help';
 export * from './timesheetReview';
 export * from './retry';
+export * from './approver';

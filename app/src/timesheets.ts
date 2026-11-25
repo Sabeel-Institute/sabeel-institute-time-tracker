@@ -211,21 +211,18 @@ export function useApprovalQueue(
   );
 }
 
-/**
- * Live list of my rejected timesheets, oldest first (the resolution backlog).
- * undefined = still loading (or the listen failed, which the banner says).
- */
-export function useRejectedSheets(uid: string): Timesheet[] | undefined {
+/** Live list of my timesheets in one state, oldest week first. */
+function useMySheets(uid: string, status: 'submitted' | 'rejected', label: string): Timesheet[] | undefined {
   return useLiveQuery<Timesheet[] | undefined>(
     () =>
       query(
         collection(db, COLLECTIONS.timesheets),
         where('uid', '==', uid),
-        where('status', '==', 'rejected'),
+        where('status', '==', status),
       ),
-    [uid],
+    [uid, status],
     {
-      label: 'useRejectedSheets',
+      label,
       map: (snap) => {
         const list = snap.docs.map((d) => ({ id: d.id, ...(d.data() as TimesheetDoc) }));
         list.sort((a, b) => a.periodKey.localeCompare(b.periodKey));
@@ -234,4 +231,17 @@ export function useRejectedSheets(uid: string): Timesheet[] | undefined {
       empty: undefined,
     },
   );
+}
+
+/**
+ * Live list of my rejected timesheets, oldest first (the resolution backlog).
+ * undefined = still loading (or the listen failed, which the banner says).
+ */
+export function useRejectedSheets(uid: string): Timesheet[] | undefined {
+  return useMySheets(uid, 'rejected', 'useRejectedSheets');
+}
+
+/** Live list of my weeks waiting for approval, oldest first. undefined = loading. */
+export function useWaitingSheets(uid: string): Timesheet[] | undefined {
+  return useMySheets(uid, 'submitted', 'useWaitingSheets');
 }

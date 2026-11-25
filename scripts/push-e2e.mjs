@@ -115,16 +115,16 @@ async function main() {
       route: { screen: 'Users' },
       landed: (p) => onScreen(p.getByText(PENDING.email, { exact: true })),
     },
-    ...['submitted', 'resubmitted'].map((kind) => ({
+    ...[['submitted', 'Timesheet submitted'], ['resubmitted', 'Timesheet resubmitted'], ['handedOver', 'Timesheet passed to you']].map(([kind, title]) => ({
       kind,
-      notification: { title: kind === 'submitted' ? 'Timesheet submitted' : 'Timesheet resubmitted', body: `${MEMBER.name} · ${periodLabel(reviewWeek)}` },
+      notification: { title, body: `${MEMBER.name} · ${periodLabel(reviewWeek)}` },
       route: { screen: 'TimesheetReview', uid: MEMBER.uid, displayName: MEMBER.name, periodKey: reviewWeek.fromKey },
       landed: async (p) => (await onScreen(p.getByText(MEMBER.name, { exact: true })))
         && onScreen(p.getByText(periodLabel(reviewWeek), { exact: true }), 5000),
     })),
-    ...['approved', 'rejected', 'reminder'].map((kind) => ({
+    ...[['approved', 'Timesheet approved'], ['rejected', 'Timesheet rejected'], ['reminder', 'Timesheet reminder'], ['needsApprover', 'Choose a new approver']].map(([kind, title]) => ({
       kind,
-      notification: { title: `Timesheet ${kind}`, body: `For ${periodLabel(ownWeek)}.` },
+      notification: { title, body: `For ${periodLabel(ownWeek)}.` },
       route: { screen: 'Timesheet', periodKey: ownWeek.fromKey },
       // The heading, not the text: "Timesheet" is also the tab's label.
       landed: async (p) => (await onScreen(p.getByRole('heading', { name: 'Timesheet', exact: true })))

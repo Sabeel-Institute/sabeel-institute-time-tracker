@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -24,11 +24,13 @@ import {
   useEntriesRange,
   explainEntryWriteError,
 } from '../entries';
-import { useTimesheet, useRejectedSheets } from '../timesheets';
+import { useTimesheet, useRejectedSheets, useWaitingSheets } from '../timesheets';
+import { stuckMessage, useEligibleApprovers, weekStanding } from '../waiting';
 import { ActivityPicker } from '../components/ActivityPicker';
 import {
   Button,
   Card,
+  Collapsible,
   ErrorText,
   Notice,
   Row,
@@ -84,6 +86,19 @@ export function HomeScreen({ uid, profile }: { uid: string; profile: UserDoc }) 
   const weekStatus = sheetStatus(sheet?.status ?? 'draft');
   const weekLocked = sheet != null && (sheet.status === 'submitted' || sheet.status === 'approved');
   const rejectedCount = useRejectedSheets(uid)?.length ?? 0;
+  // Weeks with an approver are someone else's to act on: listed, but folded
+  // away. A week nobody can approve is the person's to fix, so it says so.
+  const eligible = useEligibleApprovers();
+  const waiting = useWaitingSheets(uid);
+  const { approverUid: chosen, admin: isAdmin } = profile;
+  const standings = useMemo(
+    () => (eligible && waiting
+      ? waiting.map((sheet) => ({ sheet, standing: weekStanding(sheet, { approverUid: chosen, admin: isAdmin }, eligible) }))
+      : []),
+    [eligible, waiting, chosen, isAdmin],
+  );
+  const stuck = standings.filter((w) => w.standing.kind === 'stuck');
+  const openWeek = (periodKey: string) => nav.reset(tabState(nav.getState(), 'Timesheet', { initialPeriodKey: periodKey }));
 
   const selected = activities?.find((a) => a.id === selectedId) ?? null;
 
@@ -129,6 +144,12 @@ export function HomeScreen({ uid, profile }: { uid: string; profile: UserDoc }) 
           {rejectedCount === 1
             ? 'A timesheet was rejected. Open it to fix it and send it again.'
             : `${rejectedCount} timesheets were rejected. Open them to fix them and send them again.`}
+        </Notice>
+      ) : null}
+
+      {stuck.length > 0 ? (
+        <Notice tone="info" onPress={() => openWeek(stuck[0].sheet.periodKey)}>
+          {stuckMessage(stuck.every((w) => w.standing.ownStuck), stuck.length, 'onToday')}
         </Notice>
       ) : null}
 
@@ -181,6 +202,23 @@ export function HomeScreen({ uid, profile }: { uid: string; profile: UserDoc }) 
           onPress={() => nav.reset(tabState(nav.getState(), 'Timesheet'))}
         />
       </RowList>
+
+      {standings.length > 0 ? (
+        <Collapsible title="Waiting for approval" count={standings.length}>
+          <RowList>
+            {standings.map(({ sheet: ts, standing }) => (
+              <Row
+                key={ts.id}
+                label={periodLabel({ fromKey: ts.periodKey, toKey: ts.toKey })}
+                detail={standing.line}
+                value={formatDuration(ts.totalMinutes)}
+                accessibilityLabel={`Open the week of ${periodLabel({ fromKey: ts.periodKey, toKey: ts.toKey })}, ${formatDuration(ts.totalMinutes)}, ${standing.line}`}
+                onPress={() => openWeek(ts.periodKey)}
+              />
+            ))}
+          </RowList>
+        </Collapsible>
+      ) : null}
     </Screen>
   );
 }

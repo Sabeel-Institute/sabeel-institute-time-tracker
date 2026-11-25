@@ -68,7 +68,7 @@ export function UserEditScreen({ uid, selfUid, claims }: { uid: string; selfUid:
       {u.status === 'active' ? (
         <>
           <SectionTitle>Approver</SectionTitle>
-          <Text style={styles.hint}>Their timesheets go to this person when they submit them.</Text>
+          <Text style={styles.hint}>Their timesheets go to this person, including any already waiting for approval.</Text>
           {isAdmin || !u.admin ? (
             <SearchablePicker
               items={approverItems(approvers, u.uid, '(self)')}

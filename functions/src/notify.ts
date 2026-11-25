@@ -7,6 +7,7 @@ import { onSchedule } from 'firebase-functions/v2/scheduler';
 import { getFirestore } from 'firebase-admin/firestore';
 import { dayKeyFor, type PushTokenDoc, type TimesheetDoc, type UserDoc } from '@sabeel/shared';
 import {
+  approverNotice,
   inReminderWindow,
   prefOn,
   reminderEligible,
@@ -23,7 +24,7 @@ import { reportError, reportMessage, sentryDsn } from './sentry';
  * in anywhere). The doc id IS the token (the rules hold the two equal), so it is
  * the address used. Every function that calls this binds PUSH_SECRETS.
  */
-async function sendToUser(uid: string, notif: Notif): Promise<void> {
+export async function sendToUser(uid: string, notif: Notif): Promise<void> {
   const snap = await getFirestore().collection('users').doc(uid).collection('pushTokens').get();
   if (snap.empty) return;
   const devices = snap.docs.map((d) => ({ ...(d.data() as PushTokenDoc), token: d.id }));
@@ -73,23 +74,15 @@ export const notifyTimesheet = onDocumentWritten(
       const userDoc = async (uid: string) =>
         (await db.collection('users').doc(uid).get()).data() as UserDoc | undefined;
 
-      const becameSubmitted =
-        after.status === 'submitted' && (!before || before.status !== 'submitted');
-      if (becameSubmitted && after.approverUid !== after.uid) {
+      const notice = approverNotice(before, after);
+      if (notice) {
         const [owner, approver] = await Promise.all([
           userDoc(after.uid),
           userDoc(after.approverUid),
         ]);
         if (approver && prefOn(approver.notifPrefs, 'submitted')) {
-          await sendToUser(
-            after.approverUid,
-            texts.submitted(
-              after.uid,
-              owner?.displayName ?? after.uid,
-              range,
-              before?.status === 'rejected',
-            ),
-          );
+          const name = owner?.displayName ?? after.uid;
+          await sendToUser(after.approverUid, texts.submitted(after.uid, name, range, notice === 'resubmitted'));
         }
         return;
       }

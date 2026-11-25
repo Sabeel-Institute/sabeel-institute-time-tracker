@@ -91,6 +91,15 @@ service cloud.firestore {
                 || get(/databases/$(database)/documents/users/$(av)).data.admin == true));
     }
 
+    // A waiting week whose person has chosen someone else who may approve is on
+    // its way to them (handOverTimesheets), so its holder no longer decides it.
+    // Mirrors currentApprover in functions/src/handOver.ts for a chosen
+    // approver; an admin who chose nobody decides as an admin.
+    function notPassedOn(sheet) {
+      let choice = get(/databases/$(database)/documents/users/$(sheet.uid)).data.get('approverUid', null);
+      return choice == null || choice == request.auth.uid || !approverOk(choice);
+    }
+
     match /users/{uid} {
       // Accounts are provisioned server-side by the onUserCreate trigger (it sets
       // pending claims + creates the doc, or deletes a non-org account) — the
@@ -134,8 +143,11 @@ service cloud.firestore {
             || request.resource.data.timeZone is string);
       // Cross-user: managers assign any non-admin's approver; admins anyone's.
       // Nothing else — status/role/admin changes only via setUserAccess.
+      // The role is read from the profile too, since a token outlives it, and
+      // the choice moves the person's waiting weeks at once.
       allow update: if isActive() && request.auth.uid != uid
-        && (isAdmin() || (isManager() && resource.data.admin != true))
+        && ((isAdmin() && hasCurrentReviewRole(true))
+            || (isManager() && hasCurrentReviewRole(false) && resource.data.admin != true))
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['approverUid'])
         && approverOk(request.resource.data.approverUid);
       allow delete: if false;
@@ -403,7 +415,8 @@ service cloud.firestore {
       allow update: if isActive()
         && resource.data.status == 'submitted'
         && ((isAdmin() && hasCurrentReviewRole(true)) || (isManager()
-            && resource.data.approverUid == request.auth.uid && hasCurrentReviewRole(false)))
+            && resource.data.approverUid == request.auth.uid && hasCurrentReviewRole(false)
+            && notPassedOn(resource.data)))
         && request.resource.data.status == 'rejected'
         && request.resource.data.decidedBy == request.auth.uid
         && request.resource.data.decidedAt is int

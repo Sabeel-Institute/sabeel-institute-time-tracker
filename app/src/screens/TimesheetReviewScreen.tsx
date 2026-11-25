@@ -4,6 +4,7 @@ import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import {
   addDays,
+  approverFor,
   dayKeyFor,
   deviceTimeZone,
   formatDuration,
@@ -11,11 +12,15 @@ import {
   recordedReviewFor,
   timesheetEntriesVersion,
   timesheetRevision,
+  waitingState,
 } from '@sabeel/shared';
 import { leaveIfShowing, type RootStackParamList } from '../nav';
 import { approveTimesheet, rejectTimesheet, reopenTimesheet, useTimesheet, weekActionMessage } from '../timesheets';
 import { DayEntries, WeekStepper, openingDay, stepPeriod } from '../components/WeekView';
 import { Sheet } from '../components/Sheet';
+import { SearchablePicker } from '../components/SearchablePicker';
+import { approverItems, setApprover, useUser } from '../users';
+import { useEligibleApprovers } from '../waiting';
 import { Button, ErrorText, Field, Notice, Screen, Spinner, StatusChip, sheetStatus } from '../components/ui';
 import { getTheme, spacing } from '../theme';
 import { useReviewConfirmation, useTimesheetReview } from '../timesheetReview';
@@ -124,6 +129,33 @@ export function TimesheetReviewScreen({
     else void approve();
   };
 
+  // Who has the week. Only they or an admin may decide it; a week whose holder
+  // may no longer approve waits for its person to be given a new approver,
+  // which an admin (or a manager, for a non-admin) can do from here.
+  const owner = useUser(uid);
+  const eligible = useEligibleApprovers();
+  const holder = useUser(sheet?.status === 'submitted' ? sheet.approverUid : uid);
+  const standing = sheet?.status === 'submitted' && owner && eligible
+    ? waitingState(sheet, approverFor(uid, owner), new Set(eligible.keys())) : undefined;
+  // undefined until the holder's profile is in: no sentence names them before.
+  const holderName = sheet?.status === 'submitted' && holder?.uid === sheet.approverUid ? holder.displayName : undefined;
+  // The holder decides, unless the person has already chosen someone else and
+  // the hand-over is on its way (the server and rules refuse it then too).
+  const canDecide = admin || (sheet?.approverUid === reviewerUid && standing !== undefined && standing.kind !== 'moving');
+  const canReassign = admin || owner?.admin !== true;
+  const [reassigning, setReassigning] = useState(false);
+  const reassign = async (approverUid: string) => {
+    setError(null);
+    setReassigning(true);
+    try {
+      await setApprover(uid, approverUid);
+    } catch (e) {
+      setError(weekActionMessage(e));
+    } finally {
+      setReassigning(false);
+    }
+  };
+
   const shown = status ? sheetStatus(status) : null;
   return (
     <Screen
@@ -151,7 +183,31 @@ export function TimesheetReviewScreen({
       {/* The decision first, under the week it is about: the days below are
           what it rests on, and a reviewer should not have to scroll a whole
           week to find the buttons. */}
-      {sheet && sheet.status === 'submitted' ? (
+      {sheet && sheet.status === 'submitted' && standing?.kind === 'stuck' && holderName ? (
+        <View style={styles.decision}>
+          <Notice tone="info">
+            {holderName} can no longer approve timesheets, so this week is waiting for a new approver.
+            {canReassign ? ` Choose who approves ${displayName}'s timesheets below.` : ' An admin can choose one for them.'}
+          </Notice>
+          {canReassign ? (
+            <SearchablePicker
+              items={approverItems([...(eligible?.values() ?? [])], uid, '(self)')}
+              selectedId={owner?.approverUid ?? null}
+              onSelect={(id) => void reassign(id)}
+              placeholder="Choose an approver"
+              title="Timesheet approver"
+              disabled={reassigning}
+            />
+          ) : null}
+        </View>
+      ) : null}
+      {sheet && sheet.status === 'submitted' && standing?.kind === 'moving' ? (
+        <Text style={styles.hint}>Passing to {eligible?.get(standing.approverUid)?.displayName ?? 'their new approver'}…</Text>
+      ) : null}
+      {sheet && sheet.status === 'submitted' && !canDecide && standing?.kind === 'waiting' && holderName ? (
+        <Text style={styles.hint}>This week is with {holderName}. Only they or an admin can approve or reject it.</Text>
+      ) : null}
+      {sheet && sheet.status === 'submitted' && canDecide ? (
         <View style={styles.decision}>
           <Text style={styles.hint}>
             Check the days below, then approve the week, or reject it with a reason {displayName} will see.

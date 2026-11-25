@@ -66,6 +66,10 @@ describe('classify', () => {
     });
   });
 
+  it('records a waiting week passed to a new approver, with no actor', () => {
+    expect(classify(sheet({ approverUid: 'old' }), sheet())).toEqual({ kind: 'handedOver', actorUid: null });
+  });
+
   it('ignores writes that change no lifecycle state', () => {
     // A totals refresh, an updatedAt touch, or the auto-close reconciliation.
     expect(classify(sheet(), sheet({ totalMinutes: 120, updatedAt: 2 }))).toBeNull();

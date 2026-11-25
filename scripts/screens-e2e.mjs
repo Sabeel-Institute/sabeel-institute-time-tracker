@@ -501,8 +501,20 @@ await timesheet(adminUid, DECIDED, {
     'Thursday and Friday are both logged against Tutoring, but the Friday session was the food drive — please move it before this goes into the quarterly report.',
 });
 
+// A week nobody can approve: its person chose no one after their approver
+// lost the role, so it is still with them. Profiles only; neither signs in.
+const STUCK = { uid: 'stuck-colleague', name: 'Maryam Abdullahi-Osei' };
+const FORMER = { uid: 'former-approver', name: 'Former Approver' };
+for (const [person, approverUid] of [[STUCK, null], [FORMER, null]]) {
+  await db.doc(`${COLLECTIONS.users}/${person.uid}`).set({
+    displayName: person.name, email: `${person.uid}@oursabeel.com`, photoURL: null,
+    status: 'active', role: 'member', admin: false, approverUid, createdAt: Date.now(), ...accepted,
+  });
+}
+await timesheet(STUCK.uid, SUBMITTED, { status: 'submitted', approverUid: FORMER.uid });
+
 console.log(
-  `  seeded ${ACTIVITIES.length} activities, ${entryDocs.length + 1} entries, 3 timesheets, 5 accounts`,
+  `  seeded ${ACTIVITIES.length} activities, ${entryDocs.length + 1} entries, 4 timesheets, 5 accounts and 2 profiles`,
 );
 console.log(`  breakpoint read from source: ${WIDE_BREAKPOINT}px`);
 console.log(
@@ -866,9 +878,9 @@ const gridLayout = (page) =>
   });
 
 // ---- The tour ---------------------------------------------------------------
-const ADMIN_SCREENS = 23;
-const MEMBER_SCREENS = 6;
-const MANAGER_SCREENS = 3;
+const ADMIN_SCREENS = 25;
+const MEMBER_SCREENS = 7;
+const MANAGER_SCREENS = 4;
 const PENDING_SCREENS = 1;
 const UNACCEPTED_SCREENS = 1;
 
@@ -1150,6 +1162,22 @@ async function tourAdmin(tag, width) {
   await page.waitForTimeout(400);
   await goBack(page);
 
+  /** Everyone's queue, with the weeks nobody can approve folded into their own group. */
+  await visit('approvals-all', async () => {
+    await vis(page.getByRole('tab', { name: 'All submitted', exact: true })).click();
+    await vis(page.getByRole('button', { name: 'Show No one can approve these (1)', exact: true })).click();
+    await vis(page.getByText(/· was with Former Approver$/)).waitFor({ timeout: 20000 });
+  });
+  /** Such a week under review: who had it, and the picker that gives its person a new approver. */
+  await visit('timesheet-review-stuck', async () => {
+    await vis(page.getByText(/· was with Former Approver$/)).click();
+    await vis(page.getByText(`Former Approver can no longer approve timesheets, so this week is waiting for a new approver. Choose who approves ${STUCK.name}'s timesheets below.`, { exact: true }))
+      .waitFor({ timeout: 20000 });
+    await vis(page.getByText('Choose an approver', { exact: true })).waitFor({ timeout: 20000 });
+  });
+  await goBack(page);
+  await vis(page.getByRole('tab', { name: 'Assigned to me', exact: true })).click();
+
   await visit('reports', async () => {
     await tab(page, 'reports');
     await tap(page, 'All time');
@@ -1240,6 +1268,15 @@ async function tourMember(tag, width) {
   await visit('member-home', async () => {
     await page.getByText('Salaam,', { exact: false }).waitFor({ timeout: 45000 });
     await vis(page.getByText('What are you working on?')).waitFor({ timeout: 20000 });
+  });
+  // Once the fold is drawn the list is in, so a row shown now would be one not folded away.
+  await vis(page.getByRole('button', { name: 'Show Waiting for approval (1)', exact: true })).waitFor({ timeout: 20000 });
+  const waitingFolded = await page.getByText(/^With Admin since /).filter({ visible: true }).count();
+  check(`${tag} / weeks waiting for approval start folded away on Today`, waitingFolded === 0, `${waitingFolded} row(s) shown`);
+  /** Today with the waiting weeks unfolded: who has each, and since when. */
+  await visit('member-home-waiting', async () => {
+    await vis(page.getByRole('button', { name: 'Show Waiting for approval (1)', exact: true })).click();
+    await vis(page.getByText(/^With Admin since /)).waitFor({ timeout: 20000 });
   });
   /** A member's More: their own settings, and nothing of the institute's. */
   await visit('member-more', async () => {
@@ -1387,6 +1424,15 @@ async function tourManager(tag, width) {
     JSON.stringify(readOnly),
   );
   await goBack(page);
+
+  /** Someone else's week: who has it, and no decision for a manager who does not. */
+  await visit('manager-review-not-holder', async () => {
+    await page.goto(`${baseUrl}/approvals/review?uid=${memberUid}&displayName=${encodeURIComponent(MEMBER.name)}&periodKey=${SUBMITTED.fromKey}`);
+    await vis(page.getByText('This week is with Admin. Only they or an admin can approve or reject it.', { exact: true }))
+      .waitFor({ timeout: 25000 });
+  });
+  const decisions = await page.getByRole('button', { name: /^(Approve|Reject) timesheet/ }).filter({ visible: true }).count();
+  check(`${tag} / a manager who does not have the week is offered no decision`, decisions === 0, `${decisions} button(s)`);
 
   await visit('manager-approvals', async () => {
     await tab(page, 'approvals');

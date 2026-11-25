@@ -22,7 +22,7 @@ export function NeedsAttentionScreen({ uid }: { uid: string }) {
   // Rejections come from managers/admins, whose profiles every active user may
   // read — so names resolve without the manager-only users listing.
   const approvers = useApproverChoices();
-  const nameOf = useMemo(() => new Map(approvers.map((a) => [a.uid, a.displayName])), [approvers]);
+  const nameOf = useMemo(() => new Map((approvers ?? []).map((a) => [a.uid, a.displayName])), [approvers]);
   const tz = deviceTimeZone();
 
   return (

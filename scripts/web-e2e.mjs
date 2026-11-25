@@ -904,7 +904,7 @@ async function main() {
   if ((await mgr.getByTestId('tab-approvals-badge').innerText()) !== '1')
     throw new Error('the Approvals tab does not say one timesheet is waiting');
   await tab(mgr, 'approvals');
-  await mgr.getByRole('button', { name: "Review Volunteer's timesheet", exact: true }).click();
+  await mgr.getByRole('button', { name: /^Review Volunteer's timesheet: / }).click();
   await logged(mgr, '2h 00m').waitFor();
   // Hold the first approval until the member has withdrawn and replaced the
   // sheet. The replacement has the same document id and submitted status.
@@ -1024,7 +1024,7 @@ async function main() {
   await mgr.goto(baseUrl + '/');
   await mgr.getByText('Salaam,', { exact: false }).waitFor({ timeout: 45000 });
   await tab(mgr, 'approvals');
-  await mgr.getByRole('button', { name: "Review Volunteer's timesheet", exact: true }).click();
+  await mgr.getByRole('button', { name: /^Review Volunteer's timesheet: / }).click();
   await firstOnScreen(mgr.getByText('Flagged since submission · Long entry · more than 1h 30m', { exact: true })).waitFor();
   await firstOnScreen(mgr.getByText('Member confirmed the flagged hours on', { exact: false })).waitFor();
   // Add a 1h entry on the volunteer's behalf (approver correction path).
@@ -1464,6 +1464,81 @@ async function main() {
   }, (fields) => fields.timeZone.stringValue === 'UTC');
   if (repaired.start.integerValue !== String(legacyStart) || repaired.end.integerValue !== String(legacyEnd))
     throw new Error('repairing only the time zone changed the recorded instants');
+
+  console.log('▸ a waiting week follows its person\'s approver, and one nobody can approve is fixed from the week…');
+  // A second approver, signed up and made a manager, so losing the role below
+  // goes through setUserAccess and its cleanup, as an admin does it.
+  const handWeek = shared.periodRangeFor(shared.addDays(thisWeek.fromKey, -15));
+  const secondUid = 'second-approver';
+  await adminAuth().createUser({ uid: secondUid, email: 'second-approver@oursabeel.com', emailVerified: true, displayName: 'Second Approver' });
+  const storedProfile = async (uid) => {
+    const res = await fetch(`${FIRESTORE_DOCS}/users/${uid}`, { headers: { Authorization: 'Bearer owner' } });
+    return res.ok ? (await res.json()).fields : null;
+  };
+  await eventually(vol, 'the second approver provisioned', () => storedProfile(secondUid), (f) => f?.status?.stringValue === 'pending');
+  const ownerWrite = (path, fields) => fetch(`${FIRESTORE_DOCS}/${path}?${Object.keys(fields).map((f) => 'updateMask.fieldPaths=' + f).join('&')}`, {
+    method: 'PATCH',
+    headers: { Authorization: 'Bearer owner', 'Content-Type': 'application/json' },
+    body: JSON.stringify({ fields }),
+  }).then((res) => { if (!res.ok) throw new Error('could not write ' + path); });
+  await ownerWrite('users/' + secondUid, {
+    displayName: { stringValue: 'Second Approver' }, email: { stringValue: 'second-approver@oursabeel.com' },
+    status: { stringValue: 'active' }, role: { stringValue: 'manager' }, admin: { booleanValue: false },
+    approverUid: { nullValue: null }, createdAt: { integerValue: String(Date.now()) },
+  });
+  const storedHand = async () => {
+    const res = await fetch(`${FIRESTORE_DOCS}/timesheets/${volUid}_${handWeek.fromKey}`, { headers: { Authorization: 'Bearer owner' } });
+    return res.ok ? (await res.json()).fields : null;
+  };
+  const storedHolder = async () => (await storedHand())?.approverUid.stringValue ?? null;
+  await vol.goto(baseUrl + '/timesheet?initialPeriodKey=' + handWeek.fromKey);
+  await vol.getByRole('button', { name: 'Submit timesheet (no hours)', exact: true }).click();
+  await eventually(vol, 'the hand-over week submitted', () => storedSheetStatus(volUid, handWeek.fromKey), (st) => st === 'submitted');
+  await firstOnScreen(vol.getByText(/^With Admin since /)).waitFor();
+  // On Today the waiting weeks are folded away until asked for.
+  await vol.goto(baseUrl + '/');
+  const waitingFold = vol.getByRole('button', { name: /^Show Waiting for approval \(\d+\)$/ });
+  await waitingFold.waitFor({ timeout: 30000 });
+  const handRow = vol.getByRole('button', { name: new RegExp(`^Open the week of ${escapeRe(shared.periodLabel(handWeek))}, `) });
+  if (await handRow.count()) throw new Error('the waiting weeks on Today are not folded away');
+  await waitingFold.click();
+  await handRow.getByText(/^With Admin since /).waitFor();
+  // Choosing someone else on the submitted week passes it to them.
+  await handRow.click();
+  await expectWeekShown(vol, shared.periodLabel(handWeek));
+  const picked = Date.now();
+  await pickFromModal(vol, 'Admin', 'Second Approver');
+  await eventually(vol, 'the week passed to the second approver', storedHolder, (uid) => uid === secondUid);
+  // "Since" is when the new approver got it, not when it was submitted.
+  const handed = await storedHand();
+  if (Number(handed.heldSince.integerValue) < picked || Number(handed.submittedAt.integerValue) >= picked)
+    throw new Error('the hand-over did not record when the new approver got the week');
+  await firstOnScreen(vol.getByText(/^With Second Approver since /)).waitFor();
+  // The approver loses the role on People: the cleanup clears the choice, and
+  // the week is left with someone who can no longer approve it.
+  await openPerson('Second Approver');
+  await tapAndAnswer(mgr, () => roleOption(mgr, 'Member').click(), true);
+  await eventually(vol, 'the cleared choice', () => storedProfile(volUid), (f) => 'nullValue' in f.approverUid);
+  if (await storedHolder() !== secondUid) throw new Error('a week nobody can approve moved anyway');
+  await firstOnScreen(vol.getByText('Your approver can no longer approve timesheets. Choose a new approver below, and this week goes to them.', { exact: true })).waitFor();
+  await vol.goto(baseUrl + '/');
+  const stuckNotice = vol.getByRole('button', { name: /^Your approver can no longer approve timesheets\. Choose a new one, and your/ });
+  await stuckNotice.waitFor({ timeout: 30000 });
+  // The admin finds it folded under its own heading, and fixes it from the week.
+  await tab(mgr, 'approvals');
+  await mgr.getByRole('tab', { name: 'All submitted', exact: true }).click();
+  const stuckFold = mgr.getByRole('button', { name: 'Show No one can approve these (1)', exact: true });
+  await stuckFold.waitFor({ timeout: 30000 });
+  await stuckFold.click();
+  await firstOnScreen(mgr.getByText(/· was with Second Approver$/)).click();
+  await firstOnScreen(mgr.getByText("Second Approver can no longer approve timesheets, so this week is waiting for a new approver. Choose who approves Volunteer's timesheets below.", { exact: true })).waitFor();
+  await pickFromModal(mgr, 'Choose an approver', 'Admin');
+  await eventually(mgr, 'the week passed to the admin', storedHolder, (uid) => uid === adminUid);
+  await stuckNotice.waitFor({ state: 'hidden', timeout: 30000 });
+  await vol.goto(baseUrl + '/timesheet?initialPeriodKey=' + handWeek.fromKey);
+  await firstOnScreen(vol.getByText(/^With Admin since /)).waitFor();
+  await onScreen(vol.getByRole('button', { name: 'Withdraw submission', exact: true })).click();
+  await eventually(vol, 'the hand-over week withdrawn', () => storedSheetStatus(volUid, handWeek.fromKey), (st) => st === null);
 
   console.log('▸ People: role, admin and active each ask first, and a reload keeps the answer…');
   const VOL = 'volunteer@oursabeel.com';
