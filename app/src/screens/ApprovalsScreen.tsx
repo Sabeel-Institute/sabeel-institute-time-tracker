@@ -98,7 +98,7 @@ export function ApprovalsScreen({ uid, claims }: { uid: string; claims: TokenCla
       ) : (
         <>
           {stuck.length > 0 ? (
-            <Collapsible title="No one can approve these" count={stuck.length}>
+            <Collapsible title="Need a new approver" count={stuck.length}>
               <RowList>{stuck.map(row)}</RowList>
             </Collapsible>
           ) : null}

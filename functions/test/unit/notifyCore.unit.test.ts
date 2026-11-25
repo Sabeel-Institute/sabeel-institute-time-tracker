@@ -113,7 +113,7 @@ describe('texts', () => {
       texts.newUser('Alice', 'alice@example.com'),
       texts.submitted('u1', 'Alice', range, false),
       texts.handedOver('u1', 'Alice', range, 2),
-      texts.needsApprover(range, 1),
+      texts.needsApprover(range, 1, false),
       texts.approved(range),
       texts.rejected(range, 'why'),
       texts.reminder(range),

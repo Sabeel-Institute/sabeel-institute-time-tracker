@@ -1165,7 +1165,7 @@ async function tourAdmin(tag, width) {
   /** Everyone's queue, with the weeks nobody can approve folded into their own group. */
   await visit('approvals-all', async () => {
     await vis(page.getByRole('tab', { name: 'All submitted', exact: true })).click();
-    await vis(page.getByRole('button', { name: 'Show No one can approve these (1)', exact: true })).click();
+    await vis(page.getByRole('button', { name: 'Show Need a new approver (1)', exact: true })).click();
     await vis(page.getByText(/· was with Former Approver$/)).waitFor({ timeout: 20000 });
   });
   /** Such a week under review: who had it, and the picker that gives its person a new approver. */

@@ -153,7 +153,8 @@ export function TimesheetReviewScreen({
   // manager who still may approve, for a non-admin.
   const canReassign = admin || (eligible?.has(reviewerUid) === true && owner?.admin !== true);
   // A submitted week's hours are its decider's to correct (canTouchPeriod).
-  const canEdit = status !== 'approved' && (status !== 'submitted' || canDecide);
+  // Never one's own submitted week: they withdraw it first.
+  const canEdit = status !== 'approved' && (status !== 'submitted' || (canDecide && uid !== reviewerUid));
   const [reassigning, setReassigning] = useState(false);
   const reassign = async (approverUid: string) => {
     setError(null);

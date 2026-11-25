@@ -49,7 +49,7 @@ const sent: Array<[string, Notif]> = [
   ['submitted', texts.submitted('u1', 'Alice Smith', range, false)],
   ['resubmitted', texts.submitted('u1', 'Alice Smith', range, true)],
   ['handedOver', texts.handedOver('u1', 'Alice Smith', range, 1)],
-  ['needsApprover', texts.needsApprover(range, 2)],
+  ['needsApprover', texts.needsApprover(range, 2, true)],
   ['approved', texts.approved(range)],
   ['rejected', texts.rejected(range, 'Missing Tuesday')],
   ['reminder', texts.reminder(range)],

@@ -111,11 +111,11 @@ export const texts = {
     body: count === 1 ? `${name} · ${periodLabel(range)}` : `${name} · from ${periodLabel(range)}`,
     route: { screen: 'TimesheetReview', uid, displayName: name, periodKey: range.fromKey },
   }),
-  needsApprover: (range: Range, count: number): Notif => ({
+  /** `own`: the weeks were with the person themself, who may no longer approve. */
+  needsApprover: (range: Range, count: number, own: boolean): Notif => ({
     title: 'Choose a new approver',
-    body: count === 1
-      ? 'Your approver can no longer approve timesheets. Choose a new one, and your waiting week goes to them.'
-      : `Your approver can no longer approve timesheets. Choose a new one, and your ${count} waiting weeks go to them.`,
+    body: `${own ? 'You can no longer approve timesheets yourself.' : 'Your approver can no longer approve timesheets.'} `
+      + `Choose ${own ? 'an approver' : 'a new one'}, and your ${count === 1 ? 'waiting week goes' : `${count} waiting weeks go`} to them.`,
     route: { screen: 'Timesheet', periodKey: range.fromKey },
   }),
   approved: (range: Range): Notif => ({

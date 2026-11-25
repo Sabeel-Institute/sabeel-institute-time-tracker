@@ -766,7 +766,7 @@ export const FILMS = [
       },
       {
         say: "Weeks that nobody can approve are kept together at the top, folded away. Tap the heading to open it.",
-        do: (t) => t.tap(t.btn('Show No one can approve these (1)')),
+        do: (t) => t.tap(t.btn('Show Need a new approver (1)')),
       },
       {
         say: "Here's Yusuf's week. It was with Omar, who can't approve any more. Tap it.",

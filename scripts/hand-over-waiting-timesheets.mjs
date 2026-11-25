@@ -15,6 +15,9 @@
  * (functions/src/handOver.ts, bundled here from source with
  * packages/shared/src), so a week moves exactly when the trigger would have
  * moved it. It sends no push: the weeks it moves have waited a while already.
+ * Weeks nobody can approve are marked as the trigger marks them, so their
+ * people are not told by it later: hand the dry run's list of them to an
+ * admin, who gives each person an approver (Approvals → All submitted).
  * The dry run lists every week it would move, from whom to whom, and every
  * week nobody can approve.
  *

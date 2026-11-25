@@ -1534,7 +1534,7 @@ async function main() {
   // The admin finds it folded under its own heading, and fixes it from the week.
   await tab(mgr, 'approvals');
   await mgr.getByRole('tab', { name: 'All submitted', exact: true }).click();
-  const stuckFold = mgr.getByRole('button', { name: 'Show No one can approve these (1)', exact: true });
+  const stuckFold = mgr.getByRole('button', { name: 'Show Need a new approver (1)', exact: true });
   await stuckFold.waitFor({ timeout: 30000 });
   // By now the clear's own hand-over has run: it must have left the week where it was.
   if (await storedHolder() !== secondUid) throw new Error('a week nobody can approve moved anyway');

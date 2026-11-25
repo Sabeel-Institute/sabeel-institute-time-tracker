@@ -230,7 +230,7 @@ above, then submit."* and Submit stays unavailable.
    **Withdraw submission** unlocks it until approval.
 
 A submitted week says who has it and since when they have had it: *"With
-Aisha since Tuesday, Nov 18."* To send it to someone else, pick them under
+Aisha since Nov 18."* To send it to someone else, pick them under
 **Approver** on the same week; it moves to them in a moment, without
 withdrawing it.
 
@@ -385,8 +385,8 @@ with a *"Timesheet passed to you"* notification.
 
 Admins also get **Assigned to me / All submitted**, to see everyone's queue.
 In **All submitted**, each row says who has the week. Weeks whose approver can
-no longer approve them are grouped at the top under **No one can approve
-these**, folded until tapped. Open one, and pick who approves that person's
+no longer approve them are grouped at the top under **Need a new
+approver**, folded until tapped. Open one, and pick who approves that person's
 timesheets under the notice: the week, and any others they have waiting, go
 to that person. An admin can also approve such a week directly. A manager who
 opens such a week (from Reports) can choose the approver too, for anyone who
@@ -504,9 +504,10 @@ Tap someone on **People** to open their page:
   of the page is admins'.) A manager or admin may be their own approver.
   Changing it moves their weeks waiting for approval to the new approver.
   **Changing someone's role, or disabling them, clears every approver
-  pointing at them**: those people are asked to choose a new approver, and
-  weeks they had waiting stay under **No one can approve these** in
-  Approvals → All submitted until someone chooses for them.
+  pointing at them**: those people are asked to choose a new approver. Weeks
+  that person was holding wait under **Need a new approver** in
+  Approvals → All submitted until someone chooses for their owners. (An
+  admin's own weeks come back to them instead.)
 - **Role: Member | Manager** — managers get Approvals, Reports and Activities.
 - **Admin** — the full-control switch (see below).
 - **Active** — turn off to disable an account: they're locked out immediately

@@ -29,10 +29,13 @@ async function noticesFor(uid: string, result: HandOver): Promise<Push[]> {
     }
   }
   // A week nobody can approve is the person's to fix: told once, when it becomes so.
+  // Not an admin whose choice is merely on its way to being cleared (the
+  // cleanup runs after the role change): their weeks are about to come to them.
   if (result.newlyStuck.length > 0) {
     const owner = await profile(uid);
-    if (owner && prefOn(owner.notifPrefs, 'rejected')) {
-      pushes.push({ to: uid, notif: texts.needsApprover(range(result.newlyStuck[0]), result.newlyStuck.length) });
+    if (owner && prefOn(owner.notifPrefs, 'rejected') && !(owner.admin && owner.approverUid !== null)) {
+      const own = result.newlyStuck.every((week) => week.approverUid === uid);
+      pushes.push({ to: uid, notif: texts.needsApprover(range(result.newlyStuck[0]), result.newlyStuck.length, own) });
     }
   }
   return pushes;

@@ -188,8 +188,19 @@ describe('what a profile change sets off', () => {
   it('tells an admin whose own weeks nobody can approve once they stop being one', async () => {
     await user(owner).update({ admin: true, approverUid: null });
     await handOverWaitingWeeks(owner);
-    expect(await change(owner, { admin: false }, 100))
-      .toEqual([{ to: owner, notif: expect.objectContaining({ title: 'Choose a new approver' }) }]);
+    expect(await change(owner, { admin: false }, 100)).toEqual([{
+      to: owner,
+      notif: expect.objectContaining({ title: 'Choose a new approver', body: expect.stringMatching(/^You can no longer approve timesheets yourself\./) }),
+    }]);
+  });
+
+  it('no push to an admin whose ineligible choice is about to be cleared, so their weeks come to them', async () => {
+    await user(owner).update({ admin: true, approverUid: 'old' });
+    await handOverWaitingWeeks(owner);
+    expect(await change('old', { role: 'member' }, 100)).toEqual([]);
+    await change(owner, { approverUid: null }, 200);
+    expect(await holder(0)).toMatchObject({ approverUid: owner });
+    expect((await holder(0)).stuckSince).toBeUndefined();
   });
 
   it('a week approvable again loses its mark, so a later episode is told anew', async () => {

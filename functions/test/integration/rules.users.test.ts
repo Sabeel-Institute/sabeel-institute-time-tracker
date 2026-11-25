@@ -182,7 +182,7 @@ describe('firestore.rules — approver assignment', () => {
       await updateDoc(doc(ctx.firestore(), 'users/mgr'), { role: 'member' });
       await updateDoc(doc(ctx.firestore(), 'users/adm'), { admin: false });
     });
-    await assertFails(updateDoc(doc(mgr().firestore(), 'users/alice'), { approverUid: 'adm' }));
+    await assertFails(updateDoc(doc(mgr().firestore(), 'users/alice'), { approverUid: null }));
     await assertFails(updateDoc(doc(adm().firestore(), 'users/alice'), { approverUid: null }));
   });
 
