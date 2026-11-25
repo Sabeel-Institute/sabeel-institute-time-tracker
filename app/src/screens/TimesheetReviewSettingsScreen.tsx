@@ -40,7 +40,7 @@ function ThresholdForm({ saved }: { saved: ReviewLimits }) {
   const save = async () => {
     setError(null);
     if (!validReviewLimits({ ...saved, ...changes })) {
-      setError('Enter a minimum of at least 1 minute, an entry maximum from the minimum up to 24 hours, and a daily maximum from 1 minute to 25 hours.');
+      setError('Enter a minimum of at least 1 minute, an entry maximum from the minimum up to 24 hours, and a daily maximum from the entry maximum up to 25 hours.');
       return;
     }
     setSaving(true);

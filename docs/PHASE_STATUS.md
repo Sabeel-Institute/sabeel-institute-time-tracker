@@ -21,7 +21,13 @@ phase boundary.
 - Timesheet duration review adds configurable admin thresholds and a single
   confirmation for flagged submissions and approvals. Pending approvers see
   current thresholds and approved sheets retain their decision snapshot.
-  Deploy Firestore rules and functions before the updated clients.
+- Rollout order: Firestore rules and indexes, then functions (three new
+  callables: `submitReviewedTimesheet`, `approveReviewedTimesheet`,
+  `copyPreviousTimesheetWeek`), then check each new callable answers an
+  unauthenticated POST with its own `UNAUTHENTICATED` JSON (`TODO.md`), then
+  the web deploy, Play internal testing and TestFlight. v0.32.2 keeps working
+  against the new rules through its direct-write paths until it is retired
+  (`TODO.md`).
 
 ## Deploy log
 

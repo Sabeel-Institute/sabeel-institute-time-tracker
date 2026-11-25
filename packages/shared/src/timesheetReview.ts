@@ -24,6 +24,9 @@ export function validReviewLimits(limits: ReviewLimits): boolean {
   return [minEntryMinutes, maxEntryMinutes, maxDayMinutes].every(Number.isInteger)
     && minEntryMinutes >= 1 && minEntryMinutes <= maxEntryMinutes
     && maxEntryMinutes <= MAX_ENTRY_HOURS * 60
+    // A single entry longer than a day's maximum is then always flagged as
+    // long, even where it spills into a day another week's sheet owns.
+    && maxEntryMinutes <= maxDayMinutes
     && maxDayMinutes >= 1 && maxDayMinutes <= 25 * 60;
 }
 
@@ -157,9 +160,17 @@ function minutesByLocalDay(start: number, end: number, minutes: number, entry: R
   }
 }
 
+/** Code-unit order. The flag order is part of the version the client and the
+ * server must agree on, and localeCompare follows each runtime's locale. */
+function byCodeUnit(a: string, b: string): number {
+  return a < b ? -1 : a > b ? 1 : 0;
+}
+
 /**
  * Flags for the reviewed period. Nearby entries contribute to a shared local
- * day's total, but only days containing some work from this sheet are flagged.
+ * day's total. A day is flagged on the sheet whose period contains it, and only
+ * when that sheet's own work contributes to it: a neighboring week's edits can
+ * change this sheet's flags only through a day this sheet owns.
  */
 export function reviewTimesheet(
   limits: ReviewLimits,
@@ -193,7 +204,7 @@ export function reviewTimesheet(
       total.minutes += share;
       total.entryVersions.push(JSON.stringify([entry.id, start, end, updatedAt, share]));
       localDays.set(day, total);
-      if (inPeriod) daysInReview.add(day);
+      if (inPeriod && isInPeriod(day)) daysInReview.add(day);
     }
   }
   for (const dayKey of daysInReview) {
@@ -202,7 +213,7 @@ export function reviewTimesheet(
       flags.push({ kind: 'dayTotal', dayKey, minutes, entryVersions: entryVersions.sort() });
     }
   }
-  flags.sort((a, b) => a.dayKey.localeCompare(b.dayKey) || reviewFlagKey(a).localeCompare(reviewFlagKey(b)));
+  flags.sort((a, b) => byCodeUnit(a.dayKey, b.dayKey) || byCodeUnit(reviewFlagKey(a), reviewFlagKey(b)));
   return { limits, flags };
 }
 

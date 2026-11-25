@@ -11,7 +11,7 @@ import {
   type ReviewLimits,
   type ReviewSnapshot,
 } from '@sabeel/shared';
-import { useEntriesRange } from './entries';
+import { useSyncedEntriesRange } from './entries';
 import { db } from './firebase';
 import { useLiveDoc } from './liveQuery';
 
@@ -20,6 +20,9 @@ const limitsRef = () => doc(db, APP_CONFIG_COLLECTION, TIMESHEET_REVIEW_CONFIG_D
 export function useReviewLimits(): ReviewLimits | undefined {
   return useLiveDoc<ReviewLimits | undefined>(limitsRef, [], {
     label: 'useReviewLimits',
+    // A cache miss is not "never saved": wait for the server's answer once,
+    // then keep it (and the flags it drives) through a dropped connection.
+    waitForServer: true,
     map: (snap) => snap.exists() ? snap.data() as ReviewLimits : DEFAULT_REVIEW_LIMITS,
     empty: undefined,
   });
@@ -39,11 +42,14 @@ export function saveReviewLimits(changes: Partial<ReviewLimits>): Promise<void> 
 
 export function useTimesheetReview(uid: string, fromKey: string, toKey: string) {
   const range = reviewEntryRange({ fromKey, toKey });
-  const nearby = useEntriesRange(uid, range.fromKey, range.toKey, true);
+  const nearby = useSyncedEntriesRange(uid, range.fromKey, range.toKey);
   const limits = useReviewLimits();
   return useMemo(() => ({
+    /** Rows to show: confirmed by the server once, kept if it disconnects. */
     loaded: nearby !== undefined,
-    ...timesheetReviewEntries(nearby ?? [], { fromKey, toKey }, limits),
+    /** The server confirmed the rows: only then may the week be submitted or approved. */
+    synced: nearby?.synced === true,
+    ...timesheetReviewEntries(nearby?.rows ?? [], { fromKey, toKey }, limits),
   }), [nearby, fromKey, toKey, limits]);
 }
 

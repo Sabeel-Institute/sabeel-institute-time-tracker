@@ -71,15 +71,37 @@ describe('timesheet duration review', () => {
     expect(flags).toHaveLength(2);
   });
 
-  it('includes next-period hours on a day touched by this period and ignores unrelated days', () => {
+  it('flags a shared day only on the sheet whose period contains it', () => {
     const limits = { ...DEFAULT_REVIEW_LIMITS, maxDayMinutes: 120 };
     const entries = [
       work('overnight', period.toKey, '23:30', 90),
       work('next morning', '2026-11-08', '10:00', 61),
       work('next week', '2026-11-09', '10:00', 121),
     ];
-    expect(reviewTimesheet(limits, entries, period).flags)
-      .toEqual([expect.objectContaining({ kind: 'dayTotal', dayKey: '2026-11-08', minutes: 121 })]);
+    // Saturday's overnight entry credits 60 minutes to Sunday 11-08, which
+    // belongs to the next sheet: its total is reviewed there, with this entry in it.
+    expect(reviewTimesheet(limits, entries, period).flags).toEqual([]);
+    const next = { fromKey: '2026-11-08', toKey: '2026-11-14' };
+    expect(reviewTimesheet(limits, entries, next).flags)
+      .toContainEqual(expect.objectContaining({ kind: 'dayTotal', dayKey: '2026-11-08', minutes: 121 }));
+    // So an edit in the next week cannot change this week's reviewed version.
+    const edited = entries.map((row) => row.id === 'next morning' ? { ...row, note: 'x', updatedAt: row.updatedAt + 1 } : row);
+    expect(reviewTimesheet(limits, edited, period)).toEqual(reviewTimesheet(limits, entries, period));
+  });
+
+  it('orders flags the same way in every locale', () => {
+    // Two same-day short entries whose ids collate differently in Lithuanian.
+    const entries = [work('Pxy4n', sunday, '14:00', 1), work('Pxj7m', sunday, '15:00', 2)];
+    const expected = reviewTimesheet(DEFAULT_REVIEW_LIMITS, entries, period);
+    const original = String.prototype.localeCompare;
+    const lithuanian = new Intl.Collator('lt');
+    String.prototype.localeCompare = function (this: string, that: string) { return lithuanian.compare(this, that); };
+    try {
+      expect(reviewTimesheet(DEFAULT_REVIEW_LIMITS, [...entries].reverse(), period)).toEqual(expected);
+    } finally {
+      String.prototype.localeCompare = original;
+    }
+    expect(expected.flags.map((flag) => 'entryId' in flag && flag.entryId)).toEqual(['Pxj7m', 'Pxy4n']);
   });
 
   it('does not flag a neighboring day when an overnight timer credits it zero minutes', () => {
@@ -140,11 +162,37 @@ describe('timesheet duration review', () => {
     expect(reviewFlagChange(revised.flags[0], original)).toBe('edited');
   });
 
+  it('builds one date formatter per zone however many midnights it splits', () => {
+    const zone = 'Pacific/Chatham';
+    const nights = Array.from({ length: 10 }, (_, i) => {
+      const day = `2026-11-0${(i % 7) + 1}`;
+      const start = epochFor(day, '22:00', zone) + i * 60_000;
+      return entry('night' + i, start, start + 4 * 3600_000, { timeZone: zone, dayKey: dayKeyFor(start, zone) });
+    });
+    const Real = Intl.DateTimeFormat;
+    let built = 0;
+    const counting = function (this: unknown, ...args: ConstructorParameters<typeof Intl.DateTimeFormat>) {
+      if (args[1]?.timeZone === zone) built++;
+      return new Real(...args);
+    } as unknown as typeof Intl.DateTimeFormat;
+    Intl.DateTimeFormat = counting;
+    try {
+      reviewTimesheet({ ...DEFAULT_REVIEW_LIMITS, maxDayMinutes: 60, maxEntryMinutes: 60 }, nights, period);
+    } finally {
+      Intl.DateTimeFormat = Real;
+    }
+    expect(built).toBeLessThanOrEqual(1);
+  });
+
   it('validates whole minutes and ordered entry thresholds', () => {
     expect(validReviewLimits(DEFAULT_REVIEW_LIMITS)).toBe(true);
     expect(validReviewLimits({ ...DEFAULT_REVIEW_LIMITS, minEntryMinutes: 0 })).toBe(false);
     expect(validReviewLimits({ ...DEFAULT_REVIEW_LIMITS, minEntryMinutes: 0.5 })).toBe(false);
     expect(validReviewLimits({ ...DEFAULT_REVIEW_LIMITS, maxEntryMinutes: 2 })).toBe(false);
     expect(validReviewLimits({ ...DEFAULT_REVIEW_LIMITS, maxDayMinutes: 1501 })).toBe(false);
+    // An entry allowed to run past the day's maximum could spill into the next
+    // week's day unflagged on either sheet.
+    expect(validReviewLimits({ minEntryMinutes: 3, maxEntryMinutes: 1440, maxDayMinutes: 600 })).toBe(false);
+    expect(validReviewLimits({ minEntryMinutes: 3, maxEntryMinutes: 600, maxDayMinutes: 600 })).toBe(true);
   });
 });

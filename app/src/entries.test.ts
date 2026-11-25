@@ -57,3 +57,26 @@ it('rejects a stale correction and a stale deletion of changed hours', async () 
     expect(tx.delete).not.toHaveBeenCalled();
   }
 });
+
+it('treats a retried commit that finds its own save or deletion as success', async () => {
+  const original = { ...entry, end: 121000, durationMinutes: 2 };
+  vi.spyOn(Date, 'now').mockReturnValue(5000);
+  try {
+    // First attempt: commits the patch, then the response is lost.
+    const first = { get: vi.fn(async () => ({ data: () => original })), update: vi.fn(), delete: vi.fn() };
+    vi.mocked(runTransaction).mockImplementationOnce((_db, operation) => operation(first as unknown as Transaction));
+    const save = () => updateEntry(original, { start: original.start, end: original.end, editorUid: 'member' });
+    await save();
+    const [[, patch]] = first.update.mock.calls as unknown as [[string, object]];
+    // The SDK's retry reruns the same callback and reads what it committed.
+    for (const [act, current] of [[save, { ...original, ...patch }], [() => deleteEntry(original), undefined]] as const) {
+      const tx = { get: vi.fn(async () => ({ data: () => current })), update: vi.fn(), delete: vi.fn() };
+      vi.mocked(runTransaction).mockImplementationOnce((_db, operation) => operation(tx as unknown as Transaction));
+      await expect(act()).resolves.toBeUndefined();
+      expect(tx.update).not.toHaveBeenCalled();
+      expect(tx.delete).not.toHaveBeenCalled();
+    }
+  } finally {
+    vi.restoreAllMocks();
+  }
+});

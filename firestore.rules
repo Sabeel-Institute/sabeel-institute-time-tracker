@@ -128,6 +128,8 @@ service cloud.firestore {
                 && request.resource.data.photoURL.size() <= 2000))
         && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['approverUid'])
             || approverOk(request.resource.data.approverUid))
+        && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['activeEntryId'])
+            || pointerReleased(resource.data.get('activeEntryId', null)))
         && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['notifPrefs'])
             || request.resource.data.notifPrefs is map)
         && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['timeZone'])
@@ -139,6 +141,15 @@ service cloud.firestore {
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['approverUid'])
         && approverOk(request.resource.data.approverUid);
       allow delete: if false;
+
+      // The pointer is what the legacy submission rules check for a running
+      // timer, so it may only move off a timer that is closed or deleted by the
+      // end of the same write (clock-out, discard, or a stale pointer).
+      function pointerReleased(previous) {
+        return !(previous is string && previous.matches('^[^/]+$'))
+          || !existsAfter(/databases/$(database)/documents/timeEntries/$(previous))
+          || getAfter(/databases/$(database)/documents/timeEntries/$(previous)).data.end != null;
+      }
 
       // Push registration tokens: strictly the owner's business. The server
       // (admin SDK) reads them to send and prunes dead ones.
@@ -289,9 +300,11 @@ service cloud.firestore {
           (canTouchPeriod(resource.data.uid, resource.data.periodKey)
             && canTouchPeriod(resource.data.uid, request.resource.data.periodKey)
             && (
+              // A closed entry stays closed: a running timer exists only through
+              // clock-in, which sets the pointer the submission rules check.
               (resource.data.uid == request.auth.uid
-                && (resource.data.end != null || request.resource.data.end == null
-                    || meAfter().activeEntryId == null))
+                && (resource.data.end != null ? request.resource.data.end != null
+                    : (request.resource.data.end == null || meAfter().activeEntryId == null)))
               ||
               (resource.data.uid != request.auth.uid
                 && resource.data.end != null && request.resource.data.end != null
@@ -330,7 +343,7 @@ service cloud.firestore {
     // point. Written by nobody but the Admin SDK (`scripts/set-min-version.mjs`).
     match /config/{doc} {
       allow read: if doc != 'timesheetReview' || isActive();
-      allow create, update: if doc == 'timesheetReview' && isAdmin()
+      allow create, update: if doc == 'timesheetReview' && isAdmin() && hasCurrentReviewRole(true)
         && reviewLimitsValid(request.resource.data);
     }
 
@@ -338,16 +351,8 @@ service cloud.firestore {
       return d is map && d.keys().hasOnly(['minEntryMinutes', 'maxEntryMinutes', 'maxDayMinutes'])
         && d.minEntryMinutes is int && d.minEntryMinutes >= 1
         && d.maxEntryMinutes is int && d.maxEntryMinutes >= d.minEntryMinutes && d.maxEntryMinutes <= 1440
-        && d.maxDayMinutes is int && d.maxDayMinutes >= 1 && d.maxDayMinutes <= 1500;
-    }
-    function reviewLimitsCurrent(limits) {
-      let path = /databases/$(database)/documents/config/timesheetReview;
-      return exists(path) ? limits == get(path).data
-        : limits == {'minEntryMinutes': 3, 'maxEntryMinutes': 480, 'maxDayMinutes': 720};
-    }
-    function currentReview(review, at) {
-      return review is map && review.keys().hasOnly(['limits', 'flags', 'at'])
-        && review.at == at && review.flags is list && reviewLimitsCurrent(review.limits);
+        && d.maxDayMinutes is int && d.maxDayMinutes >= 1 && d.maxDayMinutes <= 1500
+        && d.maxEntryMinutes <= d.maxDayMinutes;
     }
 
     // Append-only timesheet history, written by the onTimesheetWritten trigger.
@@ -434,8 +439,10 @@ service cloud.firestore {
         && !('decidedAt' in request.resource.data)
         && !('decidedBy' in request.resource.data)
         && !('rejectReason' in request.resource.data)
-        && !('approvalReview' in request.resource.data)
-        && (!('submissionReview' in request.resource.data) || currentReview(request.resource.data.submissionReview, request.resource.data.submittedAt));
+        // Review snapshots are derived by the submit and approve callables from
+        // the rows they seal; a client-written one would be an unchecked claim.
+        && !('submissionReview' in request.resource.data)
+        && !('approvalReview' in request.resource.data);
 
       allow update: if isActive()
         && tsValid(request.resource.data)
@@ -454,11 +461,8 @@ service cloud.firestore {
             && !('rejectReason' in request.resource.data)
             // Older apps leave any previous review on the doc. The review's
             // own timestamp lets readers recognize it as a previous submission.
-            && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['submissionReview'])
-                || !('submissionReview' in request.resource.data)
-                || currentReview(request.resource.data.submissionReview, request.resource.data.submittedAt))
             && request.resource.data.diff(resource.data).affectedKeys().hasOnly(
-                 ['status', 'approverUid', 'submittedAt', 'submissionReview', 'totalMinutes',
+                 ['status', 'approverUid', 'submittedAt', 'totalMinutes',
                   'entryCount', 'updatedAt', 'decidedAt', 'decidedBy', 'rejectReason']))
           ||
           // DECIDE (submitted → approved | rejected): the stamped approver,
@@ -476,12 +480,11 @@ service cloud.firestore {
             && request.resource.data.decidedBy == request.auth.uid
             && request.resource.data.decidedAt is int
             && (request.resource.data.status == 'approved'
-                  ? (!('rejectReason' in request.resource.data)
-                     && (!('approvalReview' in request.resource.data) || currentReview(request.resource.data.approvalReview, request.resource.data.decidedAt)))
-                  : (!('approvalReview' in request.resource.data) && request.resource.data.rejectReason is string
+                  ? !('rejectReason' in request.resource.data)
+                  : (request.resource.data.rejectReason is string
                      && request.resource.data.rejectReason.size() > 0))
             && request.resource.data.diff(resource.data).affectedKeys().hasOnly(
-                 ['status', 'decidedAt', 'decidedBy', 'rejectReason', 'approvalReview',
+                 ['status', 'decidedAt', 'decidedBy', 'rejectReason',
                   'totalMinutes', 'entryCount', 'updatedAt']))
         );
 

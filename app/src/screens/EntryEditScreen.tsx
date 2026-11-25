@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { Platform, StyleSheet, Text, View } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { leaveIfShowing } from '../nav';
 import {
@@ -58,6 +58,11 @@ export function EntryEditScreen({ entryId, editorUid }: { entryId: string; edito
 
   const stale = timeEntryRevision(latest) !== timeEntryRevision(entry);
   const timeZone = entryDisplayTimeZone(entry.timeZone);
+  // A phone's timezone data can lag behind (a newer zone name an older Android
+  // or iOS does not know), so "unavailable" there may mean "valid elsewhere":
+  // saving would replace a real zone with UTC and move the entry's day. Only
+  // the website, whose browser carries current data, repairs a stored zone.
+  const zoneLocked = timeZone !== entry.timeZone && Platform.OS !== 'web';
   const originalDay = timeZone !== entry.timeZone ? dayKeyFor(entry.start, timeZone) : entry.dayKey;
 
   // Untouched times keep the entry's own instants (editedEntryTimes says why).
@@ -70,7 +75,7 @@ export function EntryEditScreen({ entryId, editorUid }: { entryId: string; edito
   const endKey = times ? dayKeyFor(times.end, timeZone) : null;
 
   const save = async () => {
-    if (!valid || times === null || stale || saving) return;
+    if (!valid || times === null || stale || saving || zoneLocked) return;
     setSaving(true);
     setError(null);
     try {
@@ -121,7 +126,12 @@ export function EntryEditScreen({ entryId, editorUid }: { entryId: string; edito
       {stale && !saving ? (
         <Notice tone="info" onPress={() => load(latest)}>{ENTRY_CHANGED}</Notice>
       ) : null}
-      {timeZone !== entry.timeZone ? (
+      {zoneLocked ? (
+        <Notice tone="info">
+          This device can't show times in this entry's time zone ({entry.timeZone}), so it can't be changed here.
+          Edit it on the website.
+        </Notice>
+      ) : timeZone !== entry.timeZone ? (
         <Notice tone="info">The stored time zone is unavailable. Saving uses UTC.</Notice>
       ) : null}
       <EntryForm
@@ -144,7 +154,7 @@ export function EntryEditScreen({ entryId, editorUid }: { entryId: string; edito
         <Text style={styles.hint}>This moves the entry to {dayLabel(movedTo)}.</Text>
       ) : null}
 
-      <Button label="Save changes" onPress={save} disabled={!valid || stale || saving} />
+      <Button label="Save changes" onPress={save} disabled={!valid || stale || saving || zoneLocked} />
       {!valid ? (
         <Text style={styles.hint}>The end has to be after the start, and at most 24 hours later.</Text>
       ) : null}

@@ -56,10 +56,13 @@ export async function copyPreviousWeek(uid: string, periodKey: unknown) {
         continue;
       }
       const durationMinutes = entry.durationMinutes ?? entryMinutes(entry.start, entry.end);
+      // Last week is usually approved and closed to its owner, so a legacy row
+      // the rules would refuse to copy is skipped and counted, never fatal.
       if (!entryTimesValid(entry) || entryDisplayTimeZone(entry.timeZone) !== entry.timeZone
           || !Number.isInteger(durationMinutes) || durationMinutes < 1 || durationMinutes > MAX_ENTRY_HOURS * 60
           || durationMinutes > (entry.end - entry.start) / 60000 + 1) {
-        throw new HttpsError('failed-precondition', 'Check the times and time zone of the entries in the previous week before copying.');
+        skipped++;
+        continue;
       }
       const start = epochFor(dayKey, timeOfDayFor(entry.start, entry.timeZone), entry.timeZone);
       if (dayKeyFor(start, entry.timeZone) !== dayKey) {

@@ -26,20 +26,40 @@ function flagMessage(flag: ReviewFlag, review: ReviewSnapshot): string {
   }
 }
 
+/** The entries behind a day total, from its recorded contributions. */
+function dayTotalEntryIds(flag: Extract<ReviewFlag, { kind: 'dayTotal' }>): string[] {
+  return (flag.entryVersions ?? []).flatMap((version) => {
+    try {
+      const [id] = JSON.parse(version) as unknown[];
+      return typeof id === 'string' ? [id] : [];
+    } catch {
+      return [];
+    }
+  });
+}
+
 export function reviewHighlights(review?: ReviewSnapshot, submitted?: ReviewSnapshot) {
   const entries = new Map<string, string[]>();
   const days: string[] = [];
+  const add = (entryId: string, message: string) => {
+    const messages = entries.get(entryId) ?? [];
+    if (!messages.includes(message)) messages.push(message);
+    entries.set(entryId, messages);
+  };
   if (review) {
     for (const flag of review.flags) {
       const change = reviewFlagChange(flag, submitted);
       const prefix = change === 'new' ? 'Flagged since submission · ' : change === 'edited' ? 'Changed since submission · ' : '';
       const message = prefix + flagMessage(flag, review);
       if ('entryId' in flag) {
-        const messages = entries.get(flag.entryId) ?? [];
-        messages.push(message);
-        entries.set(flag.entryId, messages);
+        add(flag.entryId, message);
       } else {
         days.push(message);
+        // Highlight the rows that make up the day, so the member can tap one.
+        // What changed since submission is said once, on the day itself.
+        for (const entryId of dayTotalEntryIds(flag)) {
+          add(entryId, `Part of the ${formatDuration(flag.minutes)} total on ${dayLabel(flag.dayKey)}`);
+        }
       }
     }
   }

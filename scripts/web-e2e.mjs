@@ -448,6 +448,8 @@ async function main() {
   // { label, text, url }: Chromium words a failed request as "Failed to load
   // resource: ... status of 400" and nothing more, so the URL travels with it.
   const consoleErrors = [];
+  // Pages the offline check has disconnected on purpose, while it lasts.
+  const offlineLabels = new Set();
   // Every failing response from the functions, Firestore and Auth emulators,
   // WITH ITS BODY. A callable failure reaches the UI as a bare "internal" and,
   // if the function is missing entirely, as a browser CORS complaint — neither
@@ -466,7 +468,7 @@ async function main() {
     const page = await ctx.newPage();
     pages.set(label, page);
     page.on('console', (m) => {
-      if (m.type() === 'error') consoleErrors.push({ label, text: m.text(), url: m.location().url });
+      if (m.type() === 'error') consoleErrors.push({ label, text: m.text(), url: m.location().url, offline: offlineLabels.has(label) });
       if (m.type() === 'warning' && /listener|session poll/.test(m.text()))
         console.log(`  (warn) [${label}] ${m.text()}`);
     });
@@ -837,6 +839,21 @@ async function main() {
   // The field echoes the selection once the profile listener catches up — wait
   // for it so Submit isn't clicked while still disabled.
   await firstOnScreen(vol.getByText('Admin', { exact: true })).waitFor();
+  // Offline, the week still shows its hours, but cannot be submitted until the
+  // server confirms them again: a cached range may be missing rows.
+  const checking = onScreen(vol.getByText('Checking for the latest hours before you can submit…', { exact: true }));
+  if (await submit.isDisabled()) await eventually(vol, 'Submit enabled online', () => submit.isDisabled(), (off) => !off);
+  offlineLabels.add('volunteer');
+  await vol.context().setOffline(true);
+  await checking.waitFor({ timeout: 45000 });
+  if (!(await submit.isDisabled())) throw new Error('an offline week offers Submit');
+  await firstOnScreen(vol.getByText('Math tutoring with the kids', { exact: true })).waitFor();
+  await vol.context().setOffline(false);
+  await checking.waitFor({ state: 'hidden', timeout: 45000 });
+  // Requests that failed while offline are logged as they settle; the tab is
+  // back once the server has confirmed the week again.
+  offlineLabels.delete('volunteer');
+  await eventually(vol, 'Submit enabled after reconnecting', () => submit.isDisabled(), (off) => !off, 45000);
   // Hold a submission while another session edits an entry in the draft.
   const releaseSubmit = await holdRequests(vol, submissionEndpoint, vol);
   const isSubmit = isCallablePost(submissionEndpoint);
@@ -1382,7 +1399,21 @@ async function main() {
   await zeroStatus('rejected');
   await vol.getByRole('button', { name: 'Resubmit timesheet', exact: true }).click();
   await zeroStatus('submitted');
+  // Hours that appear after an empty submission are new to the member: the
+  // approver sees them marked as flagged since submission.
+  const lateShort = FIRESTORE_DOCS + '/timeEntries/late-short';
+  const lateStart = shared.epochFor(otherWeek.fromKey, '12:00', shared.deviceTimeZone());
+  const lateFields = Object.fromEntries(Object.entries({
+    uid: volUid, dayKey: otherWeek.fromKey, periodKey: otherWeek.fromKey, activityId: 'late-short-activity',
+    activityName: 'Late setup', timeZone: shared.deviceTimeZone(), start: lateStart, end: lateStart + 120000,
+    durationMinutes: 2, source: 'manual', createdAt: lateStart, updatedAt: lateStart,
+  }).map(([key, value]) => [key, typeof value === 'number' ? { integerValue: String(value) } : { stringValue: value }]));
+  const owner = { Authorization: 'Bearer owner', 'Content-Type': 'application/json' };
+  if (!(await fetch(lateShort, { method: 'PATCH', headers: owner, body: JSON.stringify({ fields: lateFields }) })).ok)
+    throw new Error('could not seed the late entry');
   await mgr.goto(emptyReviewUrl);
+  await firstOnScreen(mgr.getByText('Flagged since submission · Short entry · less than 3m', { exact: true })).waitFor();
+  if (!(await fetch(lateShort, { method: 'DELETE', headers: owner })).ok) throw new Error('could not remove the late entry');
   await logged(mgr, '0m').waitFor();
   await mgr.getByRole('button', { name: 'Approve timesheet', exact: true }).click();
   await zeroStatus('approved');
@@ -1689,6 +1720,8 @@ async function main() {
     // The email form's refusals: Auth answers a sign-in it will not make with a 400.
     (e.label === 'admin' && [approvalEndpoint, copyEndpoint].includes(e.url) && /status of 400/.test(e.text)) ||
     (e.label === 'volunteer' && e.url === submissionEndpoint && /status of 400/.test(e.text)) ||
+    // The offline check disconnects the volunteer's tab on purpose.
+    (e.offline && /net::ERR_INTERNET_DISCONNECTED/.test(e.text)) ||
     (e.label === 'email' &&
       /status of 400/.test(e.text) &&
       e.url.startsWith(`http://${EMULATOR_HOSTS.auth}/`));

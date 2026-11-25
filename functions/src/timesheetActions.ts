@@ -6,6 +6,7 @@ import {
   dayKeyFor,
   DEFAULT_REVIEW_LIMITS,
   isDayKey,
+  patchApplied,
   periodHasStarted,
   periodRangeFor,
   reviewEntryRange,
@@ -79,9 +80,13 @@ async function reviewedHours(tx: Transaction, uid: string, input: ApprovalReques
   };
 }
 
-export async function submitReviewed(input: SubmissionRequest, uid: string, adminClaim: boolean) {
+/**
+ * `now` is fixed before the transaction: the Admin SDK reruns the callback when
+ * a commit's response is lost, and the rerun recognizes the submission it
+ * already committed by that timestamp instead of reporting the week as changed.
+ */
+export async function submitReviewed(input: SubmissionRequest, uid: string, adminClaim: boolean, now = Date.now()) {
   const db = getFirestore();
-  const now = Date.now();
   // Same UTC+14 boundary as periodStarted in firestore.rules for older clients.
   if (!periodHasStarted(input.periodKey, dayKeyFor(now + 14 * 3600000, 'UTC'))) {
     throw new HttpsError('failed-precondition', 'This week has not started.');
@@ -93,6 +98,7 @@ export async function submitReviewed(input: SubmissionRequest, uid: string, admi
     const sheet = sheetSnap.data() as TimesheetDoc | undefined;
     const owner = ownerSnap.data() as UserDoc | undefined;
     if (owner?.status !== 'active') throw new HttpsError('permission-denied', 'Account is not active.');
+    if (sheet && patchApplied(sheet, { uid, status: 'submitted', submittedAt: now, approverUid: input.approverUid })) return;
     if (input.sheetVersion === null ? sheet !== undefined
       : !sheet || sheet.uid !== uid || sheet.status !== 'rejected' || timesheetRevision(sheet) !== input.sheetVersion) {
       changed();
@@ -130,6 +136,7 @@ export async function approveReviewed(
   input: ApprovalRequest,
   reviewerUid: string,
   role: 'admin' | 'manager' | 'member',
+  now = Date.now(),
 ) {
   const db = getFirestore();
   const sheetRef = db.collection(COLLECTIONS.timesheets).doc(input.uid + '_' + input.periodKey);
@@ -144,11 +151,12 @@ export async function approveReviewed(
         || (sheet && !admin && sheet.approverUid !== reviewerUid)) {
       throw new HttpsError('permission-denied', 'You are no longer able to approve this timesheet.');
     }
+    // A rerun after a lost commit response: this approval already landed.
+    if (patchApplied(sheet, { uid: input.uid, status: 'approved', decidedAt: now, decidedBy: reviewerUid })) return;
     if (!sheet || sheet.uid !== input.uid || sheet.status !== 'submitted'
         || timesheetRevision(sheet) !== input.sheetVersion) changed();
 
     const { review, snapshot } = await reviewedHours(tx, input.uid, input);
-    const now = Date.now();
     tx.update(sheetRef, {
       ...snapshot, status: 'approved', decidedAt: now, decidedBy: reviewerUid, updatedAt: now,
       ...(review ? { approvalReview: { ...review, at: now } } : {}),

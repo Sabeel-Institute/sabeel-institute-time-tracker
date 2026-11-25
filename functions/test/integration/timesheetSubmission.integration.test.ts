@@ -66,7 +66,9 @@ describe('submission checks the exact hours the member reviewed', () => {
 
   it('records only one submission when two sessions submit the same draft', async () => {
     const input = request([]);
-    const results = await Promise.allSettled([submitReviewed(input, uid, false), submitReviewed(input, uid, false)]);
+    // Two sessions are two requests, each with its own timestamp.
+    const now = Date.now();
+    const results = await Promise.allSettled([submitReviewed(input, uid, false, now), submitReviewed(input, uid, false, now + 1)]);
     expect(results.filter((result) => result.status === 'fulfilled')).toHaveLength(1);
     expect(results).toContainEqual(expect.objectContaining({ status: 'rejected',
       reason: expect.objectContaining({ code: 'failed-precondition' }),
@@ -75,6 +77,20 @@ describe('submission checks the exact hours the member reviewed', () => {
     expect(recorded).toMatchObject({ status: 'submitted', entryCount: 0, totalMinutes: 0 });
     await expect(submitReviewed(input, uid, false)).rejects.toMatchObject({ code: 'failed-precondition' });
     expect((await sheetRef().get()).data()).toEqual(recorded);
+  });
+
+  it('reports success when a lost commit response makes the transaction run again', async () => {
+    await getFirestore().doc('timeEntries/' + entry.id).set(entry);
+    const input = request([entry]);
+    const now = Date.now();
+    await submitReviewed(input, uid, false, now);
+    const recorded = (await sheetRef().get()).data();
+    // The Admin SDK's rerun has the same request and timestamp and reads the
+    // submission it already committed.
+    await expect(submitReviewed(input, uid, false, now)).resolves.toBeUndefined();
+    expect((await sheetRef().get()).data()).toEqual(recorded);
+    // A later, separate request is still refused as stale.
+    await expect(submitReviewed(input, uid, false, now + 1)).rejects.toMatchObject({ code: 'failed-precondition' });
   });
 
   it('accepts an empty week without a review and preserves empty resubmission after rejection', async () => {

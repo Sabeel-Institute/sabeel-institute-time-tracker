@@ -53,6 +53,14 @@ describe('copy previous week', () => {
     expect(copied.data().durationMinutes).toBe(55);
   });
 
+  it('skips a legacy row it cannot copy instead of refusing the whole week', async () => {
+    await entries().doc('legacy-zone').set({ ...original, timeZone: 'Etc/Unknown', note: 'legacy' });
+    await entries().doc('bad-minutes').set({ ...original, durationMinutes: 999, note: 'bad minutes',
+      start: Date.UTC(2026, 6, 14, 12), end: Date.UTC(2026, 6, 14, 13), dayKey: '2026-07-14' });
+    expect(await copyPreviousWeek(uid, target)).toEqual({ copied: 1, skipped: 2 });
+    expect((await destination()).docs.map((doc) => doc.data().note)).toEqual([original.note]);
+  });
+
   it('preserves a manual entry added before the copy and keeps existing hours unchanged', async () => {
     await entries().doc('manual').set({ ...original, periodKey: target, dayKey: '2026-07-20', note: 'New manual entry' });
     await expect(copyPreviousWeek(uid, target)).rejects.toMatchObject({ code: 'failed-precondition' });

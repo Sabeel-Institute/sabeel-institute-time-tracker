@@ -6,6 +6,7 @@ import {
   runTransaction,
   where,
   writeBatch,
+  type QuerySnapshot,
 } from 'firebase/firestore';
 import { useLiveDoc, useLiveQuery } from './liveQuery';
 import {
@@ -13,6 +14,7 @@ import {
   dayKeyFor,
   deviceTimeZone,
   entryMinutes,
+  patchApplied,
   periodKeyFor,
   timeEntryRevision,
   type TimeEntryDoc,
@@ -20,7 +22,6 @@ import {
 } from '@sabeel/shared';
 import { FirebaseError } from 'firebase/app';
 import { httpsCallable } from 'firebase/functions';
-import type { DocumentData, UpdateData } from 'firebase/firestore';
 import { db, functions } from './firebase';
 import type { Activity } from './activities';
 
@@ -144,36 +145,59 @@ export function useEntriesRange(
   uid: string,
   fromKey: string,
   toKey: string,
-  waitForServer = false,
 ): TimeEntry[] | undefined {
   return useLiveQuery<TimeEntry[] | undefined>(
-    () =>
-      query(
-        collection(db, COLLECTIONS.timeEntries),
-        where('uid', '==', uid),
-        where('dayKey', '>=', fromKey),
-        where('dayKey', '<=', toKey),
-      ),
+    () => entriesRangeQuery(uid, fromKey, toKey),
+    [uid, fromKey, toKey],
+    { label: 'useEntriesRange', map: (snap) => entryRows(snap), empty: undefined },
+  );
+}
+
+/**
+ * The same rows once the server has confirmed them, and whether it still
+ * does: `synced` turns false when the connection drops, and the rows stay on
+ * screen. An action that seals the week waits for `synced`.
+ */
+export function useSyncedEntriesRange(
+  uid: string,
+  fromKey: string,
+  toKey: string,
+): { rows: TimeEntry[]; synced: boolean } | undefined {
+  return useLiveQuery<{ rows: TimeEntry[]; synced: boolean } | undefined>(
+    () => entriesRangeQuery(uid, fromKey, toKey),
     [uid, fromKey, toKey],
     {
-      label: 'useEntriesRange',
-      waitForServer,
-      map: (snap) => {
-        const list = snap.docs.map((d) => ({ ...(d.data() as TimeEntryDoc), id: d.id }));
-        list.sort((a, b) => b.dayKey.localeCompare(a.dayKey) || b.start - a.start);
-        return list;
-      },
+      label: 'useSyncedEntriesRange',
+      waitForServer: true,
+      map: (snap) => ({ rows: entryRows(snap), synced: !snap.metadata.fromCache }),
       empty: undefined,
     },
   );
 }
 
+function entriesRangeQuery(uid: string, fromKey: string, toKey: string) {
+  return query(
+    collection(db, COLLECTIONS.timeEntries),
+    where('uid', '==', uid),
+    where('dayKey', '>=', fromKey),
+    where('dayKey', '<=', toKey),
+  );
+}
+
+function entryRows(snap: QuerySnapshot): TimeEntry[] {
+  const list = snap.docs.map((d) => ({ ...(d.data() as TimeEntryDoc), id: d.id }));
+  list.sort((a, b) => b.dayKey.localeCompare(a.dayKey) || b.start - a.start);
+  return list;
+}
+
 export const ENTRY_CHANGED = 'This entry changed while you were editing. Load the latest entry and review it again.';
 
-function changeEntry(entry: TimeEntry, patch?: UpdateData<DocumentData>): Promise<void> {
+function changeEntry(entry: TimeEntry, patch?: Record<string, unknown>): Promise<void> {
   const ref = doc(db, COLLECTIONS.timeEntries, entry.id);
   return runTransaction(db, async (tx) => {
     const current = (await tx.get(ref)).data() as TimeEntryDoc | undefined;
+    // A retried commit finds its own write (patchApplied): success, not a conflict.
+    if (patch ? patchApplied(current, patch) : !current) return;
     if (!current || timeEntryRevision({ ...current, id: entry.id }) !== timeEntryRevision(entry)) {
       throw new Error(ENTRY_CHANGED);
     }

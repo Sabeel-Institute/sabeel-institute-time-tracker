@@ -6,7 +6,7 @@ import {
   assertSucceeds,
   type RulesTestEnvironment,
 } from '@firebase/rules-unit-testing';
-import { doc, getDoc, setDoc, updateDoc, deleteDoc, writeBatch } from 'firebase/firestore';
+import { doc, getDoc, setDoc, updateDoc, deleteDoc, deleteField, writeBatch } from 'firebase/firestore';
 import { EMULATOR_PROJECT_ID } from '@sabeel/shared';
 
 let testEnv: RulesTestEnvironment;
@@ -180,6 +180,34 @@ describe('timeEntries — clock in/out batches', () => {
         durationMinutes: 30,
       }),
     ); // closing without clearing the pointer fails
+    await assertSucceeds(batch.commit());
+  });
+
+  it('a closed entry cannot be turned back into a running timer', async () => {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), 'timeEntries/m1'), { ...closedEntry, source: 'clock' });
+    });
+    const ref = doc(alice().firestore(), 'timeEntries/m1');
+    const reopen = { end: null, durationMinutes: deleteField(), updatedAt: T0 + 1 };
+    await assertFails(updateDoc(ref, reopen));
+    const db = alice().firestore();
+    const batch = writeBatch(db);
+    batch.update(doc(db, 'timeEntries/m1'), reopen);
+    batch.update(doc(db, 'users/alice'), { activeEntryId: 'm1' });
+    await assertFails(batch.commit());
+    await assertSucceeds(updateDoc(ref, { note: 'still closed', updatedAt: T0 + 1 }));
+  });
+
+  it('discarding a running timer and clearing its pointer succeeds; clearing alone fails', async () => {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), 'timeEntries/e1'), runningEntry);
+      await setDoc(doc(ctx.firestore(), 'users/alice'), aliceUserDoc('e1'));
+    });
+    const db = alice().firestore();
+    await assertFails(updateDoc(doc(db, 'users/alice'), { activeEntryId: null }));
+    const batch = writeBatch(db);
+    batch.delete(doc(db, 'timeEntries/e1'));
+    batch.update(doc(db, 'users/alice'), { activeEntryId: null });
     await assertSucceeds(batch.commit());
   });
 });

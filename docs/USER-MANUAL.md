@@ -221,7 +221,14 @@ above, then submit."* and Submit stays unavailable.
 
 By default, the app highlights entries under 3 minutes or over 8 hours,
 days totaling more than 12 hours, and auto-closed entries still at 12 hours.
-For the daily flag, overnight hours count on the local days they were worked.
+For the daily flag, overnight hours count on the local days they were worked,
+and a day is checked on the timesheet of the week it falls in. The entries
+that make up a flagged day are highlighted too ("Part of the 13h total on
+…"), so you can tap one to fix it.
+
+Submitting needs a connection. If it drops while a week is open, the week
+keeps showing its hours and says *"Checking for the latest hours before you
+can submit…"* until it reconnects.
 
 Rules of thumb:
 
@@ -487,13 +494,15 @@ mistakes discovered after the fact.
 
 In **More → Timesheet review settings**, admins can set the minimum minutes
 per entry, maximum hours per entry, and maximum total hours per day. Enter a
-fractional hour as a decimal, such as 8.5 for 8 hours and 30 minutes.
+fractional hour as a decimal, such as 8.5 for 8 hours and 30 minutes. The
+daily maximum can't be lower than the maximum per entry.
 
 ![Timesheet review settings](manual/img/timesheet-review-settings.png)
 
 Changes apply to drafts and returned sheets. On a submitted sheet, the member
 keeps the review they confirmed and the approver sees the current thresholds.
-The review points out hours flagged or changed since submission. Approved
+The review points out hours flagged or changed since submission, including
+any hours added to a week that was submitted empty. Approved
 sheets keep their approval review and use current settings if reopened.
 
 ## 3.5 Odds and ends
@@ -608,6 +617,7 @@ Open that week → Reopen (admin) → the owner fixes it and resubmits.
 | "Choose who approves your hours above, then submit." | No approver chosen yet | Timesheet → Approver → pick one |
 | "This week is submitted, so it is closed for new hours" on Today | The current week is locked | Withdraw the submission on Timesheet (or ask an admin to reopen an approved week) |
 | "Clock out before you submit this week." | A session is still running | Clock out on Today, then submit |
+| "Checking for the latest hours before you can submit…" | The device is offline, or the week is still loading | Reconnect; Submit comes back on its own |
 | An entry is shaded red: "Overlaps another entry" | Two entries have overlapping times | Tap one and fix its times; submission unlocks once no entries overlap |
 | No push notifications arriving | Permission not granted on this device, or that kind is switched off | Allow notifications when the app asks (or in system settings), and check More → Notifications |
 | A red notice about live data at the top of a screen | The app couldn't load live data | Check connectivity; if it persists, tell the developer — it's also auto-reported |

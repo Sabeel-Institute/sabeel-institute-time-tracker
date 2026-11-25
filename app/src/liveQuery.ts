@@ -83,7 +83,14 @@ interface LiveOptions<S, T> {
    * while loading told people there were no activities.
    */
   empty: T;
-  /** A cached query cannot prove that all rows for a newly opened range are known. */
+  /**
+   * Deliver nothing until the server has confirmed the results once, then
+   * every snapshot including metadata-only ones, so `map` sees
+   * `metadata.fromCache` change in both directions. A cache holding a few rows of a
+   * range nothing has read before is not that range's contents, so a screen
+   * must not call it complete, or empty. Later snapshots are delivered even
+   * from the cache, so rows stay on screen when the connection drops.
+   */
   waitForServer?: boolean;
 }
 
@@ -108,13 +115,13 @@ export function useLiveQuery<T>(
   useEffect(() => {
     const q = make();
     if (!q) return;
-    let ready = !waitForServer;
+    let confirmed = !waitForServer;
     return onSnapshot(
       q,
       { includeMetadataChanges: waitForServer },
       (snap) => {
-        ready ||= !snap.metadata.fromCache;
-        if (!ready) return;
+        confirmed ||= !snap.metadata.fromCache;
+        if (!confirmed) return;
         setValue(map(snap));
         reportListenerSuccess(label);
       },
@@ -138,16 +145,21 @@ export function useLiveQuery<T>(
 export function useLiveDoc<T>(
   make: () => DocumentReference | null,
   deps: readonly unknown[],
-  { label, map, empty }: LiveOptions<DocumentSnapshot, T>,
+  { label, map, empty, waitForServer = false }: LiveOptions<DocumentSnapshot, T>,
 ): T {
   const [value, setValue] = useState<T>(empty);
-  useResetOnChange(setValue, empty, deps);
+  const subscriptionInputs = [...deps, waitForServer];
+  useResetOnChange(setValue, empty, subscriptionInputs);
   useEffect(() => {
     const ref = make();
     if (!ref) return;
+    let confirmed = !waitForServer;
     return onSnapshot(
       ref,
+      { includeMetadataChanges: waitForServer },
       (snap) => {
+        confirmed ||= !snap.metadata.fromCache;
+        if (!confirmed) return;
         setValue(map(snap));
         reportListenerSuccess(label);
       },
@@ -158,6 +170,6 @@ export function useLiveDoc<T>(
     );
     // As in useLiveQuery: the caller's deps, which the rule checks at the call.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, deps);
+  }, subscriptionInputs);
   return value;
 }

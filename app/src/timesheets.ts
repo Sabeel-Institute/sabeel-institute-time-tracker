@@ -7,14 +7,13 @@ import {
   doc,
   query,
   runTransaction,
-  type DocumentData,
-  type UpdateData,
   where,
 } from 'firebase/firestore';
 import { FirebaseError } from 'firebase/app';
 import { httpsCallable } from 'firebase/functions';
 import {
   COLLECTIONS,
+  patchApplied,
   timesheetEntriesVersion,
   timesheetReviewVersion,
   timesheetRevision,
@@ -37,6 +36,23 @@ export function weekWriteError(e: unknown): unknown {
   return e instanceof FirebaseError && e.code === 'permission-denied' ? new Error(WEEK_CHANGED) : e;
 }
 
+export const WEEK_NOT_REACHED = "That didn't reach the server. Check your connection and try again; the week shows where it stands.";
+
+/**
+ * What to tell someone whose week action failed. A callable that never got an
+ * answer (offline, a timeout, a server that gave up) reports a bare code such
+ * as "internal"; say it in words. A timeout may still have landed, which is
+ * why the message points at the week, which is live.
+ */
+export function weekActionMessage(e: unknown): string {
+  const code = (e as { code?: unknown } | null)?.code;
+  if (code === 'functions/unavailable' || code === 'functions/deadline-exceeded' || code === 'functions/internal'
+      || code === 'unavailable') {
+    return WEEK_NOT_REACHED;
+  }
+  return e instanceof Error ? e.message : String(e);
+}
+
 async function weekWrite(write: Promise<void>): Promise<void> {
   try {
     await write;
@@ -48,10 +64,13 @@ async function weekWrite(write: Promise<void>): Promise<void> {
 /** Bind the action to the revision the person saw. A withdrawn and
  * resubmitted sheet has the same id and status as the original.
  */
-function changeTimesheet(ts: Timesheet, changes?: UpdateData<DocumentData>): Promise<void> {
+function changeTimesheet(ts: Timesheet, changes?: Record<string, unknown>): Promise<void> {
   const ref = doc(db, COLLECTIONS.timesheets, ts.id);
   return weekWrite(runTransaction(db, async (tx) => {
     const current = (await tx.get(ref)).data() as TimesheetDoc | undefined;
+    // A retry after a lost commit response finds this write already applied:
+    // the decision's own timestamp, or the sheet gone for a withdraw or reopen.
+    if (changes ? patchApplied(current, changes) : !current) return;
     if (!current || timesheetRevision(current) !== timesheetRevision(ts)) throw new Error(WEEK_CHANGED);
     if (changes) tx.update(ref, changes);
     else tx.delete(ref);

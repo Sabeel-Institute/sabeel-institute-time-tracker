@@ -26,6 +26,7 @@ import {
   reopenTimesheet,
   useMyTimesheetsRange,
   useTimesheet,
+  weekActionMessage,
 } from '../timesheets';
 import { approverItems, setApprover, useApproverChoices } from '../users';
 import { SearchablePicker } from '../components/SearchablePicker';
@@ -87,7 +88,7 @@ export function TimesheetScreen({
 
   const period = periodRangeFor(anchor);
   // Wait for the entries before showing an empty week or enabling submission.
-  const { loaded, entries, conflicts, needsReview, review } = useTimesheetReview(uid, period.fromKey, period.toKey);
+  const { loaded, synced, entries, conflicts, needsReview, review } = useTimesheetReview(uid, period.fromKey, period.toKey);
   const sheet = useTimesheet(uid, period.fromKey);
   const status = sheet === undefined ? undefined : (sheet?.status ?? 'draft');
 
@@ -123,7 +124,7 @@ export function TimesheetScreen({
   const editable = status === 'draft' || status === 'rejected';
   const submittedReview = recordedReviewFor(sheet?.submissionReview, sheet?.submittedAt);
   const highlights = reviewHighlights(editable ? review : status === 'approved' ? recordedReviewFor(sheet?.approvalReview, sheet?.decidedAt) : submittedReview);
-  const blocked = !loaded || (needsReview && !review) || !approverUid || hasRunningInPeriod || conflicts.size > 0;
+  const blocked = !loaded || !synced || (needsReview && !review) || !approverUid || hasRunningInPeriod || conflicts.size > 0;
   const confirmation = useReviewConfirmation(
     JSON.stringify([uid, period.fromKey, sheet ? timesheetRevision(sheet) : status, blocked, approverUid, timesheetEntriesVersion(entries)]), review, setError,
   );
@@ -137,7 +138,7 @@ export function TimesheetScreen({
     try {
       await fn();
     } catch (e) {
-      setError((e as Error).message);
+      setError(weekActionMessage(e));
     }
   };
 
@@ -149,7 +150,7 @@ export function TimesheetScreen({
     try {
       await submitTimesheet(period.fromKey, approverUid, entries, review, sheet?.status === 'rejected' ? sheet : undefined);
     } catch (e) {
-      setError((e as Error).message);
+      setError(weekActionMessage(e));
     } finally {
       setSaving(false);
     }
@@ -232,9 +233,9 @@ export function TimesheetScreen({
               )
                 return;
               const { copied, skipped } = await copyPeriodEntries(period.fromKey);
-              if (copied === 0) throw new Error(skipped ? 'None of last week’s entries fit this week.' : 'Last week has no entries to copy.');
+              if (copied === 0) throw new Error(skipped ? 'None of last week’s entries could be copied into this week.' : 'Last week has no entries to copy.');
               if (skipped > 0)
-                throw new Error(`Copied ${copied}; skipped ${skipped} that fall outside this (shorter) week.`);
+                throw new Error(`Copied ${copied}; skipped ${skipped} that fall outside this week or could not be copied.`);
             })
           }
         />
@@ -255,12 +256,13 @@ export function TimesheetScreen({
             <Text style={styles.warn}>Choose who approves your hours above, then submit.</Text>
           ) : null}
           {hasRunningInPeriod ? <Text style={styles.hint}>Clock out before you submit this week.</Text> : null}
+          {loaded && !synced ? <Text style={styles.hint}>Checking for the latest hours before you can submit…</Text> : null}
           {conflicts.size > 0 ? (
             <Text style={styles.warn}>Some entries overlap. Fix the flagged times before you submit.</Text>
           ) : null}
           <Button
             label={status === 'rejected' ? 'Resubmit timesheet'
-              : loaded && total === 0 ? 'Submit timesheet (no hours)' : 'Submit timesheet'}
+              : loaded && entries.length === 0 ? 'Submit timesheet (no hours)' : 'Submit timesheet'}
             onPress={startSubmission}
             disabled={blocked || saving}
           />

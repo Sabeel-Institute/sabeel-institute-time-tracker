@@ -74,6 +74,18 @@ describe('approval checks the exact hours the approver saw', () => {
     expect((await sheetRef().get()).data()).toMatchObject({ status: 'approved', entryCount: 1, totalMinutes: 60 });
   });
 
+  it('reports success when a lost commit response makes the approval run again', async () => {
+    const hours = row('hours', time(10), time(11));
+    await store(hours);
+    const now = Date.now();
+    await approveReviewed(request([hours]), 'reviewer', 'manager', now);
+    const approved = (await sheetRef().get()).data();
+    expect(approved).toMatchObject({ status: 'approved', decidedAt: now, decidedBy: 'reviewer' });
+    await expect(approveReviewed(request([hours]), 'reviewer', 'manager', now)).resolves.toBeUndefined();
+    expect((await sheetRef().get()).data()).toEqual(approved);
+    await expect(approveReviewed(request([hours]), 'reviewer', 'manager', now + 1)).rejects.toMatchObject({ code: 'failed-precondition' });
+  });
+
   it('detects a note correction with the same count, timestamps, and minutes', async () => {
     const old = row('edited', time(10), time(11));
     await store({ ...old, note: 'Corrected activity detail' });

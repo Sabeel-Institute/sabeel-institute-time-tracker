@@ -53,4 +53,33 @@ describe('timesheet actions bind to the displayed revision', () => {
     expect(tx.delete).not.toHaveBeenCalled();
   });
 
+  it('treats a retried commit that finds its own decision, withdrawal or reopen as success', async () => {
+    vi.spyOn(Date, 'now').mockReturnValue(9);
+    try {
+      const rejected = {
+        ...submitted, status: 'rejected' as const, decidedAt: 9, decidedBy: 'manager', rejectReason: 'Please check.', updatedAt: 9,
+      };
+      const tx = transactionReading(rejected);
+      await expect(rejectTimesheet(submitted, 'manager', 'Please check.')).resolves.toBeUndefined();
+      expect(tx.update).not.toHaveBeenCalled();
+      for (const act of [() => withdrawTimesheet(submitted), () => reopenTimesheet(submitted)]) {
+        const gone = transactionReading(undefined as unknown as TimesheetDoc);
+        await expect(act()).resolves.toBeUndefined();
+        expect(gone.delete).not.toHaveBeenCalled();
+      }
+    } finally {
+      vi.restoreAllMocks();
+    }
+  });
+
+});
+
+describe('weekActionMessage', () => {
+  it('says in words when a callable never got an answer', async () => {
+    const { weekActionMessage, WEEK_NOT_REACHED } = await import('./timesheets');
+    for (const code of ['functions/internal', 'functions/unavailable', 'functions/deadline-exceeded']) {
+      expect(weekActionMessage(Object.assign(new Error('internal'), { code }))).toBe(WEEK_NOT_REACHED);
+    }
+    expect(weekActionMessage(new Error(WEEK_CHANGED))).toBe(WEEK_CHANGED);
+  });
 });

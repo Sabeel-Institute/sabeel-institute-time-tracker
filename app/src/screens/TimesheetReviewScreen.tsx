@@ -13,7 +13,7 @@ import {
   timesheetRevision,
 } from '@sabeel/shared';
 import { leaveIfShowing, type RootStackParamList } from '../nav';
-import { approveTimesheet, rejectTimesheet, reopenTimesheet, useTimesheet } from '../timesheets';
+import { approveTimesheet, rejectTimesheet, reopenTimesheet, useTimesheet, weekActionMessage } from '../timesheets';
 import { DayEntries, WeekStepper, openingDay, stepPeriod } from '../components/WeekView';
 import { Sheet } from '../components/Sheet';
 import { Button, ErrorText, Field, Notice, Screen, Spinner, StatusChip, sheetStatus } from '../components/ui';
@@ -51,7 +51,7 @@ export function TimesheetReviewScreen({
   const sheet = useTimesheet(uid, period.fromKey);
   const status = sheet === undefined ? undefined : (sheet?.status ?? 'draft');
   // Wait for the entries before showing empty days or enabling approval.
-  const { loaded, entries, conflicts, needsReview, review, hasRunning } = useTimesheetReview(uid, period.fromKey, period.toKey);
+  const { loaded, synced, entries, conflicts, needsReview, review, hasRunning } = useTimesheetReview(uid, period.fromKey, period.toKey);
   const [rejecting, setRejecting] = useState<string | null>(null);
   const [reason, setReason] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -73,10 +73,15 @@ export function TimesheetReviewScreen({
     setError(null);
   };
 
-  const submittedReview = recordedReviewFor(sheet?.submissionReview, sheet?.submittedAt);
+  const recordedSubmission = recordedReviewFor(sheet?.submissionReview, sheet?.submittedAt);
+  // An empty week is submitted without a review; anything flagged since then
+  // is new to the member. (An older app's submission records none either, and
+  // says nothing about what its member saw.)
+  const submittedReview = recordedSubmission
+    ?? (sheet?.status === 'submitted' && sheet.entryCount === 0 && review ? { limits: review.limits, flags: [] } : undefined);
   const shownReview = status === 'approved' ? recordedReviewFor(sheet?.approvalReview, sheet?.decidedAt) : review;
   const highlights = reviewHighlights(shownReview, status === 'submitted' ? submittedReview : undefined);
-  const canApprove = loaded && (!needsReview || review !== undefined) && conflicts.size === 0 && !hasRunning;
+  const canApprove = loaded && synced && (!needsReview || review !== undefined) && conflicts.size === 0 && !hasRunning;
   const target = JSON.stringify([uid, period.fromKey, sheet ? timesheetRevision(sheet) : status]);
   const confirmation = useReviewConfirmation(JSON.stringify([target, canApprove, timesheetEntriesVersion(entries)]), review, setError);
   const editEntry = (entryId: string) => {
@@ -99,7 +104,7 @@ export function TimesheetReviewScreen({
       setRejecting(null);
       leaveIfShowing(nav);
     } catch (e) {
-      setError((e as Error).message);
+      setError(weekActionMessage(e));
     }
   };
 
@@ -151,9 +156,10 @@ export function TimesheetReviewScreen({
           <Text style={styles.hint}>
             Check the days below, then approve the week, or reject it with a reason {displayName} will see.
           </Text>
-          {submittedReview && submittedReview.flags.length > 0 ? (
-            <Text style={styles.hint}>Member confirmed the flagged hours on {new Date(submittedReview.at).toLocaleDateString()}.</Text>
+          {recordedSubmission && recordedSubmission.flags.length > 0 ? (
+            <Text style={styles.hint}>Member confirmed the flagged hours on {new Date(recordedSubmission.at).toLocaleDateString()}.</Text>
           ) : null}
+          {loaded && !synced ? <Text style={styles.hint}>Checking for the latest hours before you can approve…</Text> : null}
           {hasRunning ? <Notice tone="info">This week still has a running timer. Wait for it to close before approving.</Notice> : null}
           {conflicts.size > 0 ? <Notice tone="error">Fix overlapping entries before approving.</Notice> : null}
           <Button
@@ -184,7 +190,7 @@ export function TimesheetReviewScreen({
                 try {
                   await reopenTimesheet(sheet);
                 } catch (e) {
-                  setError((e as Error).message);
+                  setError(weekActionMessage(e));
                 }
               }}
             />
