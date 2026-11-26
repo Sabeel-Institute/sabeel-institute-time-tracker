@@ -23,6 +23,39 @@ headed `### <YYYY-MM-DD> — <summary> — vX.Y.Z`: `npx sabeel-ci release` take
 the release's title and notes from it (`docs/DEPLOY.md`). Deploys that shipped
 no app version carry no version in their heading.
 
+### 2026-11-25 — Waiting weeks follow the approver — v0.34.0
+
+- A week waiting for approval now goes to whoever the person's approver is
+  now. Choosing someone else moves the person's waiting weeks to them. So does
+  an admin or manager choosing for them, and so does the app clearing the
+  choice when an approver loses the role. The new approver gets one "Timesheet
+  passed to you" notification for the move.
+- A submitted week says who has it and since when, and offers the Approver
+  picker. Moving the week no longer needs a withdraw.
+- Today lists the weeks waiting for approval under "Waiting for approval",
+  folded until tapped. A notice, and one notification, appear only when the
+  person has to choose a new approver because nobody can approve their week.
+- In Approvals → All submitted, admins see who has each week. Weeks nobody can
+  approve are grouped under "Need a new approver", folded. Opening one
+  shows a picker to choose the person's approver.
+- Only the one who has a week, or an admin, can approve, reject or correct it.
+  This includes not while the week is on its way to someone else.
+
+Deploy in order:
+1. Functions (the new `handOverTimesheets` trigger).
+2. Rules (rejecting and correcting a week on its way elsewhere is refused;
+   setting someone else's approver rechecks the writer's role).
+3. `node scripts/hand-over-waiting-timesheets.mjs`, then the same with
+   `--apply`, which moves weeks already with an approver other than their
+   person's current one. It sends no notifications. On 2026-11-25 the dry run
+   found 14 waiting weeks, none to move and none stuck.
+4. Then web, Play and TestFlight, and publish the help films (two updated,
+   one new: "When an approver leaves").
+
+v0.33.0 cannot show a week that nobody can approve, or offer a way to choose
+a new approver for one, so the version floor rises to 0.34.0 once Play and
+TestFlight have it (`node scripts/set-min-version.mjs 0.34.0`).
+
 ### 2026-11-24 — Timesheet review — v0.33.0
 
 - Before a week is submitted or approved, the app highlights hours worth a
