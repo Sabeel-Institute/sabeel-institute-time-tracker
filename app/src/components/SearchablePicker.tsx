@@ -29,6 +29,7 @@ export function SearchablePicker({
   placeholder,
   title,
   disabled,
+  loading,
 }: {
   items: PickerItem[];
   selectedId: string | null;
@@ -37,6 +38,8 @@ export function SearchablePicker({
   /** Modal header; defaults to the placeholder. */
   title?: string;
   disabled?: boolean;
+  /** The items are still on their way: say so, rather than the placeholder that asks for a choice. */
+  loading?: string;
 }) {
   const [open, setOpen] = useState(false);
   const [filter, setFilter] = useState('');
@@ -56,12 +59,17 @@ export function SearchablePicker({
 
   return (
     <>
+      {/* A button named by what it shows (the choice, or the placeholder that
+          asks for one): the section title above says what it chooses. */}
       <Pressable
-        onPress={() => !disabled && setOpen(true)}
-        style={[styles.field, disabled && styles.fieldDisabled]}
+        accessibilityRole="button"
+        accessibilityLabel={`${selected ? selected.label : (loading ?? placeholder)}, ${title ?? placeholder}`}
+        aria-disabled={disabled || loading !== undefined || undefined}
+        onPress={() => !disabled && loading === undefined && setOpen(true)}
+        style={[styles.field, (disabled || loading !== undefined) && styles.fieldDisabled]}
       >
         <Text style={selected ? styles.value : styles.placeholder} numberOfLines={1}>
-          {selected ? selected.label : placeholder}
+          {selected ? selected.label : (loading ?? placeholder)}
         </Text>
         <Icon name="expand-more" size={22} color={t.text.secondary} />
       </Pressable>

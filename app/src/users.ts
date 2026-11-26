@@ -1,4 +1,4 @@
-import { collection, doc, or, query, updateDoc, where } from 'firebase/firestore';
+import { collection, doc, query, updateDoc, where } from 'firebase/firestore';
 import { COLLECTIONS, type UserDoc } from '@sabeel/shared';
 import { db } from './firebase';
 import { useLiveDoc, useLiveQuery } from './liveQuery';
@@ -8,7 +8,8 @@ export type UserRow = UserDoc & { uid: string };
 /**
  * Point a user's sticky timesheet approver at an active manager/admin (or clear
  * it). Rules scope who may call this for whom: self always; managers for any
- * non-admin; admins for anyone. Affects future submissions only.
+ * non-admin; admins for anyone. The server then passes the person's waiting
+ * weeks to them (handOverTimesheets).
  */
 export function setApprover(uid: string, approverUid: string | null): Promise<void> {
   return updateDoc(doc(db, COLLECTIONS.users, uid), { approverUid });
@@ -60,30 +61,6 @@ export function approverItems(
 }
 
 /**
- * Live list of possible approvers (active managers/admins). Unlike useUsers,
- * this query is readable by every active user — rules open manager/admin
- * profiles to all so people can pick their own approver.
- */
-export function useApproverChoices(): UserRow[] {
-  return useLiveQuery(
-    () =>
-      query(
-        collection(db, COLLECTIONS.users),
-        or(where('role', '==', 'manager'), where('admin', '==', true)),
-      ),
-    [],
-    {
-      label: 'useApproverChoices',
-      map: (snap) => {
-        const list = snap.docs.map((d) => ({ uid: d.id, ...(d.data() as UserDoc) }));
-        return approverChoices(list).sort((a, b) => a.displayName.localeCompare(b.displayName));
-      },
-      empty: [],
-    },
-  );
-}
-
-/**
  * Live count of accounts awaiting approval — badges the "Manage users" button.
  * Only managers/admins may query non-manager profiles, so pass `enabled` from
  * the caller's role to skip the query (and its permission error) for members.
@@ -107,12 +84,13 @@ export function usePendingCount(enabled: boolean): number {
  * Live list of all users — managers use it for report filters and person detail.
  * undefined = still loading (or the listen failed, which the banner says).
  */
-export function useUsers(): UserRow[] | undefined {
+export function useUsers({ waitForServer = false }: { waitForServer?: boolean } = {}): UserRow[] | undefined {
   return useLiveQuery<UserRow[] | undefined>(
     () => query(collection(db, COLLECTIONS.users)),
     [],
     {
       label: 'useUsers',
+      waitForServer,
       map: (snap) => {
         const list = snap.docs.map((d) => ({ uid: d.id, ...(d.data() as UserDoc) }));
         list.sort((a, b) => a.displayName.localeCompare(b.displayName));

@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { decodeNotifRoute, encodeNotifRoute } from '@sabeel/shared';
+import type { TimesheetDoc } from '@sabeel/shared';
 import {
+  approverNotice,
   inReminderWindow,
   localClock,
   prefOn,
@@ -69,6 +71,34 @@ describe('reminderEligible', () => {
   });
 });
 
+describe('approverNotice', () => {
+  const sheet = (over: Partial<TimesheetDoc>): TimesheetDoc => ({
+    uid: 'alice', periodKey: '2026-07-05', toKey: '2026-07-11', status: 'submitted', approverUid: 'mgr',
+    submittedAt: 1, createdAt: 1, updatedAt: 1, totalMinutes: 0, entryCount: 0, ...over,
+  });
+
+  it('tells the approver about a submission and a resubmission', () => {
+    expect(approverNotice(null, sheet({}))).toBe('submitted');
+    expect(approverNotice(sheet({ status: 'rejected' }), sheet({}))).toBe('resubmitted');
+  });
+
+  it('leaves a week passed on while waiting to the hand-over, which tells once for all', () => {
+    expect(approverNotice(sheet({ approverUid: 'old' }), sheet({}))).toBeNull();
+  });
+
+  it('counts the weeks passed on, and opens the oldest', () => {
+    expect(texts.handedOver('u1', 'Alice', { fromKey: '2026-07-05', toKey: '2026-07-11' }, 3))
+      .toMatchObject({ title: '3 timesheets passed to you', body: 'Alice · from Jul 5 – Jul 11', route: { periodKey: '2026-07-05' } });
+  });
+
+  it('says nothing for a write that leaves the approver as it was, or about their own week', () => {
+    expect(approverNotice(sheet({}), sheet({ updatedAt: 2 }))).toBeNull();
+    expect(approverNotice(sheet({}), sheet({ status: 'approved' }))).toBeNull();
+    expect(approverNotice(null, sheet({ approverUid: 'alice' }))).toBeNull();
+    expect(approverNotice(sheet({ approverUid: 'old' }), sheet({ approverUid: 'alice' }))).toBeNull();
+  });
+});
+
 describe('texts', () => {
   const range = { fromKey: '2026-07-05', toKey: '2026-07-11' };
 
@@ -82,6 +112,8 @@ describe('texts', () => {
     const all = [
       texts.newUser('Alice', 'alice@example.com'),
       texts.submitted('u1', 'Alice', range, false),
+      texts.handedOver('u1', 'Alice', range, 2),
+      texts.needsApprover(range, 1, false),
       texts.approved(range),
       texts.rejected(range, 'why'),
       texts.reminder(range),

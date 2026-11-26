@@ -92,6 +92,13 @@ interface LiveOptions<S, T> {
    * from the cache, so rows stay on screen when the connection drops.
    */
   waitForServer?: boolean;
+  /**
+   * Deliver metadata-only snapshots too, from the first one, so `map` sees
+   * `metadata.fromCache` turn false when the server confirms an unchanged
+   * cache. For a caller that shows the cache at once and decides some things
+   * only once the server has answered.
+   */
+  includeMetadataChanges?: boolean;
 }
 
 /**
@@ -107,10 +114,10 @@ interface LiveOptions<S, T> {
 export function useLiveQuery<T>(
   make: () => Query | null,
   deps: readonly unknown[],
-  { label, map, empty, waitForServer = false }: LiveOptions<QuerySnapshot, T>,
+  { label, map, empty, waitForServer = false, includeMetadataChanges = false }: LiveOptions<QuerySnapshot, T>,
 ): T {
   const [value, setValue] = useState<T>(empty);
-  const subscriptionInputs = [...deps, waitForServer];
+  const subscriptionInputs = [...deps, waitForServer, includeMetadataChanges];
   useResetOnChange(setValue, empty, subscriptionInputs);
   useEffect(() => {
     const q = make();
@@ -118,7 +125,7 @@ export function useLiveQuery<T>(
     let confirmed = !waitForServer;
     return onSnapshot(
       q,
-      { includeMetadataChanges: waitForServer },
+      { includeMetadataChanges: waitForServer || includeMetadataChanges },
       (snap) => {
         confirmed ||= !snap.metadata.fromCache;
         if (!confirmed) return;

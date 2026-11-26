@@ -139,6 +139,14 @@ describe('submission checks the exact hours the member reviewed', () => {
     expect((await sheetRef().get()).data()).toMatchObject({ status: 'submitted', approverUid: uid });
   });
 
+  it('an admin who chose an approver submits to them, not to themself', async () => {
+    const owner = getFirestore().doc('users/' + uid);
+    await owner.update({ admin: true });
+    await expect(submitReviewed({ ...request([]), approverUid: uid }, uid, true)).rejects.toThrow('Choose an active approver');
+    await submitReviewed(request([]), uid, true);
+    expect((await sheetRef().get()).data()).toMatchObject({ status: 'submitted', approverUid });
+  });
+
   it('leaves future periods and inactive members without a submission', async () => {
     const db = getFirestore();
     const future = periodRangeFor(addDays(dayKeyFor(Date.now(), 'UTC'), 14)).fromKey;

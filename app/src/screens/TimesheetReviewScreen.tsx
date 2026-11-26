@@ -4,6 +4,7 @@ import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import {
   addDays,
+  approverFor,
   dayKeyFor,
   deviceTimeZone,
   formatDuration,
@@ -11,11 +12,16 @@ import {
   recordedReviewFor,
   timesheetEntriesVersion,
   timesheetRevision,
+  waitingState,
 } from '@sabeel/shared';
 import { leaveIfShowing, type RootStackParamList } from '../nav';
 import { approveTimesheet, rejectTimesheet, reopenTimesheet, useTimesheet, weekActionMessage } from '../timesheets';
 import { DayEntries, WeekStepper, openingDay, stepPeriod } from '../components/WeekView';
 import { Sheet } from '../components/Sheet';
+import { SearchablePicker } from '../components/SearchablePicker';
+import { approverItems, setApprover, useUser } from '../users';
+import { useEligibleApprovers } from '../waiting';
+import { useApprovers } from '../approvers';
 import { Button, ErrorText, Field, Notice, Screen, Spinner, StatusChip, sheetStatus } from '../components/ui';
 import { getTheme, spacing } from '../theme';
 import { useReviewConfirmation, useTimesheetReview } from '../timesheetReview';
@@ -124,6 +130,46 @@ export function TimesheetReviewScreen({
     else void approve();
   };
 
+  // Who has the week. Only they or an admin may decide it; a week whose holder
+  // may no longer approve waits for its person to be given a new approver,
+  // which an admin (or a manager, for a non-admin) can do from here.
+  const owner = useUser(uid);
+  const approvers = useApprovers();
+  const eligible = useEligibleApprovers();
+  const holder = useUser(sheet?.status === 'submitted' ? sheet.approverUid : uid);
+  const standing = sheet?.status === 'submitted' && owner && eligible
+    ? waitingState(sheet, approverFor(uid, owner), new Set(eligible.keys())) : undefined;
+  // undefined until the holder's profile is in: no sentence names them before.
+  const holderName = sheet?.status === 'submitted' && holder?.uid === sheet.approverUid ? holder.displayName : undefined;
+  // Nothing about a submitted week's decision is drawn until where it stands
+  // is known, so no button appears and then moves, or appears and goes.
+  const known = sheet?.status === 'submitted' && standing !== undefined
+    && (standing.kind === 'moving' || holderName !== undefined);
+  // The holder decides while it is theirs to: not once its person has chosen
+  // someone else, nor once they may no longer approve (the server and rules
+  // refuse both). An admin decides any week.
+  const canDecide = known && (admin || (sheet?.approverUid === reviewerUid && standing?.kind === 'waiting'));
+  // Who may set this person's approver (firestore.rules): an admin, or a
+  // manager who still may approve, for a non-admin.
+  const canReassign = admin || (eligible?.has(reviewerUid) === true && owner?.admin !== true);
+  // A submitted week's hours are its decider's to correct (canTouchPeriod).
+  // Never one's own submitted week: they withdraw it first.
+  const canEdit = status !== 'approved' && (status !== 'submitted' || (canDecide && uid !== reviewerUid));
+  const [reassigning, setReassigning] = useState(false);
+  const reassign = async (approverUid: string) => {
+    setError(null);
+    setReassigning(true);
+    try {
+      await setApprover(uid, approverUid);
+    } catch (e) {
+      setError((e as { code?: string }).code === 'permission-denied'
+        ? `You can no longer choose who approves ${displayName}'s timesheets.`
+        : weekActionMessage(e));
+    } finally {
+      setReassigning(false);
+    }
+  };
+
   const shown = status ? sheetStatus(status) : null;
   return (
     <Screen
@@ -151,7 +197,35 @@ export function TimesheetReviewScreen({
       {/* The decision first, under the week it is about: the days below are
           what it rests on, and a reviewer should not have to scroll a whole
           week to find the buttons. */}
-      {sheet && sheet.status === 'submitted' ? (
+      {sheet?.status === 'submitted' && !known ? <Text style={styles.hint}>Checking who has this week…</Text> : null}
+      {known && standing?.kind === 'stuck' ? (
+        <View style={styles.decision}>
+          <Notice tone="info">
+            {holderName} can no longer approve timesheets, so this week is waiting for a new approver.
+            {canReassign ? ` Choose who approves ${displayName}'s timesheets below.` : ' An admin can choose one for them.'}
+            {admin ? ' You can also approve or reject it yourself.' : ''}
+          </Notice>
+          {canReassign ? (
+            <SearchablePicker
+              items={approverItems(approvers.list ?? [], uid, '(self)')}
+              selectedId={owner?.approverUid ?? null}
+              onSelect={(id) => void reassign(id)}
+              placeholder="Choose an approver"
+              title="Timesheet approver"
+              disabled={reassigning}
+            />
+          ) : null}
+        </View>
+      ) : null}
+      {known && standing?.kind === 'moving' ? (
+        <Text style={styles.hint}>
+          Passing to {standing.approverUid === reviewerUid ? 'you' : (eligible?.get(standing.approverUid)?.displayName ?? 'their new approver')}…
+        </Text>
+      ) : null}
+      {known && !canDecide && standing?.kind === 'waiting' ? (
+        <Text style={styles.hint}>This week is with {holderName}. Only they or an admin can approve or reject it.</Text>
+      ) : null}
+      {sheet && canDecide ? (
         <View style={styles.decision}>
           <Text style={styles.hint}>
             Check the days below, then approve the week, or reject it with a reason {displayName} will see.
@@ -210,11 +284,11 @@ export function TimesheetReviewScreen({
           conflicts={conflicts}
           review={highlights.entries}
           // An approver corrects entries in any week not yet approved.
-          onOpen={status === 'approved' ? undefined : editEntry}
+          onOpen={canEdit ? editEntry : undefined}
         />
       ))}
 
-      {status === 'approved' ? null : (
+      {!canEdit ? null : (
         <Button
           label={`Add hours for ${displayName}`}
           kind="quiet"

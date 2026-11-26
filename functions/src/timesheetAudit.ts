@@ -24,7 +24,8 @@ export type TimesheetEventKind =
   | 'approved'
   | 'rejected'
   | 'withdrawn'
-  | 'reopened';
+  | 'reopened'
+  | 'handedOver';
 
 export interface TimesheetEvent {
   /** `${uid}_${periodKey}` — the timesheet this happened to. */
@@ -32,12 +33,14 @@ export interface TimesheetEvent {
   uid: string;
   periodKey: string;
   kind: TimesheetEventKind;
-  /** Who caused it, when the doc records that; null for a delete (see below). */
+  /** Who caused it, when the doc records that; null for a delete or a hand-over (see below). */
   actorUid: string | null;
   at: number;
   totalMinutes: number;
   entryCount: number;
   approverUid: string | null;
+  /** handedOver: who had it before. */
+  fromApproverUid?: string;
   rejectReason?: string;
   review?: TimesheetDoc['submissionReview'];
 }
@@ -65,6 +68,11 @@ export function classify(
   if (after.status === 'submitted') {
     if (!before) return { kind: 'submitted', actorUid: after.uid };
     if (before.status === 'rejected') return { kind: 'resubmitted', actorUid: after.uid };
+    // Passed to a new approver: the server moves it when the person's approver
+    // changes. Who changed that is not recorded; from whom to whom is.
+    if (before.status === 'submitted' && before.approverUid !== after.approverUid) {
+      return { kind: 'handedOver', actorUid: null };
+    }
     return null;
   }
   if (before?.status === after.status) return null;
@@ -107,6 +115,7 @@ export const onTimesheetWritten = onDocumentWritten(
         entryCount: state.entryCount,
         approverUid: state.approverUid ?? null,
         ...(review ? { review } : {}),
+        ...(verdict.kind === 'handedOver' && before ? { fromApproverUid: before.approverUid } : {}),
         ...(state.rejectReason ? { rejectReason: state.rejectReason } : {}),
       };
       await getFirestore().collection(COLLECTIONS.timesheetEvents).add(record);

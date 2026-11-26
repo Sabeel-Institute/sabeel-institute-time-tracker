@@ -6,6 +6,7 @@ import {
   periodRangeFor,
   type NotifPrefs,
   type NotifRoute,
+  type TimesheetDoc,
   type TimesheetStatus,
 } from '@sabeel/shared';
 
@@ -79,6 +80,20 @@ export interface Notif {
 
 type Range = { fromKey: string; toKey: string };
 
+/**
+ * What a timesheet write tells its approver: a submission or a resubmission.
+ * A week passed on while waiting is told by handOverTimesheets, once per
+ * hand-over rather than once per week. Nothing for their own week: a manager
+ * or admin approving their own hours needs no push about it.
+ */
+export function approverNotice(
+  before: TimesheetDoc | null,
+  after: TimesheetDoc,
+): 'submitted' | 'resubmitted' | null {
+  if (after.status !== 'submitted' || after.approverUid === after.uid || before?.status === 'submitted') return null;
+  return before?.status === 'rejected' ? 'resubmitted' : 'submitted';
+}
+
 export const texts = {
   newUser: (name: string, email: string): Notif => ({
     title: 'New account request',
@@ -89,6 +104,19 @@ export const texts = {
     title: resubmit ? 'Timesheet resubmitted' : 'Timesheet submitted',
     body: `${name} · ${periodLabel(range)}`,
     route: { screen: 'TimesheetReview', uid, displayName: name, periodKey: range.fromKey },
+  }),
+  /** `range` is the oldest of the `count` weeks; the tap opens it. */
+  handedOver: (uid: string, name: string, range: Range, count: number): Notif => ({
+    title: count === 1 ? 'Timesheet passed to you' : `${count} timesheets passed to you`,
+    body: count === 1 ? `${name} · ${periodLabel(range)}` : `${name} · from ${periodLabel(range)}`,
+    route: { screen: 'TimesheetReview', uid, displayName: name, periodKey: range.fromKey },
+  }),
+  /** `own`: the weeks were with the person themself, who may no longer approve. */
+  needsApprover: (range: Range, count: number, own: boolean): Notif => ({
+    title: 'Choose a new approver',
+    body: `${own ? 'You can no longer approve timesheets yourself.' : 'Your approver can no longer approve timesheets.'} `
+      + `Choose ${own ? 'an approver' : 'a new one'}, and your ${count === 1 ? 'waiting week goes' : `${count} waiting weeks go`} to them.`,
+    route: { screen: 'Timesheet', periodKey: range.fromKey },
   }),
   approved: (range: Range): Notif => ({
     title: 'Timesheet approved',

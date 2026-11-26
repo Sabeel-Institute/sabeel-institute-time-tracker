@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { StyleSheet, Text } from 'react-native';
-import { type TokenClaims, type UserRole } from '@sabeel/shared';
+import { approverFor, type TokenClaims, type UserRole } from '@sabeel/shared';
 import { confirmAction } from '../confirm';
 import { approverChoices, approverItems, setApprover, useUsers } from '../users';
 import { setUserAccess } from '../access';
@@ -68,11 +68,11 @@ export function UserEditScreen({ uid, selfUid, claims }: { uid: string; selfUid:
       {u.status === 'active' ? (
         <>
           <SectionTitle>Approver</SectionTitle>
-          <Text style={styles.hint}>Their timesheets go to this person when they submit them.</Text>
+          <Text style={styles.hint}>Their timesheets go to this person, including any already waiting for approval.</Text>
           {isAdmin || !u.admin ? (
             <SearchablePicker
               items={approverItems(approvers, u.uid, '(self)')}
-              selectedId={u.approverUid}
+              selectedId={approverFor(u.uid, u)}
               onSelect={(id) => {
                 setError(null);
                 setApprover(u.uid, id).catch((e) => setError((e as Error).message));
@@ -82,7 +82,7 @@ export function UserEditScreen({ uid, selfUid, claims }: { uid: string; selfUid:
             />
           ) : (
             <Text style={styles.value}>
-              {approvers.find((a) => a.uid === u.approverUid)?.displayName ?? 'None yet'}
+              {approvers.find((a) => a.uid === approverFor(u.uid, u))?.displayName ?? 'None yet'}
             </Text>
           )}
         </>

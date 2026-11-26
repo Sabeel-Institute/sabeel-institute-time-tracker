@@ -9,7 +9,7 @@ Faisal is building a time-tracking platform (Android app + website) for Sabeel I
 | Topic | Decision |
 |---|---|
 | Auth | Sign in with Google, restricted to the **@oursabeel.com** Workspace domain (mirrors the sibling kanban app), plus **one** email-and-password member account for App Review (`PASSWORD_ACCOUNT_EMAIL`, made by an admin; the server refuses every password sign-up and any other address's password sign-in, and never gives a password session a manager or admin role; `docs/STORE-RELEASE.md`, "Review access"). Provisioning is **server-authoritative**: the gen-1 `onUserCreate` function is the sole provisioner — it deletes any non-org account outright, or (for a verified org address) sets pending claims and creates a forced-pending user doc. The client never writes its own profile (`firestore.rules`: users `allow create: if false`); it only watches the doc. The domain gate lives once, in the trigger (shared `isAllowedEmail`); the client passes Google an `hd` hint (UX only). **Every** org account lands `pending` until an **admin** approves — no domain auto-approval (the approver sees the requester's name and email). **Accounts are created on the web only**: the phone apps ask the `accountExists` callable before `signInWithCredential` and refuse an identity with no account ("This account isn't set up for the app yet. Contact your administrator."), so neither store's in-app account-deletion requirement applies (`docs/STORE-RELEASE.md`). |
-| Trust model | **Weekly timesheets with submit/approve** (supersedes the v1 honor system, decided 2026-07-16). Users log hours freely into the current period (Sun–Sat calendar week, clipped to month boundaries); they review and **submit** each period's timesheet; their sticky, self-chosen **approver** (an active manager/admin; assignment changeable by managers/admins too) approves or rejects with a reason. Approved periods are locked (admin reopen only). **Official reporting counts approved timesheets only** (managers get an explicit unofficial include-unapproved view). Managers/approvers can correct and add entries on a user's behalf. **Managers and admins may be their own approver and self-approve** (decided 2026-07-25 — flexibility over enforced second-party review at this org size; also the only way out of having no eligible approver). Approver eligibility is revalidated when a decision is made, and losing the role clears the pointers at you. |
+| Trust model | **Weekly timesheets with submit/approve** (supersedes the v1 honor system, decided 2026-07-16). Users log hours freely into the current period (Sun–Sat calendar week, clipped to month boundaries); they review and **submit** each period's timesheet; their sticky, self-chosen **approver** (an active manager/admin; assignment changeable by managers/admins too) approves or rejects with a reason. Approved periods are locked (admin reopen only). **Official reporting counts approved timesheets only** (managers get an explicit unofficial include-unapproved view). Managers/approvers can correct and add entries on a user's behalf. **Managers and admins may be their own approver and self-approve** (decided 2026-07-25 — flexibility over enforced second-party review at this org size; also the only way out of having no eligible approver). Approver eligibility is revalidated when a decision is made, and losing the role clears the pointers at you. **A waiting week follows its person's current approver** (decided 2026-11-25): changing the approver, by anyone and by any route, moves the person's submitted weeks to the new one (`handOverTimesheets`), and a week whose holder may no longer approve, with no one else chosen, waits under "Need a new approver" until someone is chosen or the holder may approve again. Only the holder, while it is not on its way to someone else, or an admin decides a week. Moving a waiting week is therefore open to whoever may set the person's approver (the person; any manager for a non-admin; any admin). The history records each move with who had the week and who has it, but not who changed the choice. |
 | Scope | Generic time tracking; roles are member / manager (+ admin flag). **Admins** approve/disable users, change roles and delete archived activities; **managers** create/archive activities, run reports, and correct entries. |
 | Platforms v1 | Android app + responsive website from **one Expo codebase** (react-native-web, PineTimeCompanion-style). No iOS, no EAS. |
 | Clock-in | Own device, anywhere; one active session per user; plus manual entry (start/end or duration) with activity + optional note. |
@@ -93,7 +93,10 @@ timeEntries/{id}                      # top-level: managers query across users
 timesheets/{uid}_{periodKey}          # one doc per (user, period) once submitted; no doc = draft
   uid, periodKey, toKey               # Sun–Sat week clipped to the month (first/last may be partial)
   status: 'submitted' | 'approved' | 'rejected'
-  approverUid                         # stamped from users/{uid}.approverUid at (re)submission
+  approverUid                         # who has it: approverFor(uid, profile) at (re)submission,
+                                      #   moved with the profile's approver while submitted
+  heldSince?                          # when they got it (absent before v0.34.0: submittedAt)
+  stuckSince?                         # server-only: since when nobody can approve it
   submittedAt, decidedAt?, decidedBy?, rejectReason?
   totalMinutes, entryCount            # informational snapshot; live truth = the period's entries
   createdAt, updatedAt
@@ -106,14 +109,18 @@ reports/{id}                          # Report a problem; written by reportProbl
 timesheetEvents/{id}                  # append-only history; server-written, no client access
   sheetId, uid, periodKey             # submit/approve/reject/withdraw/reopen all mutate or
   kind, actorUid, at                  #   DELETE the single timesheet doc, so without this the
+                                      #   (kind also handedOver: fromApproverUid → approverUid, no actor)
   totalMinutes, entryCount            #   record of who approved a period — and that it was
   approverUid, rejectReason?          #   later reopened — would not exist anywhere
 ```
 
 **Timesheet lifecycle**: submit = owner creates the doc (zero-hour OK; current week may
-be submitted mid-period; never future periods); decide = stamped approver or any admin
+be submitted mid-period; never future periods); decide = the approver who has it or any admin
 (reject requires a reason); resubmit after rejection re-stamps the owner's current
-approver; withdraw = owner deletes pre-approval; admin delete reopens anything.
+approver; while submitted, the week moves with the owner's approver (the
+`handOverTimesheets` trigger on `users/{uid}`, which reads the profile at commit and
+moves only to someone who may approve); withdraw = owner deletes pre-approval; admin
+delete reopens anything.
 Entry writes per period state: draft/rejected → owner + any manager/admin (on-behalf
 creates are closed-only and flagged `lastEditedBy`); submitted → stamped approver +
 admins only; approved → nobody. Exception: the owner may always close their own
@@ -149,7 +156,8 @@ Rules tests with `@firebase/rules-unit-testing` (tajweed's exact harness).
 2. `exportCsv` (callable, manager) — filters `{uid?, activityId?, from, to}` (dayKey range), returns CSV string (well under the 10 MB callable limit).
 3. `autoCloseStaleSessions` (scheduled hourly, Phase 6) — replaces a session running >12h with its finished entry at start+12h, `autoClosed: true`, in one transaction.
 4. `acceptRules` (callable, active accounts) — records the institute's rules as accepted on the caller's profile (`docs/STORE-RELEASE.md`, 4).
-5. `reportProblem` (callable, active accounts) — Report a problem: keeps `reports/{id}` (five an hour per account) and emails it from `apps-noreply@` to `apps-reports@`, Reply-To the reporter, by keyless domain-wide delegation (`functions/src/gmail.ts`).
+5. `handOverTimesheets` (trigger on `users/{uid}` updates, retried) — when the approver choice, or the status, role or admin flag, changes, moves the person's submitted weeks to their current approver in one transaction (if that person may approve) and stamps `heldSince`. When a person's own ability to approve changes, it does the same for everyone who chose them. When a person's own ability to approve changes, it also does this for everyone whose weeks they have. One push per move to the new approver ("Timesheet passed to you", or "N timesheets…"). A week that becomes one nobody can approve is marked `stuckSince`, and its person gets one "Choose a new approver" push; the mark clears when it can be approved again. Pushes are rebuilt from the event's time stamped on the weeks, so a retry sends what an earlier attempt committed.
+6. `reportProblem` (callable, active accounts) — Report a problem: keeps `reports/{id}` (five an hour per account) and emails it from `apps-noreply@` to `apps-reports@`, Reply-To the reporter, by keyless domain-wide delegation (`functions/src/gmail.ts`).
 
 Not functions: profile creation (client create under rules), totals (aggregation queries), statements (print view).
 

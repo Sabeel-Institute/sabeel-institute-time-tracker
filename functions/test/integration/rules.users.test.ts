@@ -177,6 +177,15 @@ describe('firestore.rules — approver assignment', () => {
     await assertSucceeds(updateDoc(doc(adm().firestore(), 'users/mgr'), { approverUid: 'adm' }));
   });
 
+  it('a manager or admin whose role is gone cannot set anyone’s approver through a stale token', async () => {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await updateDoc(doc(ctx.firestore(), 'users/mgr'), { role: 'member' });
+      await updateDoc(doc(ctx.firestore(), 'users/adm'), { admin: false });
+    });
+    await assertFails(updateDoc(doc(mgr().firestore(), 'users/alice'), { approverUid: null }));
+    await assertFails(updateDoc(doc(adm().firestore(), 'users/alice'), { approverUid: null }));
+  });
+
   it('members cannot set other people’s approver', async () => {
     await assertFails(updateDoc(doc(alice().firestore(), 'users/bob'), { approverUid: 'mgr' }));
   });

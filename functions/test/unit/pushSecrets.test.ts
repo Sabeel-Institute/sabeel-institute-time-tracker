@@ -35,7 +35,7 @@ describe('push senders', () => {
   it('are found, so the scan cannot pass by finding nothing', () => {
     // The ones that send today. A new sender joins this list by being found;
     // either way the line is updated knowingly, and the next test covers it.
-    expect(senders()).toEqual(['notifyNewUser', 'notifyTimesheet', 'weeklyReminder']);
+    expect(senders()).toEqual(['handOverTimesheets', 'notifyNewUser', 'notifyTimesheet', 'weeklyReminder']);
   });
 
   it('are each bound to APNS_KEY', async () => {

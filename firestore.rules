@@ -62,7 +62,8 @@ service cloud.firestore {
       return exists(tsPath(uid, periodKey)) ? get(tsPath(uid, periodKey)).data.status : 'draft';
     }
     // draft/rejected: owner or any manager/admin (managers may correct AND add on
-    // behalf). submitted: only the stamped approver or an admin — never the owner
+    // behalf). submitted: only the approver who has it (and not once it is on
+    // its way to another, notPassedOn) or an admin — never the owner
     // (they withdraw first). approved: nobody (an admin reopens first).
     function canTouchPeriod(entryUid, periodKey) {
       let st = periodStatus(entryUid, periodKey);
@@ -72,7 +73,8 @@ service cloud.firestore {
             && request.auth.uid != entryUid
             && ((isAdmin() && hasCurrentReviewRole(true)) || (isManager()
                 && get(tsPath(entryUid, periodKey)).data.approverUid == request.auth.uid
-                && hasCurrentReviewRole(false))));
+                && hasCurrentReviewRole(false)
+                && notPassedOn(get(tsPath(entryUid, periodKey)).data))));
     }
 
     // An old sheet keeps its stamped approver even after demotion. Check the
@@ -89,6 +91,17 @@ service cloud.firestore {
         || (get(/databases/$(database)/documents/users/$(av)).data.status == 'active'
             && (get(/databases/$(database)/documents/users/$(av)).data.role == 'manager'
                 || get(/databases/$(database)/documents/users/$(av)).data.admin == true));
+    }
+
+    // A waiting week whose person's approver now is someone else who may
+    // approve is on its way to them (handOverTimesheets), so its holder no
+    // longer decides or edits it. The same target as currentApprover in
+    // functions/src/handOver.ts: the choice, or an admin who chose nobody.
+    function notPassedOn(sheet) {
+      let owner = get(/databases/$(database)/documents/users/$(sheet.uid)).data;
+      let choice = owner.get('approverUid', null);
+      let target = choice != null ? choice : (owner.get('admin', false) == true ? sheet.uid : null);
+      return target == null || target == request.auth.uid || !approverOk(target);
     }
 
     match /users/{uid} {
@@ -134,8 +147,11 @@ service cloud.firestore {
             || request.resource.data.timeZone is string);
       // Cross-user: managers assign any non-admin's approver; admins anyone's.
       // Nothing else — status/role/admin changes only via setUserAccess.
+      // The role is read from the profile too, since a token outlives it, and
+      // the choice moves the person's waiting weeks at once.
       allow update: if isActive() && request.auth.uid != uid
-        && (isAdmin() || (isManager() && resource.data.admin != true))
+        && ((isAdmin() && hasCurrentReviewRole(true))
+            || (isManager() && hasCurrentReviewRole(false) && resource.data.admin != true))
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['approverUid'])
         && approverOk(request.resource.data.approverUid);
       allow delete: if false;
@@ -403,7 +419,8 @@ service cloud.firestore {
       allow update: if isActive()
         && resource.data.status == 'submitted'
         && ((isAdmin() && hasCurrentReviewRole(true)) || (isManager()
-            && resource.data.approverUid == request.auth.uid && hasCurrentReviewRole(false)))
+            && resource.data.approverUid == request.auth.uid && hasCurrentReviewRole(false)
+            && notPassedOn(resource.data)))
         && request.resource.data.status == 'rejected'
         && request.resource.data.decidedBy == request.auth.uid
         && request.resource.data.decidedAt is int

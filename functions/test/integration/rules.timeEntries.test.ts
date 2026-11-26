@@ -467,6 +467,21 @@ describe('timeEntries — submitted period lock', () => {
     await assertSucceeds(deleteDoc(doc(mgrDb, 'timeEntries/e1')));
   });
 
+  it('once alice has chosen someone else, the approver who has the week no longer corrects it', async () => {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      const db = ctx.firestore();
+      await setDoc(doc(db, 'users/mgr2'), { ...aliceUserDoc(), displayName: 'Mgr2', role: 'manager' });
+      await updateDoc(doc(db, 'users/alice'), { approverUid: 'mgr2' });
+    });
+    const mgrDb = manager().firestore();
+    await assertFails(updateDoc(doc(mgrDb, 'timeEntries/e1'), { note: 'Correction', lastEditedBy: 'mgr', updatedAt: T0 }));
+    await assertFails(setDoc(doc(mgrDb, 'timeEntries/n4'), { ...closedEntry, lastEditedBy: 'mgr' }));
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await updateDoc(doc(ctx.firestore(), 'users/alice'), { approverUid: null });
+    });
+    await assertSucceeds(updateDoc(doc(mgrDb, 'timeEntries/e1'), { note: 'Correction', lastEditedBy: 'mgr', updatedAt: T0 }));
+  });
+
   it('a demoted stamped approver loses entry edits even with a stale manager token', async () => {
     await testEnv.withSecurityRulesDisabled(async (ctx) => {
       await updateDoc(doc(ctx.firestore(), 'users/mgr'), { role: 'member' });

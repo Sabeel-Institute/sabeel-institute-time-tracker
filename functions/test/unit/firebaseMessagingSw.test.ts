@@ -48,6 +48,8 @@ const sent: Array<[string, Notif]> = [
   ['newUser', texts.newUser('Alice Smith', 'alice@oursabeel.com')],
   ['submitted', texts.submitted('u1', 'Alice Smith', range, false)],
   ['resubmitted', texts.submitted('u1', 'Alice Smith', range, true)],
+  ['handedOver', texts.handedOver('u1', 'Alice Smith', range, 1)],
+  ['needsApprover', texts.needsApprover(range, 2, true)],
   ['approved', texts.approved(range)],
   ['rejected', texts.rejected(range, 'Missing Tuesday')],
   ['reminder', texts.reminder(range)],
@@ -70,7 +72,7 @@ beforeEach(() => vi.clearAllMocks());
 it('covers every notification the server builds', () => {
   // A new kind in notifyCore.ts must be added to `sent`, so its route is held
   // to the trip below like the rest.
-  expect(Object.keys(texts).sort()).toEqual(['approved', 'newUser', 'rejected', 'reminder', 'submitted']);
+  expect(Object.keys(texts).sort()).toEqual(['approved', 'handedOver', 'needsApprover', 'newUser', 'rejected', 'reminder', 'submitted']);
 });
 
 describe('push', () => {

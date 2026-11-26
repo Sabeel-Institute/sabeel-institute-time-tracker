@@ -4,6 +4,7 @@ import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import {
   addDays,
+  approverFor,
   dayKeyFor,
   deviceTimeZone,
   formatDuration,
@@ -28,7 +29,9 @@ import {
   useTimesheet,
   weekActionMessage,
 } from '../timesheets';
-import { approverItems, setApprover, useApproverChoices } from '../users';
+import { approverItems, setApprover } from '../users';
+import { stuckMessage, useEligibleApprovers, weekStanding } from '../waiting';
+import { useApprovers } from '../approvers';
 import { SearchablePicker } from '../components/SearchablePicker';
 import { DayEntries, MonthWeeks, openingDay, type WeekState } from '../components/WeekView';
 import {
@@ -114,11 +117,25 @@ export function TimesheetScreen({
   }, [entries]);
 
   // Submission needs an approver and a period with no open timers or overlaps.
-  const approvers = useApproverChoices();
+  const approvers = useApprovers();
+  const eligible = useEligibleApprovers();
   // Rejections come from managers/admins, whose profiles every active user may
   // read, so the name resolves from the approver list.
-  const decidedBy = approvers.find((a) => a.uid === sheet?.decidedBy)?.displayName;
-  const approverUid = profile.approverUid ?? (claims.admin ? uid : null);
+  const decidedBy = sheet?.decidedBy ? approvers.byUid?.get(sheet.decidedBy)?.displayName : undefined;
+  const approverUid = approverFor(uid, { approverUid: profile.approverUid, admin: claims.admin === true });
+  // A waiting week follows the approver chosen here (handOverTimesheets),
+  // judged from the profile as the server does; the token gates submitting.
+  const standing = sheet?.status === 'submitted' && eligible ? weekStanding(sheet, profile, eligible) : undefined;
+  const approverPicker = (
+    <SearchablePicker
+      items={approverItems(approvers.list ?? [], uid, '(myself)')}
+      selectedId={approverUid}
+      loading={approvers.list ? undefined : 'Loading approvers…'}
+      onSelect={(id) => void act(() => setApprover(uid, id))}
+      placeholder="Choose who approves your hours"
+      title="Timesheet approver"
+    />
+  );
   const hasRunningInPeriod = entries.some((e) => e.end === null);
   const started = periodHasStarted(period.fromKey, todayKey);
   const editable = status === 'draft' || status === 'rejected';
@@ -245,13 +262,7 @@ export function TimesheetScreen({
         <>
           <SectionTitle>Approver</SectionTitle>
           <Text style={styles.hint}>Your timesheet goes to them when you submit it.</Text>
-          <SearchablePicker
-            items={approverItems(approvers, uid, '(myself)')}
-            selectedId={profile.approverUid}
-            onSelect={(id) => void act(() => setApprover(uid, id))}
-            placeholder="Choose who approves your hours"
-            title="Timesheet approver"
-          />
+          {approverPicker}
           {!approverUid ? (
             <Text style={styles.warn}>Choose who approves your hours above, then submit.</Text>
           ) : null}
@@ -271,9 +282,15 @@ export function TimesheetScreen({
 
       {sheet && sheet.status === 'submitted' ? (
         <>
-          <Text style={styles.hint}>
-            Submitted. It is with your approver now; withdraw it if you need to change something.
-          </Text>
+          {standing?.kind === 'stuck' ? (
+            <Notice tone="info">{stuckMessage(standing.ownStuck, 1, 'onWeek')}</Notice>
+          ) : standing ? (
+            <Text style={styles.hint}>{standing.kind === 'moving' ? `${standing.line}…` : `${standing.line}.`}</Text>
+          ) : null}
+          <SectionTitle>Approver</SectionTitle>
+          <Text style={styles.hint}>Weeks waiting for approval go to whoever you choose.</Text>
+          {approverPicker}
+          <Text style={styles.hint}>Withdraw it if you need to change something.</Text>
           <Button label="Withdraw submission" kind="quiet" onPress={() => act(() => withdrawTimesheet(sheet))} />
         </>
       ) : null}

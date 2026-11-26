@@ -102,6 +102,12 @@ where you started.
 If a timesheet of yours was rejected, a **red notice** sits at the top of
 Today — tap it to fix things (see 1.7).
 
+Weeks you have submitted that are waiting for approval are listed at the
+bottom of Today, under **Waiting for approval**, folded away until you tap it.
+Each one says who has it and since when (see 1.6).
+
+![Waiting for approval, unfolded](manual/img/today-waiting.png)
+
 Managers and admins also get **Approvals** and **Reports** tabs, and **People**
 and **Activities** in More — covered in Parts 2 and 3.
 
@@ -195,10 +201,13 @@ entries are fine. One can end at 2:00 PM and the next can start at 2:00 PM.
 ## 1.5 Choosing your approver
 
 Before your first submission, tell the app who approves your hours: on
-**Timesheet**, under **Approver** (shown on a week you can still submit), tap
-the box and pick from the list of managers. It sticks — it applies to every
-future submission until you change it — and changing it never affects a week
-you've already submitted.
+**Timesheet**, under **Approver**, tap the box and pick from the list of
+managers. It sticks: it applies to every submission until you change it.
+
+Changing it also moves every week still **waiting for approval** to the person
+you choose, and they get a notification (unless you chose yourself). Weeks
+already approved or rejected stay as they are; a rejected week goes to your new
+approver when you resubmit it.
 
 If you are a manager or an admin yourself, your own name is at the bottom of the
 list as **"(myself)"** — managers and admins may approve their own hours. You
@@ -219,6 +228,18 @@ above, then submit."* and Submit stays unavailable.
    hours change while you submit, check the updated week and try again.
 3. The status turns **Submitted** and the week locks while your approver has it.
    **Withdraw submission** unlocks it until approval.
+
+A submitted week says who has it and since when they have had it: *"With
+Aisha since Nov 18."* To send it to someone else, pick them under
+**Approver** on the same week; it moves to them in a moment, without
+withdrawing it.
+
+If your approver can no longer approve timesheets (they left, or their role
+changed), the week says *"Your approver can no longer approve timesheets.
+Choose a new approver below, and this week goes to them."* A notice on Today
+says the same, and you get a notification. Pick someone, and every waiting
+week goes to them. (If they get the role back before you choose, the weeks are
+theirs to approve again.)
 
 ![Checking flagged hours before submitting](manual/img/timesheet-review-prompt.png)
 
@@ -358,8 +379,22 @@ Managers get two extra tabs, **Approvals** and **Reports**, and in **More**,
 ![Approvals](manual/img/approvals.png)
 
 The **Approvals** tab. The number on it says how many submissions are waiting
-for *you* — the sheets whose submitters picked you as their approver. Admins
-also get **Assigned to me / All submitted**, to see everyone's queue.
+for *you* — the sheets whose submitters picked you as their approver. When
+someone changes their approver to you, their waiting weeks come to you too,
+with a *"Timesheet passed to you"* notification.
+
+Admins also get **Assigned to me / All submitted**, to see everyone's queue.
+In **All submitted**, each row says who has the week. Weeks whose approver can
+no longer approve them are grouped at the top under **Need a new
+approver**, folded until tapped. Open one, and pick who approves that person's
+timesheets under the notice: the week, and any others they have waiting, go
+to that person. An admin can also approve such a week directly. A manager who
+opens such a week (from Reports) can choose the approver too, for anyone who
+is not an admin.
+
+Only the one who has a week, or an admin, can approve, reject or correct it. A
+manager who opens someone else's submitted week sees who has it instead of the
+buttons.
 
 ![Reviewing a timesheet](manual/img/review.png)
 
@@ -466,10 +501,13 @@ Tap someone on **People** to open their page:
 
 - **Approver** — who approves their timesheets. Set it here, or let them pick
   their own on Timesheet. (Managers can set this for non-admins too; the rest
-  of the page is admins'.) A manager or admin may be their own approver. Note
-  that **changing someone's role, or disabling them, clears every approver
-  pointing at them** — those people will be asked to choose a new approver
-  before their next submission.
+  of the page is admins'.) A manager or admin may be their own approver.
+  Changing it moves their weeks waiting for approval to the new approver.
+  **Changing someone's role, or disabling them, clears every approver
+  pointing at them**: those people are asked to choose a new approver. Weeks
+  that person was holding wait under **Need a new approver** in
+  Approvals → All submitted until someone chooses for their owners. (An
+  admin's own weeks come back to them instead.)
 - **Role: Member | Manager** — managers get Approvals, Reports and Activities.
 - **Admin** — the full-control switch (see below).
 - **Active** — turn off to disable an account: they're locked out immediately
@@ -557,7 +595,11 @@ Tap the red notice on Today → tap the rejected week → read the reason → fi
 the entries → Resubmit timesheet.
 
 **…change who approves my timesheets?**
-Timesheet → Approver → pick someone else. Applies from your next submission.
+Timesheet → Approver → pick someone else. Weeks waiting for approval move to
+them too.
+
+**…see who has my submitted weeks?**
+Today → Waiting for approval → each week says who has it and since when.
 
 **…sign in with a different Google account?**
 More → Sign out → Sign in with Google → the account chooser appears.

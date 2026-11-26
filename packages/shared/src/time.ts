@@ -161,38 +161,42 @@ export function periodHasStarted(periodKey: string, todayKey: string): boolean {
   return periodKey <= todayKey;
 }
 
-/** Human label for a period: 'Jul 5 – Jul 11' (or 'Dec 28 – Jan 3' across years). */
+// Labels name a calendar day, so they format in UTC with fixed options: one
+// formatter each, built on first use (see dayKeyFormats for why).
+let monthFormat: Intl.DateTimeFormat | undefined;
+let shortDayFormat: Intl.DateTimeFormat | undefined;
+let longDayFormat: Intl.DateTimeFormat | undefined;
+let longDayYearFormat: Intl.DateTimeFormat | undefined;
+const utcDay = (dayKey: string, day = true) => {
+  const { y, m, d } = parseDayKey(dayKey);
+  return new Date(Date.UTC(y, m - 1, day ? d : 1));
+};
+
+/** 'July 2026': the month a day falls in. */
 export function monthLabel(dayKey: string): string {
-  const { y, m } = parseDayKey(dayKey);
-  return new Intl.DateTimeFormat('en-US', {
-    timeZone: 'UTC',
-    month: 'long',
-    year: 'numeric',
-  }).format(new Date(Date.UTC(y, m - 1, 1)));
+  monthFormat ??= new Intl.DateTimeFormat('en-US', { timeZone: 'UTC', month: 'long', year: 'numeric' });
+  return monthFormat.format(utcDay(dayKey, false));
 }
 
+/** Human label for a period: 'Jul 5 – Jul 11' (or 'Dec 28 – Jan 3' across years). */
 export function periodLabel(range: { fromKey: string; toKey: string }): string {
-  const fmt = (dayKey: string) => {
-    const { y, m, d } = parseDayKey(dayKey);
-    return new Intl.DateTimeFormat('en-US', {
-      timeZone: 'UTC',
-      month: 'short',
-      day: 'numeric',
-    }).format(new Date(Date.UTC(y, m - 1, d)));
-  };
-  return `${fmt(range.fromKey)} – ${fmt(range.toKey)}`;
+  shortDayFormat ??= new Intl.DateTimeFormat('en-US', { timeZone: 'UTC', month: 'short', day: 'numeric' });
+  return `${shortDayFormat.format(utcDay(range.fromKey))} – ${shortDayFormat.format(utcDay(range.toKey))}`;
+}
+
+/** A day in a sentence: 'Nov 1'. */
+export function shortDayLabel(dayKey: string): string {
+  shortDayFormat ??= new Intl.DateTimeFormat('en-US', { timeZone: 'UTC', month: 'short', day: 'numeric' });
+  return shortDayFormat.format(utcDay(dayKey));
 }
 
 /** Human label for a day: 'Sunday, Nov 1'. The year only when it is not `currentYear`'s. */
 export function dayLabel(dayKey: string, currentYear?: number): string {
-  const { y, m, d } = parseDayKey(dayKey);
-  return new Intl.DateTimeFormat('en-US', {
-    timeZone: 'UTC',
-    weekday: 'long',
-    month: 'short',
-    day: 'numeric',
-    year: currentYear !== undefined && currentYear !== y ? 'numeric' : undefined,
-  }).format(new Date(Date.UTC(y, m - 1, d)));
+  const withYear = currentYear !== undefined && currentYear !== parseDayKey(dayKey).y;
+  const format = withYear
+    ? (longDayYearFormat ??= new Intl.DateTimeFormat('en-US', { timeZone: 'UTC', weekday: 'long', month: 'short', day: 'numeric', year: 'numeric' }))
+    : (longDayFormat ??= new Intl.DateTimeFormat('en-US', { timeZone: 'UTC', weekday: 'long', month: 'short', day: 'numeric' }));
+  return format.format(utcDay(dayKey));
 }
 
 /**

@@ -45,6 +45,7 @@ import { TimesheetReviewSettingsScreen } from './src/screens/TimesheetReviewSett
 import { NotificationSettingsScreen } from './src/screens/NotificationSettingsScreen';
 import { ReportProblemScreen } from './src/screens/ReportProblemScreen';
 import { RulesScreen } from './src/screens/RulesScreen';
+import { ApproversProvider } from './src/approvers';
 import { HelpFilmScreen, HelpScreen } from './src/screens/HelpScreen';
 import { navigationRef, tabState, type RootStackParamList } from './src/nav';
 import { AppNav, activeTab } from './src/components/AppNav';
@@ -253,6 +254,7 @@ export default function App() {
   } else {
     const { profile, claims, user } = session;
     content = (
+      <ApproversProvider key={user.uid}>
       <Shell uid={user.uid} approver={isApprover} admin={claims.admin === true}>
         <Navigator linking={claims.admin === true ? ADMIN_LINKING : isApprover ? APPROVER_LINKING : MEMBER_LINKING}>
         <Stack.Navigator
@@ -420,6 +422,7 @@ export default function App() {
         </Stack.Navigator>
         </Navigator>
       </Shell>
+      </ApproversProvider>
     );
   }
 
