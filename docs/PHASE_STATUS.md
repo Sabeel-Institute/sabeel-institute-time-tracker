@@ -41,20 +41,24 @@ no app version carry no version in their heading.
 - Only the one who has a week, or an admin, can approve, reject or correct it.
   This includes not while the week is on its way to someone else.
 
-Deploy in order:
-1. Functions (the new `handOverTimesheets` trigger).
-2. Rules (rejecting and correcting a week on its way elsewhere is refused;
-   setting someone else's approver rechecks the writer's role).
-3. `node scripts/hand-over-waiting-timesheets.mjs`, then the same with
-   `--apply`, which moves weeks already with an approver other than their
-   person's current one. It sends no notifications. On 2026-11-25 the dry run
-   found 14 waiting weeks, none to move and none stuck.
-4. Then web, Play and TestFlight, and publish the help films (two updated,
-   one new: "When an approver leaves").
-
-v0.33.0 cannot show a week that nobody can approve, or offer a way to choose
-a new approver for one, so the version floor rises to 0.34.0 once Play and
-TestFlight have it (`node scripts/set-min-version.mjs 0.34.0`).
+Shipped on 2026-11-25 and 2026-11-26, in this order, all from `8806c4d` (main
+at `a8a5f36` for the server, the same code):
+1. Functions through Deploy Functions: `handOverTimesheets` created, the
+   query probe OK on all 13 shapes, and no errors logged after the deploy.
+2. Rules and indexes. The live ruleset matches main byte for byte.
+3. `scripts/hand-over-waiting-timesheets.mjs --apply`: 14 waiting weeks of
+   6 people, none to move and none stuck.
+4. The help films, all 18 to the help site. "Submitting your week" and
+   "Roles and access" were recorded again, and "When an approver leaves" is
+   new.
+5. Play internal testing, 0.34.0 (34000): Play's APK started cleanly 5 times
+   out of 5. GitHub release v0.34.0.
+6. Deploy Web: the site serves 0.34.0 · 8806c4d.
+7. TestFlight, build 34000. Apple warned that builds will need the iOS 27 SDK
+   from April 2027.
+8. The version floor, `config/app.minVersionCode`, raised from 33000 to 34000.
+   v0.33.0 cannot show a week nobody can approve, or offer a way to choose a
+   new approver for one.
 
 ### 2026-11-24 — Timesheet review — v0.33.0
 
