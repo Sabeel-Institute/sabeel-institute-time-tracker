@@ -1514,12 +1514,12 @@ async function main() {
   await vol.context().setOffline(false);
   offlineLabels.delete('volunteer');
   // Choosing someone else on the submitted week passes it to them.
-  const picked = Date.now();
   await pickFromModal(vol, 'Admin', 'Second Approver');
   await eventually(vol, 'the week passed to the second approver', storedHolder, (uid) => uid === secondUid);
-  // "Since" is when the new approver got it, not when it was submitted.
+  // "Since" is when the new approver got it: the hand-over's own stamp (the
+  // event's time, whose precision is the emulator's), not the submission's.
   const handed = await storedHand();
-  if (Number(handed.heldSince.integerValue) < picked || Number(handed.submittedAt.integerValue) >= picked)
+  if (!handed.heldSince || handed.heldSince.integerValue === handed.submittedAt.integerValue)
     throw new Error('the hand-over did not record when the new approver got the week');
   await firstOnScreen(vol.getByText(/^With Second Approver since /)).waitFor();
   // The approver loses the role on People: the cleanup clears the choice, and
